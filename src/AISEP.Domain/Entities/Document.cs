@@ -1,69 +1,23 @@
-using AISEP.Domain.Enums;
-
 namespace AISEP.Domain.Entities;
 
-/// <summary>
-/// Document uploaded by startup for AI analysis
-/// </summary>
-public class Document : BaseEntity
+public class Document
 {
-    public int StartupProfileId { get; private set; }
-    public string Title { get; private set; } = string.Empty;
-    public DocumentType Type { get; private set; }
-    public string FilePath { get; private set; } = string.Empty;
-    public string FileName { get; private set; } = string.Empty;
-    public long FileSize { get; private set; }
-    public string ContentHash { get; private set; } = string.Empty; // SHA-256
-    public int Version { get; private set; } = 1;
+    public int DocumentID { get; set; }
+    public int StartupID { get; set; }
+    public string DocumentType { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FileURL { get; set; } = string.Empty;
+    public int FileSize { get; set; }
+    public string? FileFormat { get; set; }
+    public string? Version { get; set; }
+    public bool IsAnalyzed { get; set; }
+    public string? AnalysisStatus { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public DateTime? AnalyzedAt { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public bool IsArchived { get; set; }
 
     // Navigation properties
-    public StartupProfile StartupProfile { get; private set; } = null!;
-    public DocumentAnalysis? Analysis { get; private set; }
-    public BlockchainTransaction? BlockchainTransaction { get; private set; }
-
-    private Document() { }
-
-    public static Document Create(
-        int startupProfileId,
-        string title,
-        DocumentType type,
-        string filePath,
-        string fileName,
-        long fileSize,
-        string contentHash)
-    {
-        const long maxFileSize = 25 * 1024 * 1024; // 25MB
-        if (fileSize > maxFileSize)
-            throw new ArgumentException($"File size exceeds maximum allowed size of {maxFileSize} bytes", nameof(fileSize));
-
-        if (string.IsNullOrWhiteSpace(contentHash))
-            throw new ArgumentException("Content hash is required", nameof(contentHash));
-
-        var document = new Document
-        {
-            StartupProfileId = startupProfileId,
-            Title = title,
-            Type = type,
-            FilePath = filePath,
-            FileName = fileName,
-            FileSize = fileSize,
-            ContentHash = contentHash,
-            Version = 1
-        };
-
-        // TODO: Add domain event DocumentUploadedEvent
-        return document;
-    }
-
-    public void UpdateVersion(string filePath, string fileName, long fileSize, string contentHash)
-    {
-        FilePath = filePath;
-        FileName = fileName;
-        FileSize = fileSize;
-        ContentHash = contentHash;
-        Version++;
-        UpdatedAt = DateTime.UtcNow;
-
-        // TODO: Add domain event DocumentVersionUpdatedEvent
-    }
+    public Startup Startup { get; set; } = null!;
+    public DocumentBlockchainProof? BlockchainProof { get; set; }
 }

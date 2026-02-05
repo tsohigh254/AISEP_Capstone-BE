@@ -1,6 +1,5 @@
 using AISEP.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection;
 
 namespace AISEP.Infrastructure.Data;
 
@@ -14,59 +13,255 @@ public class ApplicationDbContext : DbContext
     {
     }
 
-    // DbSets
+    // Authentication
     public DbSet<User> Users => Set<User>();
-    public DbSet<StartupProfile> StartupProfiles => Set<StartupProfile>();
-    public DbSet<InvestorProfile> InvestorProfiles => Set<InvestorProfile>();
-    public DbSet<AdvisorProfile> AdvisorProfiles => Set<AdvisorProfile>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    // Startup
+    public DbSet<Startup> Startups => Set<Startup>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Document> Documents => Set<Document>();
-    public DbSet<DocumentAnalysis> DocumentAnalyses => Set<DocumentAnalysis>();
-    public DbSet<BlockchainTransaction> BlockchainTransactions => Set<BlockchainTransaction>();
-    public DbSet<StartupScore> StartupScores => Set<StartupScore>();
-    public DbSet<Connection> Connections => Set<Connection>();
-    public DbSet<MentorshipSession> MentorshipSessions => Set<MentorshipSession>();
-    public DbSet<InvestmentProposal> InvestmentProposals => Set<InvestmentProposal>();
+    public DbSet<DocumentBlockchainProof> DocumentBlockchainProofs => Set<DocumentBlockchainProof>();
+
+    // Advisor
+    public DbSet<Advisor> Advisors => Set<Advisor>();
+    public DbSet<AdvisorAvailability> AdvisorAvailabilities => Set<AdvisorAvailability>();
+    public DbSet<AdvisorExpertise> AdvisorExpertises => Set<AdvisorExpertise>();
+    public DbSet<AdvisorIndustryFocus> AdvisorIndustryFocuses => Set<AdvisorIndustryFocus>();
+    public DbSet<AdvisorAchievement> AdvisorAchievements => Set<AdvisorAchievement>();
+    public DbSet<AdvisorTestimonial> AdvisorTestimonials => Set<AdvisorTestimonial>();
+
+    // Investor
+    public DbSet<Investor> Investors => Set<Investor>();
     public DbSet<InvestorWatchlist> InvestorWatchlists => Set<InvestorWatchlist>();
+    public DbSet<InvestorPreferences> InvestorPreferences => Set<InvestorPreferences>();
+    public DbSet<InvestorIndustryFocus> InvestorIndustryFocuses => Set<InvestorIndustryFocus>();
+    public DbSet<InvestorStageFocus> InvestorStageFocuses => Set<InvestorStageFocus>();
+    public DbSet<PortfolioCompany> PortfolioCompanies => Set<PortfolioCompany>();
+
+    // AI & Scoring
+    public DbSet<StartupPotentialScore> StartupPotentialScores => Set<StartupPotentialScore>();
+    public DbSet<ScoreSubMetric> ScoreSubMetrics => Set<ScoreSubMetric>();
+    public DbSet<ScoreImprovementRecommendation> ScoreImprovementRecommendations => Set<ScoreImprovementRecommendation>();
+    public DbSet<ScoringModelConfiguration> ScoringModelConfigurations => Set<ScoringModelConfiguration>();
+
+    // Collaboration
+    public DbSet<StartupAdvisorMentorship> StartupAdvisorMentorships => Set<StartupAdvisorMentorship>();
+    public DbSet<MentorshipSession> MentorshipSessions => Set<MentorshipSession>();
+    public DbSet<MentorshipReport> MentorshipReports => Set<MentorshipReport>();
+    public DbSet<MentorshipFeedback> MentorshipFeedbacks => Set<MentorshipFeedback>();
+    public DbSet<StartupInvestorConnection> StartupInvestorConnections => Set<StartupInvestorConnection>();
+    public DbSet<InformationRequest> InformationRequests => Set<InformationRequest>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
+
+    // System
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
-    public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
-    public DbSet<ConsultationRequest> ConsultationRequests => Set<ConsultationRequest>();
-    public DbSet<ConsultationReport> ConsultationReports => Set<ConsultationReport>();
-    public DbSet<ConsultationFeedback> ConsultationFeedbacks => Set<ConsultationFeedback>();
+    public DbSet<FlaggedContent> FlaggedContents => Set<FlaggedContent>();
+    public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
+    public DbSet<ProfileView> ProfileViews => Set<ProfileView>();
+    public DbSet<Industry> Industries => Set<Industry>();
+    public DbSet<IndustryTrend> IndustryTrends => Set<IndustryTrend>();
+    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
+    public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Apply all configurations from this assembly
-        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
-
-        // Global query filters can be added here if needed
+        // Configure primary keys
+        ConfigurePrimaryKeys(modelBuilder);
+        
+        // Configure relationships and constraints here
+        ConfigureRelationships(modelBuilder);
     }
 
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    private void ConfigurePrimaryKeys(ModelBuilder modelBuilder)
     {
-        // Auto-set UpdatedAt for modified entities
-        var entries = ChangeTracker.Entries<BaseEntity>()
-            .Where(e => e.State == EntityState.Modified);
+        // Authentication
+        modelBuilder.Entity<User>().HasKey(u => u.UserID);
+        modelBuilder.Entity<Role>().HasKey(r => r.RoleID);
+        modelBuilder.Entity<UserRole>().HasKey(ur => ur.UserRoleID);
+        modelBuilder.Entity<Permission>().HasKey(p => p.PermissionID);
+        modelBuilder.Entity<RolePermission>().HasKey(rp => rp.RolePermissionID);
+        modelBuilder.Entity<RefreshToken>().HasKey(rt => rt.RefreshTokenID);
 
-        foreach (var entry in entries)
-        {
-            entry.Entity.UpdatedAt = DateTime.UtcNow;
-        }
+        // Startup
+        modelBuilder.Entity<Startup>().HasKey(s => s.StartupID);
+        modelBuilder.Entity<TeamMember>().HasKey(tm => tm.TeamMemberID);
+        modelBuilder.Entity<Document>().HasKey(d => d.DocumentID);
+        modelBuilder.Entity<DocumentBlockchainProof>().HasKey(p => p.ProofID);
 
-        // Auto-set DeletedAt for soft deleted entities
-        var deletedEntries = ChangeTracker.Entries<BaseEntity>()
-            .Where(e => e.State == EntityState.Deleted);
+        // Advisor
+        modelBuilder.Entity<Advisor>().HasKey(a => a.AdvisorID);
+        modelBuilder.Entity<AdvisorAvailability>().HasKey(aa => aa.AvailabilityID);
+        modelBuilder.Entity<AdvisorExpertise>().HasKey(ae => ae.ExpertiseID);
+        modelBuilder.Entity<AdvisorIndustryFocus>().HasKey(aif => aif.IndustryFocusID);
+        modelBuilder.Entity<AdvisorAchievement>().HasKey(aa => aa.AchievementID);
+        modelBuilder.Entity<AdvisorTestimonial>().HasKey(at => at.TestimonialID);
 
-        foreach (var entry in deletedEntries)
-        {
-            entry.State = EntityState.Modified;
-            entry.Entity.IsDeleted = true;
-            entry.Entity.DeletedAt = DateTime.UtcNow;
-        }
+        // Investor
+        modelBuilder.Entity<Investor>().HasKey(i => i.InvestorID);
+        modelBuilder.Entity<InvestorWatchlist>().HasKey(iw => iw.WatchlistID);
+        modelBuilder.Entity<InvestorPreferences>().HasKey(ip => ip.PreferenceID);
+        modelBuilder.Entity<InvestorIndustryFocus>().HasKey(iif => iif.FocusID);
+        modelBuilder.Entity<InvestorStageFocus>().HasKey(isf => isf.StageFocusID);
+        modelBuilder.Entity<PortfolioCompany>().HasKey(pc => pc.PortfolioID);
 
-        return await base.SaveChangesAsync(cancellationToken);
+        // AI & Scoring
+        modelBuilder.Entity<StartupPotentialScore>().HasKey(sps => sps.ScoreID);
+        modelBuilder.Entity<ScoreSubMetric>().HasKey(ssm => ssm.SubMetricID);
+        modelBuilder.Entity<ScoreImprovementRecommendation>().HasKey(sir => sir.RecommendationID);
+        modelBuilder.Entity<ScoringModelConfiguration>().HasKey(smc => smc.ConfigID);
+
+        // Collaboration
+        modelBuilder.Entity<StartupAdvisorMentorship>().HasKey(sam => sam.MentorshipID);
+        modelBuilder.Entity<MentorshipSession>().HasKey(ms => ms.SessionID);
+        modelBuilder.Entity<MentorshipReport>().HasKey(mr => mr.ReportID);
+        modelBuilder.Entity<MentorshipFeedback>().HasKey(mf => mf.FeedbackID);
+        modelBuilder.Entity<StartupInvestorConnection>().HasKey(sic => sic.ConnectionID);
+        modelBuilder.Entity<InformationRequest>().HasKey(ir => ir.RequestID);
+        modelBuilder.Entity<Conversation>().HasKey(c => c.ConversationID);
+        modelBuilder.Entity<Message>().HasKey(m => m.MessageID);
+
+        // System
+        modelBuilder.Entity<Notification>().HasKey(n => n.NotificationID);
+        modelBuilder.Entity<AuditLog>().HasKey(al => al.LogID);
+        modelBuilder.Entity<FlaggedContent>().HasKey(fc => fc.FlagID);
+        modelBuilder.Entity<ModerationAction>().HasKey(ma => ma.ActionID);
+        modelBuilder.Entity<ProfileView>().HasKey(pv => pv.ViewID);
+        modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
+        modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
+        modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
+        modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
+        modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
+    }
+
+    private void ConfigureRelationships(ModelBuilder modelBuilder)
+    {
+        // User relationships
+        modelBuilder.Entity<UserRole>()
+            .HasOne(ur => ur.AssignedByUser)
+            .WithMany()
+            .HasForeignKey(ur => ur.AssignedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Startup>()
+            .HasOne(s => s.ApprovedByUser)
+            .WithMany()
+            .HasForeignKey(s => s.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // DocumentBlockchainProof - one-to-one with Document
+        modelBuilder.Entity<DocumentBlockchainProof>()
+            .HasOne(p => p.Document)
+            .WithOne(d => d.BlockchainProof)
+            .HasForeignKey<DocumentBlockchainProof>(p => p.DocumentID);
+
+        // AdvisorAvailability - one-to-one with Advisor
+        modelBuilder.Entity<AdvisorAvailability>()
+            .HasOne(a => a.Advisor)
+            .WithOne(adv => adv.Availability)
+            .HasForeignKey<AdvisorAvailability>(a => a.AdvisorID);
+
+        // InvestorPreferences - one-to-one with Investor
+        modelBuilder.Entity<InvestorPreferences>()
+            .HasOne(p => p.Investor)
+            .WithOne(i => i.Preferences)
+            .HasForeignKey<InvestorPreferences>(p => p.InvestorID);
+
+        // Industry self-reference
+        modelBuilder.Entity<Industry>()
+            .HasOne(i => i.ParentIndustry)
+            .WithMany(i => i.SubIndustries)
+            .HasForeignKey(i => i.ParentIndustryID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // FlaggedContent relationships
+        modelBuilder.Entity<FlaggedContent>()
+            .HasOne(f => f.RelatedUser)
+            .WithMany()
+            .HasForeignKey(f => f.RelatedUserID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<FlaggedContent>()
+            .HasOne(f => f.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(f => f.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ModerationAction>()
+            .HasOne(m => m.TargetUser)
+            .WithMany()
+            .HasForeignKey(m => m.TargetUserID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ModerationAction>()
+            .HasOne(m => m.ActionTakenByUser)
+            .WithMany()
+            .HasForeignKey(m => m.ActionTakenBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Prevent cascade delete cycles
+        modelBuilder.Entity<InvestorWatchlist>()
+            .HasOne(iw => iw.Startup)
+            .WithMany(s => s.WatchedByInvestors)
+            .HasForeignKey(iw => iw.StartupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<StartupAdvisorMentorship>()
+            .HasOne(m => m.Startup)
+            .WithMany(s => s.Mentorships)
+            .HasForeignKey(m => m.StartupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<StartupInvestorConnection>()
+            .HasOne(c => c.Startup)
+            .WithMany(s => s.InvestorConnections)
+            .HasForeignKey(c => c.StartupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AdvisorTestimonial>()
+            .HasOne(t => t.Startup)
+            .WithMany(s => s.AdvisorTestimonials)
+            .HasForeignKey(t => t.StartupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AdvisorTestimonial>()
+            .HasOne(t => t.Mentorship)
+            .WithMany(m => m.Testimonials)
+            .HasForeignKey(t => t.MentorshipID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProfileView>()
+            .HasOne(pv => pv.ViewedStartup)
+            .WithMany(s => s.ProfileViews)
+            .HasForeignKey(pv => pv.ViewedStartupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProfileView>()
+            .HasOne(pv => pv.ViewedAdvisor)
+            .WithMany(a => a.ProfileViews)
+            .HasForeignKey(pv => pv.ViewedAdvisorID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProfileView>()
+            .HasOne(pv => pv.ViewedInvestor)
+            .WithMany(i => i.ProfileViews)
+            .HasForeignKey(pv => pv.ViewedInvestorID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Prevent cascade in InformationRequest
+        modelBuilder.Entity<InformationRequest>()
+            .HasOne(ir => ir.Connection)
+            .WithMany(c => c.InformationRequests)
+            .HasForeignKey(ir => ir.ConnectionID)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

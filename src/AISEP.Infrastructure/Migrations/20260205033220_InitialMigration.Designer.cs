@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260205033220_InitialMigration")]
+    partial class InitialMigration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1252,46 +1255,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("ProfileViews");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.RefreshToken", b =>
-                {
-                    b.Property<int>("RefreshTokenID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RefreshTokenID"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("IPAddress")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReplacedByToken")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserAgent")
-                        .HasColumnType("text");
-
-                    b.Property<int>("UserID")
-                        .HasColumnType("integer");
-
-                    b.HasKey("RefreshTokenID");
-
-                    b.HasIndex("UserID");
-
-                    b.ToTable("RefreshTokens");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.Role", b =>
                 {
                     b.Property<int>("RoleID")
@@ -2331,17 +2294,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("ViewerUser");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.RefreshToken", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.User", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.RolePermission", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.Permission", "Permission")
@@ -2661,8 +2613,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("ProfileViewsAsViewer");
-
-                    b.Navigation("RefreshTokens");
 
                     b.Navigation("SentMessages");
 

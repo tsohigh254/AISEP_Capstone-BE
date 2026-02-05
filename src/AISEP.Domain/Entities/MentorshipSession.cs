@@ -1,86 +1,29 @@
 namespace AISEP.Domain.Entities;
 
-/// <summary>
-/// Mentorship session between advisor and startup
-/// </summary>
-public class MentorshipSession : BaseEntity
+public class MentorshipSession
 {
-    public int ConnectionId { get; private set; }
-    public DateTime ScheduledAt { get; private set; }
-    public int DurationMinutes { get; private set; }
-    public string? Topic { get; private set; }
-    public string? SessionNotes { get; private set; }
-    public string? ActionItems { get; private set; } // JSON array
-    public int? ProductivityRating { get; private set; } // 1-5 scale
-    public bool IsCompleted { get; private set; } = false;
-    public DateTime? CompletedAt { get; private set; }
+    public int SessionID { get; set; }
+    public int MentorshipID { get; set; }
+    public DateTime? ScheduledStartAt { get; set; }
+    public int? DurationMinutes { get; set; }
+    public string? SessionFormat { get; set; }
+    public string? MeetingURL { get; set; }
+    public string? SessionStatus { get; set; }
+    public DateTime? AdvisorConfirmedConductedAt { get; set; }
+    public DateTime? StartupConfirmedConductedAt { get; set; }
+    public DateTime? ConductedConfirmedAt { get; set; }
+    public string? TopicsDiscussed { get; set; }
+    public string? KeyInsights { get; set; }
+    public string? ActionItems { get; set; }
+    public string? NextSteps { get; set; }
+    public string? RecommendedResources { get; set; }
+    public string? AdvisorInternalNotes { get; set; }
+    public string? StartupNotes { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 
     // Navigation properties
-    public Connection Connection { get; private set; } = null!;
-    public ConsultationRequest? ConsultationRequest { get; private set; }
-    public ConsultationReport? ConsultationReport { get; private set; }
-    public ICollection<ConsultationFeedback> Feedbacks { get; private set; } = new List<ConsultationFeedback>();
-
-    private MentorshipSession() { }
-
-    public static MentorshipSession Create(
-        int connectionId,
-        DateTime scheduledAt,
-        int durationMinutes,
-        string? topic)
-    {
-        if (durationMinutes <= 0)
-            throw new ArgumentException("Duration must be positive", nameof(durationMinutes));
-
-        if (scheduledAt <= DateTime.UtcNow)
-            throw new ArgumentException("Scheduled time must be in the future", nameof(scheduledAt));
-
-        return new MentorshipSession
-        {
-            ConnectionId = connectionId,
-            ScheduledAt = scheduledAt,
-            DurationMinutes = durationMinutes,
-            Topic = topic,
-            IsCompleted = false
-        };
-    }
-
-    public void Complete(string? sessionNotes, string? actionItems, int? productivityRating)
-    {
-        if (IsCompleted)
-            throw new InvalidOperationException("Session is already completed");
-
-        if (productivityRating.HasValue && (productivityRating < 1 || productivityRating > 5))
-            throw new ArgumentException("Rating must be between 1 and 5", nameof(productivityRating));
-
-        SessionNotes = sessionNotes;
-        ActionItems = actionItems;
-        ProductivityRating = productivityRating;
-        IsCompleted = true;
-        CompletedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
-
-        // TODO: Add domain event MentorshipSessionCompletedEvent
-    }
-
-    public void Reschedule(DateTime newScheduledAt)
-    {
-        if (IsCompleted)
-            throw new InvalidOperationException("Cannot reschedule completed session");
-
-        if (newScheduledAt <= DateTime.UtcNow)
-            throw new ArgumentException("New scheduled time must be in the future", nameof(newScheduledAt));
-
-        ScheduledAt = newScheduledAt;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void UpdateTopic(string topic)
-    {
-        if (IsCompleted)
-            throw new InvalidOperationException("Cannot update topic of completed session");
-
-        Topic = topic;
-        UpdatedAt = DateTime.UtcNow;
-    }
+    public StartupAdvisorMentorship Mentorship { get; set; } = null!;
+    public ICollection<MentorshipReport> Reports { get; set; } = new List<MentorshipReport>();
+    public ICollection<MentorshipFeedback> Feedbacks { get; set; } = new List<MentorshipFeedback>();
 }
