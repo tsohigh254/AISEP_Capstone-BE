@@ -87,7 +87,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("UserID")
                         .IsUnique();
 
-                    b.ToTable("Advisors");
+                    b.ToTable("Advisors", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorAchievement", b =>
@@ -125,7 +125,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("AdvisorID");
 
-                    b.ToTable("AdvisorAchievements");
+                    b.ToTable("AdvisorAchievements", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorAvailability", b =>
@@ -168,7 +168,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("AdvisorID")
                         .IsUnique();
 
-                    b.ToTable("AdvisorAvailabilities");
+                    b.ToTable("AdvisorAvailabilities", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorExpertise", b =>
@@ -196,7 +196,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("AdvisorID");
 
-                    b.ToTable("AdvisorExpertises");
+                    b.ToTable("AdvisorExpertises", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorIndustryFocus", b =>
@@ -218,7 +218,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("AdvisorID");
 
-                    b.ToTable("AdvisorIndustryFocuses");
+                    b.ToTable("AdvisorIndustryFocuses", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorTestimonial", b =>
@@ -264,7 +264,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("AdvisorTestimonials");
+                    b.ToTable("AdvisorTestimonials", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
@@ -307,7 +307,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Conversation", b =>
@@ -340,7 +340,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("MentorshipID");
 
-                    b.ToTable("Conversations");
+                    b.ToTable("Conversations", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
@@ -397,7 +397,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("Documents");
+                    b.ToTable("Documents", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.DocumentBlockchainProof", b =>
@@ -448,7 +448,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("DocumentID")
                         .IsUnique();
 
-                    b.ToTable("DocumentBlockchainProofs");
+                    b.ToTable("DocumentBlockchainProofs", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.FlaggedContent", b =>
@@ -507,7 +507,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("ReviewedBy");
 
-                    b.ToTable("FlaggedContents");
+                    b.ToTable("FlaggedContents", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Industry", b =>
@@ -532,7 +532,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("ParentIndustryID");
 
-                    b.ToTable("Industries");
+                    b.ToTable("Industries", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.IndustryTrend", b =>
@@ -578,7 +578,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("IndustryID");
 
-                    b.ToTable("IndustryTrends");
+                    b.ToTable("IndustryTrends", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.InformationRequest", b =>
@@ -627,7 +627,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.ToTable("InformationRequests");
+                    b.ToTable("InformationRequests", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Investor", b =>
@@ -683,7 +683,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("UserID")
                         .IsUnique();
 
-                    b.ToTable("Investors");
+                    b.ToTable("Investors", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.InvestorIndustryFocus", b =>
@@ -705,7 +705,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.ToTable("InvestorIndustryFocuses");
+                    b.ToTable("InvestorIndustryFocuses", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.InvestorPreferences", b =>
@@ -745,7 +745,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("InvestorID")
                         .IsUnique();
 
-                    b.ToTable("InvestorPreferences");
+                    b.ToTable("InvestorPreferences", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.InvestorStageFocus", b =>
@@ -767,7 +767,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.ToTable("InvestorStageFocuses");
+                    b.ToTable("InvestorStageFocuses", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.InvestorWatchlist", b =>
@@ -812,7 +812,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("InvestorWatchlists");
+                    b.ToTable("InvestorWatchlists", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipFeedback", b =>
@@ -851,7 +851,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("SessionID");
 
-                    b.ToTable("MentorshipFeedbacks");
+                    b.ToTable("MentorshipFeedbacks", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipReport", b =>
@@ -901,7 +901,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("SessionID");
 
-                    b.ToTable("MentorshipReports");
+                    b.ToTable("MentorshipReports", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipSession", b =>
@@ -970,7 +970,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("MentorshipID");
 
-                    b.ToTable("MentorshipSessions");
+                    b.ToTable("MentorshipSessions", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Message", b =>
@@ -1009,7 +1009,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("SenderUserID");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.ModerationAction", b =>
@@ -1056,7 +1056,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("TargetUserID");
 
-                    b.ToTable("ModerationActions");
+                    b.ToTable("ModerationActions", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Notification", b =>
@@ -1106,7 +1106,38 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", (string)null);
+                });
+
+            modelBuilder.Entity("AISEP.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.Property<int>("PasswordResetTokenID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PasswordResetTokenID"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserID")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PasswordResetTokenID");
+
+                    b.HasIndex("UserID");
+
+                    b.ToTable("PasswordResetTokens", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Permission", b =>
@@ -1129,7 +1160,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasKey("PermissionID");
 
-                    b.ToTable("Permissions");
+                    b.ToTable("Permissions", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.PlatformAnalytics", b =>
@@ -1161,7 +1192,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasKey("AnalyticID");
 
-                    b.ToTable("PlatformAnalytics");
+                    b.ToTable("PlatformAnalytics", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.PortfolioCompany", b =>
@@ -1213,7 +1244,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.ToTable("PortfolioCompanies");
+                    b.ToTable("PortfolioCompanies", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.ProfileView", b =>
@@ -1249,7 +1280,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("ViewerUserID");
 
-                    b.ToTable("ProfileViews");
+                    b.ToTable("ProfileViews", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.RefreshToken", b =>
@@ -1289,7 +1320,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Role", b =>
@@ -1315,7 +1346,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasKey("RoleID");
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.RolePermission", b =>
@@ -1325,6 +1356,9 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RolePermissionID"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("PermissionID")
                         .HasColumnType("integer");
@@ -1338,7 +1372,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("RoleID");
 
-                    b.ToTable("RolePermissions");
+                    b.ToTable("RolePermissions", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.SavedReport", b =>
@@ -1382,7 +1416,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("CreatedByUserUserID");
 
-                    b.ToTable("SavedReports");
+                    b.ToTable("SavedReports", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.ScoreImprovementRecommendation", b =>
@@ -1420,7 +1454,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("PotentialScoreScoreID");
 
-                    b.ToTable("ScoreImprovementRecommendations");
+                    b.ToTable("ScoreImprovementRecommendations", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.ScoreSubMetric", b =>
@@ -1458,7 +1492,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("PotentialScoreScoreID");
 
-                    b.ToTable("ScoreSubMetrics");
+                    b.ToTable("ScoreSubMetrics", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.ScoringModelConfiguration", b =>
@@ -1513,7 +1547,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("CreatedByUserUserID");
 
-                    b.ToTable("ScoringModelConfigurations");
+                    b.ToTable("ScoringModelConfigurations", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Startup", b =>
@@ -1604,7 +1638,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("UserID")
                         .IsUnique();
 
-                    b.ToTable("Startups");
+                    b.ToTable("Startups", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.StartupAdvisorMentorship", b =>
@@ -1679,7 +1713,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("StartupAdvisorMentorships");
+                    b.ToTable("StartupAdvisorMentorships", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.StartupInvestorConnection", b =>
@@ -1724,7 +1758,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("StartupInvestorConnections");
+                    b.ToTable("StartupInvestorConnections", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.StartupPotentialScore", b =>
@@ -1774,7 +1808,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("StartupPotentialScores");
+                    b.ToTable("StartupPotentialScores", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.SystemSettings", b =>
@@ -1816,7 +1850,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("UpdatedByUserUserID");
 
-                    b.ToTable("SystemSettings");
+                    b.ToTable("SystemSettings", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.TeamMember", b =>
@@ -1862,7 +1896,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("StartupID");
 
-                    b.ToTable("TeamMembers");
+                    b.ToTable("TeamMembers", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.User", b =>
@@ -1902,7 +1936,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasKey("UserID");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.UserRole", b =>
@@ -1933,7 +1967,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("UserRoles");
+                    b.ToTable("UserRoles", (string)null);
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Advisor", b =>
@@ -2281,6 +2315,17 @@ namespace AISEP.Infrastructure.Migrations
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "User")
                         .WithMany("Notifications")
+                        .HasForeignKey("UserID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("AISEP.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.HasOne("AISEP.Domain.Entities.User", "User")
+                        .WithMany("PasswordResetTokens")
                         .HasForeignKey("UserID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2659,6 +2704,8 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Investor");
 
                     b.Navigation("Notifications");
+
+                    b.Navigation("PasswordResetTokens");
 
                     b.Navigation("ProfileViewsAsViewer");
 

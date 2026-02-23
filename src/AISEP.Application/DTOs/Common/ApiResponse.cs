@@ -30,6 +30,10 @@ public class ApiResponse<T>
             }
         };
     }
+
+    // Convenient aliases
+    public static ApiResponse<T> Ok(T data, string? message = null) => SuccessResponse(data, message);
+    public static ApiResponse<T> Fail(string message) => ErrorResponse("ERROR", message);
 }
 
 public class ApiResponse

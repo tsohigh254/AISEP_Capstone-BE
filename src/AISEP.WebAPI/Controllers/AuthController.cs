@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AISEP.WebAPI.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 [Tags("Authentication")]
 public class AuthController : ControllerBase
 {
@@ -150,6 +150,54 @@ public class AuthController : ControllerBase
         }
 
         return Ok(ApiResponse.SuccessResponse("Password changed successfully"));
+    }
+
+    /// <summary>
+    /// Admin reset password for any user
+    /// </summary>
+    [HttpPut("admin/reset-password")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AdminResetPassword([FromBody] AdminResetPasswordRequest request)
+    {
+        var result = await _authService.AdminResetPasswordAsync(request.UserId, request.NewPassword);
+
+        if (!result)
+        {
+            return NotFound(ApiResponse.ErrorResponse("USER_NOT_FOUND", "User not found"));
+        }
+
+        return Ok(ApiResponse.SuccessResponse("Password reset successfully"));
+    }
+
+    /// <summary>
+    /// Request password reset email
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var (success, message) = await _authService.ForgotPasswordAsync(request.Email);
+        return Ok(ApiResponse.SuccessResponse(message));
+    }
+
+    /// <summary>
+    /// Reset password using token from email
+    /// </summary>
+    [HttpPost("reset-password")]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var (success, message) = await _authService.ResetPasswordAsync(request);
+
+        if (!success)
+        {
+            return BadRequest(ApiResponse.ErrorResponse("RESET_PASSWORD_FAILED", message ?? "Password reset failed"));
+        }
+
+        return Ok(ApiResponse.SuccessResponse(message));
     }
 
     private string? GetIpAddress()

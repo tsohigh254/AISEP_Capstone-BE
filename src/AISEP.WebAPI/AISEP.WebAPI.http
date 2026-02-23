@@ -1,6 +1,7 @@
 @AISEP.WebAPI_HostAddress = http://localhost:5294
 
-GET {{AISEP.WebAPI_HostAddress}}/weatherforecast/
+### Health check — master data (public)
+GET {{AISEP.WebAPI_HostAddress}}/api/master/industries
 Accept: application/json
 
 ###

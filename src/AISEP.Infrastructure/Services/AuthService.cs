@@ -7,6 +7,7 @@ using AISEP.Application.DTOs.Auth;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
+using AISEP.Infrastructure.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -17,11 +18,19 @@ public class AuthService : IAuthService
 {
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
+    private readonly IEmailService _emailService;
+    private readonly EmailSettings _emailSettings;
 
-    public AuthService(ApplicationDbContext context, IOptions<JwtSettings> jwtSettings)
+    public AuthService(
+        ApplicationDbContext context, 
+        IOptions<JwtSettings> jwtSettings,
+        IEmailService emailService,
+        IOptions<EmailSettings> emailSettings)
     {
         _context = context;
         _jwtSettings = jwtSettings.Value;
+        _emailService = emailService;
+        _emailSettings = emailSettings.Value;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, string? ipAddress = null, string? userAgent = null)
@@ -254,6 +263,116 @@ public class AuthService : IAuthService
         await RevokeAllTokensAsync(userId);
 
         return true;
+    }
+
+    public async Task<bool> AdminResetPasswordAsync(int userId, string newPassword)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return false;
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        // Revoke all refresh tokens after password reset
+        await RevokeAllTokensAsync(userId);
+
+        return true;
+    }
+
+    public async Task<(bool Success, string? Message)> ForgotPasswordAsync(string email)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        
+        // Always return success to prevent email enumeration attacks
+        if (user == null)
+        {
+            return (true, "If your email is registered, you will receive a password reset link.");
+        }
+
+        // Invalidate any existing reset tokens
+        var existingTokens = await _context.PasswordResetTokens
+            .Where(t => t.UserID == user.UserID && t.UsedAt == null && t.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+        
+        foreach (var existingToken in existingTokens)
+        {
+            existingToken.UsedAt = DateTime.UtcNow; // Mark as used
+        }
+
+        // Generate secure token
+        var token = GenerateSecureToken();
+        var resetToken = new PasswordResetToken
+        {
+            UserID = user.UserID,
+            Token = token,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddHours(1) // Token valid for 1 hour
+        };
+
+        _context.PasswordResetTokens.Add(resetToken);
+        await _context.SaveChangesAsync();
+
+        // Send email with reset link
+        try
+        {
+            var resetUrl = $"{_emailSettings.BaseUrl}/reset-password";
+            await _emailService.SendPasswordResetEmailAsync(user.Email, token, resetUrl);
+        }
+        catch (Exception)
+        {
+            // Log error but don't expose to user
+            return (true, "If your email is registered, you will receive a password reset link.");
+        }
+
+        return (true, "If your email is registered, you will receive a password reset link.");
+    }
+
+    public async Task<(bool Success, string? Message)> ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        if (request.NewPassword != request.ConfirmNewPassword)
+        {
+            return (false, "Passwords do not match");
+        }
+
+        var resetToken = await _context.PasswordResetTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Token == request.Token && t.UsedAt == null);
+
+        if (resetToken == null)
+        {
+            return (false, "Invalid or expired reset token");
+        }
+
+        if (resetToken.IsExpired)
+        {
+            return (false, "Reset token has expired");
+        }
+
+        // Update password
+        resetToken.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        resetToken.User.UpdatedAt = DateTime.UtcNow;
+        
+        // Mark token as used
+        resetToken.UsedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        // Revoke all refresh tokens
+        await RevokeAllTokensAsync(resetToken.UserID);
+
+        return (true, "Password has been reset successfully");
+    }
+
+    private string GenerateSecureToken()
+    {
+        var randomBytes = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToBase64String(randomBytes)
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 
     private (string token, DateTime expires) GenerateAccessToken(User user)

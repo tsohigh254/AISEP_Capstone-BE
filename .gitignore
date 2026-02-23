@@ -3,6 +3,16 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# ====== AISEP custom ignores ======
+# Uploaded files (local dev storage)
+**/uploads/
+
+# Ad-hoc seed / migration scripts
+seed_*.sql
+seed-*.csx
+
+# ====== End AISEP custom ignores ======
+
 # User-specific files
 *.rsuser
 *.suo

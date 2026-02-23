@@ -56,3 +56,9 @@ public class ResetPasswordRequest
     public string NewPassword { get; set; } = null!;
     public string ConfirmNewPassword { get; set; } = null!;
 }
+
+public class AdminResetPasswordRequest
+{
+    public int UserId { get; set; }
+    public string NewPassword { get; set; } = null!;
+}

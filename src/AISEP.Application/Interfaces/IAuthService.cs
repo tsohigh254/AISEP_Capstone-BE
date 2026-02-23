@@ -10,4 +10,7 @@ public interface IAuthService
     Task<bool> LogoutAsync(int userId, string refreshToken);
     Task<bool> RevokeAllTokensAsync(int userId);
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request);
+    Task<bool> AdminResetPasswordAsync(int userId, string newPassword);
+    Task<(bool Success, string? Message)> ForgotPasswordAsync(string email);
+    Task<(bool Success, string? Message)> ResetPasswordAsync(ResetPasswordRequest request);
 }

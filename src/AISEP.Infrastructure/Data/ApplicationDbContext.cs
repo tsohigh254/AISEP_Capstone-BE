@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     // Startup
     public DbSet<Startup> Startups => Set<Startup>();
@@ -91,6 +92,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Permission>().HasKey(p => p.PermissionID);
         modelBuilder.Entity<RolePermission>().HasKey(rp => rp.RolePermissionID);
         modelBuilder.Entity<RefreshToken>().HasKey(rt => rt.RefreshTokenID);
+        modelBuilder.Entity<PasswordResetToken>().HasKey(prt => prt.PasswordResetTokenID);
 
         // Startup
         modelBuilder.Entity<Startup>().HasKey(s => s.StartupID);
@@ -157,6 +159,11 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(s => s.ApprovedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Each user can only have one startup profile
+        modelBuilder.Entity<Startup>()
+            .HasIndex(s => s.UserID)
+            .IsUnique();
 
         // DocumentBlockchainProof - one-to-one with Document
         modelBuilder.Entity<DocumentBlockchainProof>()

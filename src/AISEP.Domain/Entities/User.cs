@@ -15,6 +15,7 @@ public class User
     // Navigation properties
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     public ICollection<Message> SentMessages { get; set; } = new List<Message>();
