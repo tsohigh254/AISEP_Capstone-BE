@@ -20,6 +20,7 @@ public class User
     public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     public ICollection<Message> SentMessages { get; set; } = new List<Message>();
     public ICollection<ProfileView> ProfileViewsAsViewer { get; set; } = new List<ProfileView>();
+    public ICollection<EmailOtp> EmailOtps { get; set; } = new List<EmailOtp>();
     public Startup? Startup { get; set; }
     public Advisor? Advisor { get; set; }
     public Investor? Investor { get; set; }

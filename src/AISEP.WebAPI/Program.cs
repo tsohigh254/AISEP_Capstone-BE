@@ -141,6 +141,17 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+    builder.Services.AddCors(opt =>
+    {
+        opt.AddPolicy("CORS", builder =>
+        {
+            builder.WithOrigins("http://localhost:3000")
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+        });
+    });
+
 var app = builder.Build();
 
     // Seed database
@@ -166,9 +177,11 @@ var app = builder.Build();
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
-        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+        //app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+        app.UseSwaggerUI();
     }
 
+    app.UseCors("CORS");
     app.UseHttpsRedirection();
     app.UseAuthentication();
     app.UseAuthorization();

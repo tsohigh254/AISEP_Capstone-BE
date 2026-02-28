@@ -1,16 +1,24 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using AISEP.Application.Configuration;
+using AISEP.Application.DTOs;
 using AISEP.Application.DTOs.Auth;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Settings;
+using MediatR;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Org.BouncyCastle.Asn1.Ocsp;
+using System.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -33,13 +41,13 @@ public class AuthService : IAuthService
         _emailSettings = emailSettings.Value;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<string>> RegisterAsync(RegisterRequest request)
     {
         // Check if email already exists
         var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
         if (existingUser != null)
         {
-            return new AuthResponse
+            return new AuthResponse<string>
             {
                 Success = false,
                 Message = "Email already registered"
@@ -50,7 +58,7 @@ public class AuthService : IAuthService
         var validUserTypes = new[] { "Startup", "Investor", "Advisor" };
         if (!validUserTypes.Contains(request.UserType))
         {
-            return new AuthResponse
+            return new AuthResponse<string>
             {
                 Success = false,
                 Message = "Invalid user type. Must be Startup, Investor, or Advisor"
@@ -83,40 +91,27 @@ public class AuthService : IAuthService
             };
             _context.UserRoles.Add(userRole);
             await _context.SaveChangesAsync();
-        }
+        }       
 
-        // Generate tokens
-        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
-        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
+        var newOtp = await GenerateOtp(user.UserID);
 
-        // Get user roles
-        var roles = await GetUserRolesAsync(user.UserID);
+        await SendEmail(user.UserID, user.Email, newOtp);
 
-        return new AuthResponse
+        return new AuthResponse<string>
         {
             Success = true,
-            Message = "Registration successful",
-            Data = new AuthData
-            {
-                UserID = user.UserID,
-                Email = user.Email,
-                UserType = user.UserType,
-                Roles = roles,
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                AccessTokenExpires = accessTokenExpires,
-                RefreshTokenExpires = refreshTokenExpires
-            }
+            Message = "Register successfully, open your email to get the otp code",
+            Data = user.Email
         };
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<AuthData>> LoginAsync(LoginRequest request, HttpContext context, string? ipAddress = null, string? userAgent = null)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
         
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            return new AuthResponse
+            return new AuthResponse<AuthData>
             {
                 Success = false,
                 Message = "Invalid email or password"
@@ -125,7 +120,7 @@ public class AuthService : IAuthService
 
         if (!user.IsActive)
         {
-            return new AuthResponse
+            return new AuthResponse<AuthData>
             {
                 Success = false,
                 Message = "Account is deactivated"
@@ -143,33 +138,41 @@ public class AuthService : IAuthService
         // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
 
-        return new AuthResponse
+        SetupToken(context, refreshTokenExpires, refreshToken);
+
+        return new AuthResponse<AuthData>
         {
             Success = true,
             Message = "Login successful",
             Data = new AuthData
             {
-                UserID = user.UserID,
-                Email = user.Email,
-                UserType = user.UserType,
-                Roles = roles,
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),          
                 AccessToken = accessToken,
-                RefreshToken = refreshToken,
                 AccessTokenExpires = accessTokenExpires,
-                RefreshTokenExpires = refreshTokenExpires
             }
         };
     }
 
-    public async Task<AuthResponse> RefreshTokenAsync(string refreshToken, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<AuthData>> RefreshTokenAsync(HttpContext context, string? ipAddress = null, string? userAgent = null)
     {
+        var refreshToken = context.Request.Cookies["refreshToken"];
+
+        if (refreshToken == null)
+        {
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "Invalid refresh token"
+            };
+        }
+
         var token = await _context.RefreshTokens
             .Include(rt => rt.User)
             .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
 
         if (token == null)
         {
-            return new AuthResponse
+            return new AuthResponse<AuthData>
             {
                 Success = false,
                 Message = "Invalid refresh token"
@@ -178,7 +181,7 @@ public class AuthService : IAuthService
 
         if (!token.IsActive)
         {
-            return new AuthResponse
+            return new AuthResponse<AuthData>
             {
                 Success = false,
                 Message = "Refresh token is expired or revoked"
@@ -200,34 +203,36 @@ public class AuthService : IAuthService
         // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
 
-        return new AuthResponse
+        SetupToken(context, refreshTokenExpires, newRefreshToken);
+
+        return new AuthResponse<AuthData>
         {
             Success = true,
             Message = "Token refreshed successfully",
             Data = new AuthData
             {
-                UserID = user.UserID,
-                Email = user.Email,
-                UserType = user.UserType,
-                Roles = roles,
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = newAccessToken,
-                RefreshToken = newRefreshToken,
                 AccessTokenExpires = accessTokenExpires,
-                RefreshTokenExpires = refreshTokenExpires
             }
         };
     }
 
-    public async Task<bool> LogoutAsync(int userId, string refreshToken)
+    public async Task<bool> LogoutAsync(HttpContext context)
     {
+        var refreshToken = context.Request.Cookies["refreshToken"];
+
         var token = await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.UserID == userId && rt.Token == refreshToken);
+            .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
 
         if (token == null) return false;
 
         token.RevokedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
-        return true;
+
+        SetupToken(context, DateTime.UnixEpoch, string.Empty);
+
+        return true;   
     }
 
     public async Task<bool> RevokeAllTokensAsync(int userId)
@@ -280,15 +285,17 @@ public class AuthService : IAuthService
         return true;
     }
 
-    public async Task<(bool Success, string? Message)> ForgotPasswordAsync(string email)
+    public async Task<AuthResponse<string>> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
-        
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+
         // Always return success to prevent email enumeration attacks
         if (user == null)
-        {
-            return (true, "If your email is registered, you will receive a password reset link.");
-        }
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "User does not exists"
+            };
 
         // Invalidate any existing reset tokens
         var existingTokens = await _context.PasswordResetTokens
@@ -314,54 +321,153 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
 
         // Send email with reset link
-        try
-        {
-            var resetUrl = $"{_emailSettings.BaseUrl}/reset-password";
-            await _emailService.SendPasswordResetEmailAsync(user.Email, token, resetUrl);
-        }
-        catch (Exception)
-        {
-            // Log error but don't expose to user
-            return (true, "If your email is registered, you will receive a password reset link.");
-        }
+        var newOtp = await GenerateOtp(user.UserID);
 
-        return (true, "If your email is registered, you will receive a password reset link.");
+        await SendEmail(user.UserID, user.Email, newOtp);
+
+        return new AuthResponse<string>
+        {
+            Success = true,
+            Message = "Email sent successfully"
+        };
     }
 
-    public async Task<(bool Success, string? Message)> ResetPasswordAsync(ResetPasswordRequest request)
+    public async Task<AuthResponse<string>> ResetPasswordAsync(ResetPasswordRequest request)
     {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+
+        if (user == null)
+        {
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "User does not exists"
+            };
+        }
+
         if (request.NewPassword != request.ConfirmNewPassword)
-        {
-            return (false, "Passwords do not match");
-        }
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "Passwords do not match"
+            };       
 
-        var resetToken = await _context.PasswordResetTokens
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Token == request.Token && t.UsedAt == null);
-
-        if (resetToken == null)
-        {
-            return (false, "Invalid or expired reset token");
-        }
-
-        if (resetToken.IsExpired)
-        {
-            return (false, "Reset token has expired");
-        }
-
-        // Update password
-        resetToken.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-        resetToken.User.UpdatedAt = DateTime.UtcNow;
-        
-        // Mark token as used
-        resetToken.UsedAt = DateTime.UtcNow;
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         // Revoke all refresh tokens
-        await RevokeAllTokensAsync(resetToken.UserID);
+        await RevokeAllTokensAsync(user.UserID);
 
-        return (true, "Password has been reset successfully");
+        return new AuthResponse<string>
+        {
+            Success = true,
+            Message = "Password has been reset successfully"
+        };
+    }
+
+    public async Task<AuthResponse<AuthData>> VerifyEmailAsync(EmailVerifyRequest emailVerifyRequest, HttpContext context, string? ipAddress = null, string? userAgent = null)
+    {
+        var user = await _context.Users
+            .Include(u => u.EmailOtps)
+            .FirstOrDefaultAsync(u => u.Email == emailVerifyRequest.Email);
+
+        if (user != null && !user.IsActive)      
+            return new AuthResponse<AuthData>            {
+                Success = false,
+                Message = "Account is deactivated"
+            };
+        
+
+        if (user.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "Otp code expired"
+            };
+     
+        // Update last login
+        user.LastLoginAt = DateTime.UtcNow;
+
+        foreach (var otp in user.EmailOtps)
+        {
+            if (otp.Otp == emailVerifyRequest.Otp)
+            {
+                user.EmailVerified = true;
+                _context.EmailOtps.Remove(otp);
+                break;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Generate tokens
+        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
+        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
+
+        // Get user roles
+        var roles = await GetUserRolesAsync(user.UserID);
+
+        SetupToken(context, refreshTokenExpires, refreshToken);
+
+        return new AuthResponse<AuthData>
+        {
+            Success = true,
+            Message = "Email verified successfully",
+            Data = new AuthData
+            {
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
+                AccessToken = accessToken,
+                AccessTokenExpires = accessTokenExpires,
+            }
+        };
+    }
+
+    public async Task<AuthResponse<string>> ResendVerificationAsync(ResendEmailRequest resendEmailRequest)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == resendEmailRequest.Email);
+
+        if (user == null)
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "User does not exists"
+            };
+
+        foreach (var otp in user.EmailOtps)
+        {
+            if (!otp.IsUsed)
+                otp.IsUsed = true;
+        }
+
+        var newOtp = await GenerateOtp(user.UserID);
+
+        await SendEmail(user.UserID, user.Email, newOtp);
+
+        return new AuthResponse<string>
+        {
+            Success = true,
+            Message = "Email sent successfully"
+        };
+    }
+
+    #region helper method
+    private async Task<string> GenerateOtp(int userId)
+    {
+        var otp = new Random().Next(100000, 999999).ToString();
+
+        var emailOtp = new EmailOtp
+        {
+            UserId = userId,
+            IsUsed = false,
+            Otp = otp
+        };
+
+        _context.EmailOtps.Add(emailOtp);
+        await _context.SaveChangesAsync();
+
+        return otp;
     }
 
     private string GenerateSecureToken()
@@ -403,7 +509,7 @@ public class AuthService : IAuthService
 
     private async Task<(string token, DateTime expires)> GenerateRefreshTokenAsync(int userId, string? ipAddress, string? userAgent)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var token = Guid.NewGuid() + "-" + Guid.NewGuid();
         var expires = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays);
 
         var refreshToken = new RefreshToken
@@ -430,4 +536,29 @@ public class AuthService : IAuthService
             .Select(ur => ur.Role.RoleName)
             .ToListAsync();
     }
+
+    private void SetupToken(HttpContext context, DateTime dateTime, string refreshToken)
+    {
+        context.Response.Cookies.Append(
+            "refreshToken",
+            refreshToken,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.None,
+                Secure = true,
+                Expires = dateTime,
+                Path = ""
+            });
+    }
+
+    private async Task SendEmail(int userId, string email, string otp)
+    {
+        var htmlBody = $"<p>Mã xác nh?n email c?a b?n là:</p> " +
+            $" <p class=\"otp\">{otp}</p> " +
+            $"<p>Mã s? h?t h?n trong {5} phút. Không chia s? mã otp này cho b?t kì ai</p>";
+
+        await _emailService.SendEmailAsync(email, "M?t email ?ã g?i ??n email c?a b?n . Hãy nh?p mã xác nh?n", htmlBody);
+    }
+    #endregion
 }

@@ -19,23 +19,18 @@ public class RefreshTokenRequest
     public string RefreshToken { get; set; } = null!;
 }
 
-public class AuthResponse
+public class AuthResponse<T>
 {
     public bool Success { get; set; }
     public string? Message { get; set; }
-    public AuthData? Data { get; set; }
+    public T? Data { get; set; }
 }
 
 public class AuthData
 {
-    public int UserID { get; set; }
-    public string Email { get; set; } = null!;
-    public string UserType { get; set; } = null!;
-    public List<string> Roles { get; set; } = new();
+    public UserProfileResponse Info { get; set; } = null!;
     public string AccessToken { get; set; } = null!;
-    public string RefreshToken { get; set; } = null!;
     public DateTime AccessTokenExpires { get; set; }
-    public DateTime RefreshTokenExpires { get; set; }
 }
 
 public class ChangePasswordRequest
@@ -52,7 +47,7 @@ public class ForgotPasswordRequest
 
 public class ResetPasswordRequest
 {
-    public string Token { get; set; } = null!;
+    public string Email { get; set; } = null!;
     public string NewPassword { get; set; } = null!;
     public string ConfirmNewPassword { get; set; } = null!;
 }
@@ -62,3 +57,15 @@ public class AdminResetPasswordRequest
     public int UserId { get; set; }
     public string NewPassword { get; set; } = null!;
 }
+
+public class EmailVerifyRequest
+{
+    public string Email { get; set; }
+    public string Otp { get; set; }
+}
+
+public class ResendEmailRequest
+{
+    public string Email { get; set; }
+}
+

@@ -30,14 +30,14 @@ public class AuthController : ControllerBase
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.RegisterAsync(request, ipAddress, userAgent);
+        var result = await _authService.RegisterAsync(request);
 
         if (!result.Success)
         {
             return BadRequest(ApiResponse.ErrorResponse("REGISTRATION_FAILED", result.Message ?? "Registration failed"));
         }
 
-        return Ok(ApiResponse<AuthData>.SuccessResponse(result.Data!, result.Message));
+        return Ok(result);
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ public class AuthController : ControllerBase
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.LoginAsync(request, ipAddress, userAgent);
+        var result = await _authService.LoginAsync(request,HttpContext, ipAddress, userAgent);
 
         if (!result.Success)
         {
@@ -67,12 +67,12 @@ public class AuthController : ControllerBase
     [HttpPost("refresh-token")]
     [ProducesResponseType(typeof(ApiResponse<AuthData>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> RefreshToken()
     {
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.RefreshTokenAsync(request.RefreshToken, ipAddress, userAgent);
+        var result = await _authService.RefreshTokenAsync(HttpContext, ipAddress, userAgent);
 
         if (!result.Success)
         {
@@ -89,15 +89,15 @@ public class AuthController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Logout()
     {
-        var userId = GetCurrentUserId();
-        if (userId == null)
-        {
-            return Unauthorized(ApiResponse.ErrorResponse("UNAUTHORIZED", "User not authenticated"));
-        }
+        //var userId = GetCurrentUserId();
+        //if (userId == null)
+        //{
+        //    return Unauthorized(ApiResponse.ErrorResponse("UNAUTHORIZED", "User not authenticated"));
+        //}
 
-        var result = await _authService.LogoutAsync(userId.Value, request.RefreshToken);
+        var result = await _authService.LogoutAsync(HttpContext);
 
         if (!result)
         {
@@ -178,8 +178,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        var (success, message) = await _authService.ForgotPasswordAsync(request.Email);
-        return Ok(ApiResponse.SuccessResponse(message));
+        var result = await _authService.ForgotPasswordAsync(request);
+        return Ok(result);
     }
 
     /// <summary>
@@ -190,16 +190,54 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
-        var (success, message) = await _authService.ResetPasswordAsync(request);
+        var result = await _authService.ResetPasswordAsync(request);
 
-        if (!success)
+        if (!result.Success)
         {
-            return BadRequest(ApiResponse.ErrorResponse("RESET_PASSWORD_FAILED", message ?? "Password reset failed"));
+            return BadRequest(ApiResponse.ErrorResponse("RESET_PASSWORD_FAILED", result.Message ?? "Password reset failed"));
         }
 
-        return Ok(ApiResponse.SuccessResponse(message));
+        return Ok(result);
     }
 
+    /// <summary>
+    /// Verify email using otp
+    /// </summary>
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail([FromBody] EmailVerifyRequest emailVerifyRequest)
+    {
+        var ipAddress = GetIpAddress();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        var result = await _authService.VerifyEmailAsync(emailVerifyRequest, HttpContext, ipAddress, userAgent);
+
+        if (!result.Success)
+        {
+            return BadRequest(ApiResponse.ErrorResponse("VERIFY_EMAIL_FAILED", result.Message ?? "Verify email failed"));
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Resend verification email using otp
+    /// </summary>
+    [HttpPost("resend")]
+    public async Task<IActionResult> ResendVerification([FromBody] ResendEmailRequest resendEmailRequest)
+    {
+
+        var result = await _authService.ResendVerificationAsync(resendEmailRequest);
+
+        if (!result.Success)
+        {
+            return BadRequest(ApiResponse.ErrorResponse("RESEND_EMAIL_FAILED", result.Message ?? "Resend email failed"));
+        }
+
+        return Ok(result);
+    }
+
+
+    #region helper method
     private string? GetIpAddress()
     {
         if (Request.Headers.ContainsKey("X-Forwarded-For"))
@@ -218,4 +256,5 @@ public class AuthController : ControllerBase
         }
         return null;
     }
+    #endregion
 }

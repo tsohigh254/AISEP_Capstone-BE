@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailOtp> EmailOtps => Set<EmailOtp>();
 
     // Startup
     public DbSet<Startup> Startups => Set<Startup>();
