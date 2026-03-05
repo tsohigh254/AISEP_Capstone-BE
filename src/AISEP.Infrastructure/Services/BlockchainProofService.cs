@@ -3,6 +3,7 @@ using AISEP.Application.DTOs.Blockchain;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Domain.Interfaces;
 using AISEP.Infrastructure.Data;
 
@@ -56,7 +57,7 @@ public class BlockchainProofService : IBlockchainProofService
                 DocumentID = documentId,
                 FileHash = fileHash,
                 HashAlgorithm = "SHA-256",
-                ProofStatus = "HashComputed",
+                ProofStatus = ProofStatus.HashComputed,
                 AnchoredBy = userId
             };
             _context.DocumentBlockchainProofs.Add(proof);
@@ -143,7 +144,7 @@ public class BlockchainProofService : IBlockchainProofService
 
         // Update proof record
         proof.TransactionHash = txHash;
-        proof.ProofStatus = "Pending";
+        proof.ProofStatus = ProofStatus.Pending;
         proof.AnchoredAt = DateTime.UtcNow;
         proof.BlockchainNetwork = "Stub"; // TODO: set from config when using real blockchain
 
@@ -203,7 +204,10 @@ public class BlockchainProofService : IBlockchainProofService
         }
 
         // Update proof in DB
-        proof.ProofStatus = txStatus.Status;
+        if (Enum.TryParse<ProofStatus>(txStatus.Status, true, out var parsedProofStatus))
+            proof.ProofStatus = parsedProofStatus;
+        else if (string.Equals(txStatus.Status, "Confirmed", StringComparison.OrdinalIgnoreCase))
+            proof.ProofStatus = ProofStatus.Anchored;
         if (txStatus.BlockNumber != null) proof.BlockNumber = txStatus.BlockNumber;
 
         await _context.SaveChangesAsync(ct);
@@ -308,9 +312,9 @@ public class BlockchainProofService : IBlockchainProofService
             status = "NotFound"; // not on chain
 
         // Update proof status if verified
-        if (verified && proof.ProofStatus != "Confirmed")
+        if (verified && proof.ProofStatus != ProofStatus.Anchored)
         {
-            proof.ProofStatus = "Confirmed";
+            proof.ProofStatus = ProofStatus.Anchored;
             await _context.SaveChangesAsync(ct);
         }
 

@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -44,7 +45,7 @@ public class MentorshipService : IMentorshipService
         var duplicate = await _db.StartupAdvisorMentorships.AnyAsync(m =>
             m.StartupID == startup.StartupID &&
             m.AdvisorID == request.AdvisorId &&
-            (m.MentorshipStatus == "Requested" || m.MentorshipStatus == "Accepted" || m.MentorshipStatus == "InProgress"));
+            (m.MentorshipStatus == MentorshipStatus.Requested || m.MentorshipStatus == MentorshipStatus.Accepted || m.MentorshipStatus == MentorshipStatus.InProgress));
         if (duplicate)
             return ApiResponse<MentorshipDto>.ErrorResponse("MENTORSHIP_ALREADY_EXISTS",
                 "An active or pending mentorship with this advisor already exists.");
@@ -53,7 +54,7 @@ public class MentorshipService : IMentorshipService
         {
             StartupID = startup.StartupID,
             AdvisorID = request.AdvisorId,
-            MentorshipStatus = "Requested",
+            MentorshipStatus = MentorshipStatus.Requested,
             ChallengeDescription = request.ChallengeDescription,
             SpecificQuestions = request.SpecificQuestions,
             PreferredFormat = request.PreferredFormat,
@@ -118,8 +119,8 @@ public class MentorshipService : IMentorshipService
                 "ACCESS_DENIED", "Only Startup, Advisor, Staff, or Admin can view mentorships.");
         }
 
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(m => m.MentorshipStatus == status);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<MentorshipStatus>(status, true, out var statusEnum))
+            query = query.Where(m => m.MentorshipStatus == statusEnum);
 
         query = query.OrderByDescending(m => m.CreatedAt);
 
@@ -135,7 +136,7 @@ public class MentorshipService : IMentorshipService
                 StartupName = m.Startup.CompanyName,
                 AdvisorID = m.AdvisorID,
                 AdvisorName = m.Advisor.FullName,
-                MentorshipStatus = m.MentorshipStatus,
+                MentorshipStatus = m.MentorshipStatus.ToString(),
                 ChallengeDescription = m.ChallengeDescription,
                 PreferredFormat = m.PreferredFormat,
                 RequestedAt = m.RequestedAt,
@@ -194,11 +195,11 @@ public class MentorshipService : IMentorshipService
         var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
         if (mentorship == null) return error!;
 
-        if (mentorship.MentorshipStatus != "Requested")
+        if (mentorship.MentorshipStatus != MentorshipStatus.Requested)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot accept mentorship with status '{mentorship.MentorshipStatus}'. Only 'Requested' can be accepted.");
 
-        mentorship.MentorshipStatus = "Accepted";
+        mentorship.MentorshipStatus = MentorshipStatus.Accepted;
         mentorship.AcceptedAt = DateTime.UtcNow;
         mentorship.LastUpdatedByRole = "Advisor";
         mentorship.UpdatedAt = DateTime.UtcNow;
@@ -220,11 +221,11 @@ public class MentorshipService : IMentorshipService
         var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
         if (mentorship == null) return error!;
 
-        if (mentorship.MentorshipStatus != "Requested")
+        if (mentorship.MentorshipStatus != MentorshipStatus.Requested)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot reject mentorship with status '{mentorship.MentorshipStatus}'. Only 'Requested' can be rejected.");
 
-        mentorship.MentorshipStatus = "Rejected";
+        mentorship.MentorshipStatus = MentorshipStatus.Rejected;
         mentorship.RejectedAt = DateTime.UtcNow;
         mentorship.RejectedReason = reason;
         mentorship.LastUpdatedByRole = "Advisor";
@@ -249,7 +250,7 @@ public class MentorshipService : IMentorshipService
         if (mentorship == null)
             return ApiResponse<SessionDto>.ErrorResponse(error!.Error!.Code, error.Error.Message);
 
-        if (mentorship.MentorshipStatus != "Accepted" && mentorship.MentorshipStatus != "InProgress")
+        if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot create session for mentorship with status '{mentorship.MentorshipStatus}'. Must be 'Accepted' or 'InProgress'.");
 
@@ -267,9 +268,9 @@ public class MentorshipService : IMentorshipService
         _db.MentorshipSessions.Add(session);
 
         // Move mentorship to InProgress if still Accepted
-        if (mentorship.MentorshipStatus == "Accepted")
+        if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
         {
-            mentorship.MentorshipStatus = "InProgress";
+            mentorship.MentorshipStatus = MentorshipStatus.InProgress;
             mentorship.LastUpdatedByRole = "Advisor";
             mentorship.UpdatedAt = DateTime.UtcNow;
         }
@@ -501,7 +502,7 @@ public class MentorshipService : IMentorshipService
         MentorshipID = m.MentorshipID,
         StartupID = m.StartupID,
         AdvisorID = m.AdvisorID,
-        MentorshipStatus = m.MentorshipStatus,
+        MentorshipStatus = m.MentorshipStatus.ToString(),
         ChallengeDescription = m.ChallengeDescription,
         SpecificQuestions = m.SpecificQuestions,
         PreferredFormat = m.PreferredFormat,
@@ -522,7 +523,7 @@ public class MentorshipService : IMentorshipService
         StartupName = m.Startup.CompanyName,
         AdvisorID = m.AdvisorID,
         AdvisorName = m.Advisor.FullName,
-        MentorshipStatus = m.MentorshipStatus,
+        MentorshipStatus = m.MentorshipStatus.ToString(),
         ChallengeDescription = m.ChallengeDescription,
         SpecificQuestions = m.SpecificQuestions,
         PreferredFormat = m.PreferredFormat,

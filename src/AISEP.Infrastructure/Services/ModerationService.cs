@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Moderation;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,6 @@ public class ModerationService : IModerationService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<ModerationService> _logger;
-
-    // Valid status values matching DB
-    private static readonly HashSet<string> ValidStatuses = new(StringComparer.OrdinalIgnoreCase)
-        { "Pending", "InReview", "Resolved", "Rejected" };
 
     private static readonly HashSet<string> AllowedActionTypes = new(StringComparer.OrdinalIgnoreCase)
         { "Warn", "Hide", "Remove", "LockUser", "UnlockUser", "BanUser", "MarkSafe", "RejectReport" };
@@ -41,8 +38,8 @@ public class ModerationService : IModerationService
 
         var query = _db.FlaggedContents.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(f => f.ModerationStatus == status);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ModerationStatus>(status, true, out var statusEnum))
+            query = query.Where(f => f.ModerationStatus == statusEnum);
 
         if (!string.IsNullOrWhiteSpace(entityType))
             query = query.Where(f => f.ContentType == entityType);
@@ -71,7 +68,7 @@ public class ModerationService : IModerationService
                 FlagReason = f.FlagReason,
                 FlagSource = f.FlagSource,
                 Severity = f.Severity,
-                ModerationStatus = f.ModerationStatus,
+                ModerationStatus = f.ModerationStatus.ToString(),
                 FlaggedAt = f.FlaggedAt
             })
             .ToListAsync();
@@ -122,12 +119,12 @@ public class ModerationService : IModerationService
         if (flag is null)
             return ApiResponse<FlaggedContentDetailDto>.ErrorResponse("FLAG_NOT_FOUND", "Flagged content not found.");
 
-        // Only Pending can transition to InReview
-        if (!string.Equals(flag.ModerationStatus, "Pending", StringComparison.OrdinalIgnoreCase))
+        // Only unresolved flags (None) without a reviewer can be assigned
+        if (flag.ModerationStatus != ModerationStatus.None || flag.ReviewedBy != null)
             return ApiResponse<FlaggedContentDetailDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot assign flag with status '{flag.ModerationStatus}'. Only Pending flags can be assigned.");
+                $"Cannot assign flag with status '{flag.ModerationStatus}'. Only unresolved flags without a reviewer can be assigned.");
 
-        flag.ModerationStatus = "InReview";
+        // Assign doesn't change status — it stays None until resolved
         flag.ReviewedBy = staffUserId;
         if (!string.IsNullOrWhiteSpace(note))
             flag.ModeratorNotes = note;
@@ -166,25 +163,27 @@ public class ModerationService : IModerationService
         if (flag is null)
             return ApiResponse<FlaggedContentDetailDto>.ErrorResponse("FLAG_NOT_FOUND", "Flagged content not found.");
 
-        // Only Pending or InReview can be resolved
-        if (string.Equals(flag.ModerationStatus, "Resolved", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(flag.ModerationStatus, "Rejected", StringComparison.OrdinalIgnoreCase))
+        // Only None (unresolved) can be resolved
+        if (flag.ModerationStatus != ModerationStatus.None)
             return ApiResponse<FlaggedContentDetailDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Flag is already '{flag.ModerationStatus}'. Cannot resolve again.");
 
-        // Map decision to status
-        var newStatus = decision switch
+        // Map decision to ModerationStatus enum
+        if (!Enum.TryParse<ModerationStatus>(decision, true, out var newStatus))
         {
-            "RejectReport" => "Rejected",
-            "MarkSafe" => "Resolved",
-            "Resolved" => "Resolved",
-            _ => "Resolved"
-        };
+            // Fallback mappings for legacy decision strings
+            newStatus = decision switch
+            {
+                "RejectReport" => ModerationStatus.Reject,
+                "MarkSafe" => ModerationStatus.Approve,
+                "Resolved" => ModerationStatus.Approve,
+                _ => ModerationStatus.Approve
+            };
+        }
 
         flag.ModerationStatus = newStatus;
         flag.ReviewedAt = DateTime.UtcNow;
         flag.ReviewedBy = staffUserId;
-        flag.ModerationAction = decision;
         if (!string.IsNullOrWhiteSpace(note))
             flag.ModeratorNotes = note;
 
@@ -338,7 +337,7 @@ public class ModerationService : IModerationService
             FlagReason = request.Reason,
             FlagSource = "UserReport",
             FlagDetails = request.Description,
-            ModerationStatus = "Pending",
+            ModerationStatus = ModerationStatus.None,
             FlaggedAt = DateTime.UtcNow
         };
 
@@ -403,11 +402,10 @@ public class ModerationService : IModerationService
         FlagSource = f.FlagSource,
         Severity = f.Severity,
         FlagDetails = f.FlagDetails,
-        ModerationStatus = f.ModerationStatus,
+        ModerationStatus = f.ModerationStatus.ToString(),
         FlaggedAt = f.FlaggedAt,
         ReviewedAt = f.ReviewedAt,
         ReviewedBy = f.ReviewedBy,
-        ModerationAction = f.ModerationAction,
         ModeratorNotes = f.ModeratorNotes,
         Actions = f.ModerationActions
             .OrderByDescending(a => a.ActionTakenAt)

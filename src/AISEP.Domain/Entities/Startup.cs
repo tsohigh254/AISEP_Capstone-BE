@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class Startup
@@ -7,9 +9,9 @@ public class Startup
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
     public string? Description { get; set; }
-    public string? Industry { get; set; }
+    public int? IndustryID { get; set; }
     public string? SubIndustry { get; set; }
-    public string? Stage { get; set; }
+    public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public int? TeamSize { get; set; }
     public string? Location { get; set; }
@@ -17,11 +19,10 @@ public class Startup
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
     public string? CoverImageURL { get; set; }
-    public string? FundingStage { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
-    public string? ProfileStatus { get; set; }
+    public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public int? ProfileCompleteness { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public int? ApprovedBy { get; set; }
@@ -31,6 +32,7 @@ public class Startup
     // Navigation properties
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }
+    public Industry? Industry { get; set; }
     public ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
     public ICollection<StartupPotentialScore> PotentialScores { get; set; } = new List<StartupPotentialScore>();

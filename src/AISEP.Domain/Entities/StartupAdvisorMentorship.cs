@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class StartupAdvisorMentorship
@@ -5,7 +7,7 @@ public class StartupAdvisorMentorship
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public int AdvisorID { get; set; }
-    public string MentorshipStatus { get; set; } = "Requested"; // Requested, Rejected, Accepted, InProgress, Completed, InDispute, Resolved
+    public MentorshipStatus MentorshipStatus { get; set; } = MentorshipStatus.Requested;
     public string? ChallengeDescription { get; set; }
     public string? SpecificQuestions { get; set; }
     public string? ExpectedScope { get; set; }

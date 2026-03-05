@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Chat;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -49,8 +50,8 @@ public class ChatService : IChatService
                 c.Mentorship!.Advisor.UserID == userId))
         );
 
-        if (!string.IsNullOrEmpty(status))
-            query = query.Where(c => c.ConversationStatus == status);
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<ConversationStatus>(status, true, out var statusEnum))
+            query = query.Where(c => c.ConversationStatus == statusEnum);
 
         var totalItems = await query.CountAsync();
 
@@ -82,7 +83,7 @@ public class ChatService : IChatService
                 ConversationId = c.ConversationID,
                 ConnectionId = c.ConnectionID,
                 MentorshipId = c.MentorshipID,
-                Status = c.ConversationStatus,
+                Status = c.ConversationStatus.ToString(),
                 Title = title,
                 LastMessagePreview = lastMsg != null
                     ? (lastMsg.Length > 80 ? lastMsg[..80] + "…" : lastMsg)
@@ -127,7 +128,7 @@ public class ChatService : IChatService
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "ACCESS_DENIED", "You are not a participant of this connection.");
 
-            if (conn.ConnectionStatus != "Accepted")
+            if (conn.ConnectionStatus != ConnectionStatus.Accepted)
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "INVALID_STATUS_TRANSITION",
                     $"Cannot create conversation: connection status is '{conn.ConnectionStatus}', must be 'Accepted'.");
@@ -135,7 +136,7 @@ public class ChatService : IChatService
             // Check for existing open conversation
             var existing = await _db.Conversations
                 .AnyAsync(c => c.ConnectionID == request.ConnectionId.Value
-                            && c.ConversationStatus == "Open");
+                            && c.ConversationStatus == ConversationStatus.Active);
             if (existing)
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "CONVERSATION_ALREADY_EXISTS",
@@ -156,15 +157,14 @@ public class ChatService : IChatService
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "ACCESS_DENIED", "You are not a participant of this mentorship.");
 
-            var allowedStatuses = new[] { "Accepted", "InProgress" };
-            if (!allowedStatuses.Contains(mentorship.MentorshipStatus))
+            if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "INVALID_STATUS_TRANSITION",
                     $"Cannot create conversation: mentorship status is '{mentorship.MentorshipStatus}', must be 'Accepted' or 'InProgress'.");
 
             var existing = await _db.Conversations
                 .AnyAsync(c => c.MentorshipID == request.MentorshipId.Value
-                            && c.ConversationStatus == "Open");
+                            && c.ConversationStatus == ConversationStatus.Active);
             if (existing)
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "CONVERSATION_ALREADY_EXISTS",
@@ -181,7 +181,7 @@ public class ChatService : IChatService
         {
             ConnectionID = request.ConnectionId,
             MentorshipID = request.MentorshipId,
-            ConversationStatus = "Open",
+            ConversationStatus = ConversationStatus.Active,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -217,7 +217,7 @@ public class ChatService : IChatService
             ConversationId = conv.ConversationID,
             ConnectionId = conv.ConnectionID,
             MentorshipId = conv.MentorshipID,
-            Status = conv.ConversationStatus,
+            Status = conv.ConversationStatus.ToString(),
             Title = title,
             Participants = participants,
             CreatedAt = conv.CreatedAt,
@@ -240,11 +240,11 @@ public class ChatService : IChatService
             return ApiResponse<ConversationDto>.ErrorResponse(
                 "ACCESS_DENIED", "You are not a participant of this conversation.");
 
-        if (conv.ConversationStatus == "Closed")
+        if (conv.ConversationStatus == ConversationStatus.Closed)
             return ApiResponse<ConversationDto>.ErrorResponse(
                 "INVALID_STATUS_TRANSITION", "Conversation is already closed.");
 
-        conv.ConversationStatus = "Closed";
+        conv.ConversationStatus = ConversationStatus.Closed;
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("CLOSE_CONVERSATION", "Conversation",
@@ -316,7 +316,7 @@ public class ChatService : IChatService
             return ApiResponse<MessageDto>.ErrorResponse(
                 "ACCESS_DENIED", "You are not a participant of this conversation.");
 
-        if (conv.ConversationStatus == "Closed")
+        if (conv.ConversationStatus == ConversationStatus.Closed)
             return ApiResponse<MessageDto>.ErrorResponse(
                 "INVALID_STATUS_TRANSITION", "Cannot send messages in a closed conversation.");
 
@@ -504,7 +504,7 @@ public class ChatService : IChatService
         ConversationId = c.ConversationID,
         ConnectionId = c.ConnectionID,
         MentorshipId = c.MentorshipID,
-        Status = c.ConversationStatus,
+        Status = c.ConversationStatus.ToString(),
         CreatedAt = c.CreatedAt,
         LastMessageAt = c.LastMessageAt
     };

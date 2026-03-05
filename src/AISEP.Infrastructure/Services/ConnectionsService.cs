@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Connection;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -39,7 +40,7 @@ public class ConnectionsService : IConnectionsService
         var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
             c.StartupID == request.StartupId &&
             c.InvestorID == investor.InvestorID &&
-            (c.ConnectionStatus == "Sent" || c.ConnectionStatus == "Accepted"));
+            (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
         if (duplicate)
             return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_ALREADY_EXISTS",
                 "An active or pending connection with this startup already exists.");
@@ -48,7 +49,7 @@ public class ConnectionsService : IConnectionsService
         {
             StartupID = request.StartupId,
             InvestorID = investor.InvestorID,
-            ConnectionStatus = "Sent",
+            ConnectionStatus = ConnectionStatus.Requested,
             InitiatedBy = userId,
             PersonalizedMessage = request.Message,
             RequestedAt = DateTime.UtcNow
@@ -84,8 +85,8 @@ public class ConnectionsService : IConnectionsService
             .Include(c => c.Startup).Include(c => c.Investor)
             .Where(c => c.InvestorID == investor.InvestorID);
 
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(c => c.ConnectionStatus == status);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
+            query = query.Where(c => c.ConnectionStatus == statusEnum);
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
@@ -122,8 +123,8 @@ public class ConnectionsService : IConnectionsService
             .Include(c => c.Startup).Include(c => c.Investor)
             .Where(c => c.StartupID == startup.StartupID);
 
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(c => c.ConnectionStatus == status);
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum2))
+            query = query.Where(c => c.ConnectionStatus == statusEnum2);
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
@@ -172,9 +173,9 @@ public class ConnectionsService : IConnectionsService
         var (conn, error) = await GetConnectionForInvestor(userId, connectionId);
         if (conn == null) return error!;
 
-        if (conn.ConnectionStatus != "Sent")
+        if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot update connection with status '{conn.ConnectionStatus}'. Only 'Sent' can be updated.");
+                $"Cannot update connection with status '{conn.ConnectionStatus}'. Only 'Requested' can be updated.");
 
         if (request.Message != null) conn.PersonalizedMessage = request.Message;
 
@@ -193,11 +194,11 @@ public class ConnectionsService : IConnectionsService
         var (conn, error) = await GetConnectionForInvestor(userId, connectionId);
         if (conn == null) return error!;
 
-        if (conn.ConnectionStatus != "Sent")
+        if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot withdraw connection with status '{conn.ConnectionStatus}'. Only 'Sent' can be withdrawn.");
+                $"Cannot withdraw connection with status '{conn.ConnectionStatus}'. Only 'Requested' can be withdrawn.");
 
-        conn.ConnectionStatus = "Withdrawn";
+        conn.ConnectionStatus = ConnectionStatus.Withdrawn;
         conn.RespondedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -216,11 +217,11 @@ public class ConnectionsService : IConnectionsService
         var (conn, error) = await GetConnectionForStartup(userId, connectionId);
         if (conn == null) return error!;
 
-        if (conn.ConnectionStatus != "Sent")
+        if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot accept connection with status '{conn.ConnectionStatus}'. Only 'Sent' can be accepted.");
+                $"Cannot accept connection with status '{conn.ConnectionStatus}'. Only 'Requested' can be accepted.");
 
-        conn.ConnectionStatus = "Accepted";
+        conn.ConnectionStatus = ConnectionStatus.Accepted;
         conn.RespondedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -239,11 +240,11 @@ public class ConnectionsService : IConnectionsService
         var (conn, error) = await GetConnectionForStartup(userId, connectionId);
         if (conn == null) return error!;
 
-        if (conn.ConnectionStatus != "Sent")
+        if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot reject connection with status '{conn.ConnectionStatus}'. Only 'Sent' can be rejected.");
+                $"Cannot reject connection with status '{conn.ConnectionStatus}'. Only 'Requested' can be rejected.");
 
-        conn.ConnectionStatus = "Rejected";
+        conn.ConnectionStatus = ConnectionStatus.Rejected;
         conn.RespondedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -267,11 +268,11 @@ public class ConnectionsService : IConnectionsService
             return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_NOT_OWNED",
                 "You do not have access to this connection.");
 
-        if (conn.ConnectionStatus != "Accepted")
+        if (conn.ConnectionStatus != ConnectionStatus.Accepted)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot close connection with status '{conn.ConnectionStatus}'. Only 'Accepted' can be closed.");
 
-        conn.ConnectionStatus = "Closed";
+        conn.ConnectionStatus = ConnectionStatus.Closed;
         conn.RespondedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -291,7 +292,7 @@ public class ConnectionsService : IConnectionsService
         if (conn == null)
             return ApiResponse<InfoRequestDto>.ErrorResponse(error!.Error!.Code, error.Error.Message);
 
-        if (conn.ConnectionStatus != "Accepted")
+        if (conn.ConnectionStatus != ConnectionStatus.Accepted)
             return ApiResponse<InfoRequestDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 "Information requests can only be created for accepted connections.");
 
@@ -303,7 +304,7 @@ public class ConnectionsService : IConnectionsService
             InvestorID = investor.InvestorID,
             RequestType = request.RequestType,
             RequestMessage = request.RequestMessage,
-            RequestStatus = "Pending",
+            RequestStatus = RequestStatus.Pending,
             RequestedAt = DateTime.UtcNow
         };
 
@@ -357,11 +358,11 @@ public class ConnectionsService : IConnectionsService
             return ApiResponse<InfoRequestDto>.ErrorResponse("INFO_REQUEST_NOT_OWNED",
                 "You are not the startup owner of this connection.");
 
-        if (ir.RequestStatus != "Pending")
+        if (ir.RequestStatus != RequestStatus.Pending)
             return ApiResponse<InfoRequestDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot fulfill info request with status '{ir.RequestStatus}'.");
 
-        ir.RequestStatus = "Fulfilled";
+        ir.RequestStatus = RequestStatus.Approved;
         ir.ResponseMessage = request.ResponseMessage;
         ir.ResponseDocumentIDs = request.ResponseDocumentIDs;
         ir.FulfilledAt = DateTime.UtcNow;
@@ -389,11 +390,11 @@ public class ConnectionsService : IConnectionsService
             return ApiResponse<InfoRequestDto>.ErrorResponse("INFO_REQUEST_NOT_OWNED",
                 "You are not the startup owner of this connection.");
 
-        if (ir.RequestStatus != "Pending")
+        if (ir.RequestStatus != RequestStatus.Pending)
             return ApiResponse<InfoRequestDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot reject info request with status '{ir.RequestStatus}'.");
 
-        ir.RequestStatus = "Rejected";
+        ir.RequestStatus = RequestStatus.Rejected;
         ir.ResponseMessage = reason;
         await _db.SaveChangesAsync();
 
@@ -448,10 +449,10 @@ public class ConnectionsService : IConnectionsService
             InvestorID = investor.InvestorID,
             CompanyName = request.CompanyName,
             Industry = request.Industry,
-            InvestmentStage = request.InvestmentStage,
+            InvestmentStage = !string.IsNullOrWhiteSpace(request.InvestmentStage) && Enum.TryParse<InvestmentStage>(request.InvestmentStage, true, out var isEnum) ? isEnum : null,
             InvestmentDate = request.InvestmentDate,
             InvestmentAmount = request.InvestmentAmount,
-            CurrentStatus = request.CurrentStatus,
+            CurrentStatus = !string.IsNullOrWhiteSpace(request.CurrentStatus) && Enum.TryParse<PortfolioCompanyStatus>(request.CurrentStatus, true, out var csEnum) ? csEnum : null,
             Description = request.Description
         };
 
@@ -482,11 +483,11 @@ public class ConnectionsService : IConnectionsService
 
         if (request.CompanyName != null) pc.CompanyName = request.CompanyName;
         if (request.Industry != null) pc.Industry = request.Industry;
-        if (request.InvestmentStage != null) pc.InvestmentStage = request.InvestmentStage;
+        if (request.InvestmentStage != null && Enum.TryParse<InvestmentStage>(request.InvestmentStage, true, out var isEnum2)) pc.InvestmentStage = isEnum2;
         if (request.InvestmentDate.HasValue) pc.InvestmentDate = request.InvestmentDate;
         if (request.InvestmentAmount.HasValue) pc.InvestmentAmount = request.InvestmentAmount;
-        if (request.CurrentStatus != null) pc.CurrentStatus = request.CurrentStatus;
-        if (request.ExitType != null) pc.ExitType = request.ExitType;
+        if (request.CurrentStatus != null && Enum.TryParse<PortfolioCompanyStatus>(request.CurrentStatus, true, out var csEnum2)) pc.CurrentStatus = csEnum2;
+        if (request.ExitType != null && Enum.TryParse<ExitType>(request.ExitType, true, out var etEnum)) pc.ExitType = etEnum;
         if (request.ExitDate.HasValue) pc.ExitDate = request.ExitDate;
         if (request.ExitValue.HasValue) pc.ExitValue = request.ExitValue;
         if (request.Description != null) pc.Description = request.Description;
@@ -590,7 +591,7 @@ public class ConnectionsService : IConnectionsService
         ConnectionID = c.ConnectionID,
         StartupID = c.StartupID,
         InvestorID = c.InvestorID,
-        ConnectionStatus = c.ConnectionStatus,
+        ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         MatchScore = c.MatchScore,
         RequestedAt = c.RequestedAt,
@@ -604,7 +605,7 @@ public class ConnectionsService : IConnectionsService
         StartupName = c.Startup.CompanyName,
         InvestorID = c.InvestorID,
         InvestorName = c.Investor.FullName,
-        ConnectionStatus = c.ConnectionStatus,
+        ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         MatchScore = c.MatchScore,
         RequestedAt = c.RequestedAt,
@@ -618,7 +619,7 @@ public class ConnectionsService : IConnectionsService
         StartupName = c.Startup.CompanyName,
         InvestorID = c.InvestorID,
         InvestorName = c.Investor.FullName,
-        ConnectionStatus = c.ConnectionStatus,
+        ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         AttachedDocumentIDs = c.AttachedDocumentIDs,
         MatchScore = c.MatchScore,
@@ -634,7 +635,7 @@ public class ConnectionsService : IConnectionsService
         InvestorID = ir.InvestorID,
         RequestType = ir.RequestType,
         RequestMessage = ir.RequestMessage,
-        RequestStatus = ir.RequestStatus,
+        RequestStatus = ir.RequestStatus.ToString(),
         ResponseMessage = ir.ResponseMessage,
         ResponseDocumentIDs = ir.ResponseDocumentIDs,
         RequestedAt = ir.RequestedAt,
@@ -647,11 +648,11 @@ public class ConnectionsService : IConnectionsService
         InvestorID = p.InvestorID,
         CompanyName = p.CompanyName,
         Industry = p.Industry,
-        InvestmentStage = p.InvestmentStage,
+        InvestmentStage = p.InvestmentStage?.ToString(),
         InvestmentDate = p.InvestmentDate,
         InvestmentAmount = p.InvestmentAmount,
-        CurrentStatus = p.CurrentStatus,
-        ExitType = p.ExitType,
+        CurrentStatus = p.CurrentStatus?.ToString(),
+        ExitType = p.ExitType?.ToString(),
         ExitDate = p.ExitDate,
         ExitValue = p.ExitValue,
         Description = p.Description,

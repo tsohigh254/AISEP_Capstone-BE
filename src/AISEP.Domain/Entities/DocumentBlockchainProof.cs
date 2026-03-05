@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class DocumentBlockchainProof
@@ -11,7 +13,7 @@ public class DocumentBlockchainProof
     public string? BlockNumber { get; set; }
     public DateTime? AnchoredAt { get; set; }
     public int? AnchoredBy { get; set; }
-    public string ProofStatus { get; set; } = "Anchored"; // Anchored or Revoked
+    public ProofStatus ProofStatus { get; set; } = ProofStatus.Anchored;
 
     // Navigation properties
     public Document Document { get; set; } = null!;

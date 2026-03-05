@@ -99,12 +99,11 @@ public class StartupSearchItemDto
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
     public string? Stage { get; set; }
-    public string? Industry { get; set; }
+    public string? IndustryName { get; set; }
     public string? SubIndustry { get; set; }
     public string? Location { get; set; }
     public string? Country { get; set; }
     public string? LogoURL { get; set; }
-    public string? FundingStage { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

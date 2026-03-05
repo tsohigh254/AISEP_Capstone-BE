@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260305040721_EnumStandardization")]
+    partial class EnumStandardization
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -827,10 +830,10 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<DateTime?>("LastNotifiedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<short?>("Priority")
+                    b.Property<short>("Priority")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
-                        .HasDefaultValueSql("1");
+                        .HasDefaultValue((short)1);
 
                     b.Property<DateTime?>("RemovedAt")
                         .HasColumnType("timestamp with time zone");

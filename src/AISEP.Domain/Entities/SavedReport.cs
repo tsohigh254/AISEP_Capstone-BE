@@ -1,10 +1,12 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class SavedReport
 {
     public int ReportID { get; set; }
     public string ReportName { get; set; } = string.Empty;
-    public string ReportType { get; set; } = string.Empty;
+    public ReportType ReportType { get; set; }
     public string? Parameters { get; set; } // JSON
     public int CreatedBy { get; set; }
     public bool IsScheduled { get; set; }

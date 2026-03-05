@@ -378,9 +378,8 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = "Account is deactivated"
             };
-        
 
-        if (user.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
+        if (user!.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
             return new AuthResponse<AuthData>
             {
                 Success = false,
@@ -554,11 +553,11 @@ public class AuthService : IAuthService
 
     private async Task SendEmail(int userId, string email, string otp)
     {
-        var htmlBody = $"<p>Mã xác nh?n email c?a b?n là:</p> " +
+        var htmlBody = $"<p>Mï¿½ xï¿½c nh?n email c?a b?n lï¿½:</p> " +
             $" <p class=\"otp\">{otp}</p> " +
-            $"<p>Mã s? h?t h?n trong {5} phút. Không chia s? mã otp này cho b?t kì ai</p>";
+            $"<p>Mï¿½ s? h?t h?n trong {5} phï¿½t. Khï¿½ng chia s? mï¿½ otp nï¿½y cho b?t kï¿½ ai</p>";
 
-        await _emailService.SendEmailAsync(email, "M?t email ?ã g?i ??n email c?a b?n . Hãy nh?p mã xác nh?n", htmlBody);
+        await _emailService.SendEmailAsync(email, "M?t email ?ï¿½ g?i ??n email c?a b?n . Hï¿½y nh?p mï¿½ xï¿½c nh?n", htmlBody);
     }
     #endregion
 }

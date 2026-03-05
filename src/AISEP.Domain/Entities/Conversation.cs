@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class Conversation
@@ -5,7 +7,7 @@ public class Conversation
     public int ConversationID { get; set; }
     public int? ConnectionID { get; set; }
     public int? MentorshipID { get; set; }
-    public string ConversationStatus { get; set; } = string.Empty;
+    public ConversationStatus ConversationStatus { get; set; } = ConversationStatus.Active;
     public DateTime CreatedAt { get; set; }
     public DateTime? LastMessageAt { get; set; }
 

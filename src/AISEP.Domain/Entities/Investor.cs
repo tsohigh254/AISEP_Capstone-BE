@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class Investor
@@ -14,6 +16,7 @@ public class Investor
     public string? Country { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
+    public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

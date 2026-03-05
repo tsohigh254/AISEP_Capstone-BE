@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -43,7 +44,7 @@ public class AdvisorService : IAdvisorService
             Website = request.Website,
             LinkedInURL = request.LinkedInURL,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
-            ProfileStatus = "Draft",
+            ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -130,7 +131,7 @@ public class AdvisorService : IAdvisorService
                 AdvisorID = advisor.AdvisorID,
                 Category = item.Category,
                 SubTopic = item.SubTopic,
-                ProficiencyLevel = item.ProficiencyLevel,
+                ProficiencyLevel = Enum.TryParse<ProficiencyLevel>(item.ProficiencyLevel, true, out var pl) ? pl : null,
                 YearsOfExperience = item.YearsOfExperience
             })
             .ToList();
@@ -148,7 +149,7 @@ public class AdvisorService : IAdvisorService
         {
             Category = e.Category,
             SubTopic = e.SubTopic,
-            ProficiencyLevel = e.ProficiencyLevel,
+            ProficiencyLevel = e.ProficiencyLevel?.ToString(),
             YearsOfExperience = e.YearsOfExperience
         }).ToList();
 
@@ -276,7 +277,7 @@ public class AdvisorService : IAdvisorService
             {
                 Category = e.Category,
                 SubTopic = e.SubTopic,
-                ProficiencyLevel = e.ProficiencyLevel,
+                ProficiencyLevel = e.ProficiencyLevel?.ToString(),
                 YearsOfExperience = e.YearsOfExperience
             }).ToList()
         }).ToList();
@@ -313,7 +314,7 @@ public class AdvisorService : IAdvisorService
         MentorshipPhilosophy = a.MentorshipPhilosophy,
         LinkedInURL = a.LinkedInURL,
         Website = a.Website,
-        ProfileStatus = a.ProfileStatus,
+        ProfileStatus = a.ProfileStatus.ToString(),
         ProfileCompleteness = a.ProfileCompleteness,
         TotalMentees = a.TotalMentees,
         TotalSessionHours = a.TotalSessionHours,
@@ -324,7 +325,7 @@ public class AdvisorService : IAdvisorService
         {
             Category = e.Category,
             SubTopic = e.SubTopic,
-            ProficiencyLevel = e.ProficiencyLevel,
+            ProficiencyLevel = e.ProficiencyLevel?.ToString(),
             YearsOfExperience = e.YearsOfExperience
         }).ToList(),
         Availability = availability != null ? MapAvailabilityDto(availability) : null,

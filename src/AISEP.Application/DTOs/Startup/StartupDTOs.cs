@@ -7,16 +7,16 @@ public class CreateStartupRequest
     public string CompanyName { get; set; } = null!;
     public string? OneLiner { get; set; }
     public string? Description { get; set; }
-    /// <summary>Industry name string (stored in Startups.Industry column)</summary>
-    public string? Industry { get; set; }
+    /// <summary>FK to Industries table</summary>
+    public int? IndustryID { get; set; }
     public string? SubIndustry { get; set; }
+    /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public int? TeamSize { get; set; }
     public string? Location { get; set; }
     public string? Country { get; set; }
     public string? Website { get; set; }
-    public string? FundingStage { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -27,7 +27,7 @@ public class UpdateStartupRequest
     public string? CompanyName { get; set; }
     public string? OneLiner { get; set; }
     public string? Description { get; set; }
-    public string? Industry { get; set; }
+    public int? IndustryID { get; set; }
     public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
@@ -37,7 +37,6 @@ public class UpdateStartupRequest
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
     public string? CoverImageURL { get; set; }
-    public string? FundingStage { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -53,7 +52,8 @@ public class StartupMeDto
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
     public string? Description { get; set; }
-    public string? Industry { get; set; }
+    public int? IndustryID { get; set; }
+    public string? IndustryName { get; set; }
     public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
@@ -63,7 +63,6 @@ public class StartupMeDto
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
     public string? CoverImageURL { get; set; }
-    public string? FundingStage { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -82,7 +81,8 @@ public class StartupPublicDto
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
     public string? Description { get; set; }
-    public string? Industry { get; set; }
+    public int? IndustryID { get; set; }
+    public string? IndustryName { get; set; }
     public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
@@ -92,7 +92,6 @@ public class StartupPublicDto
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
     public string? CoverImageURL { get; set; }
-    public string? FundingStage { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public string? ProfileStatus { get; set; }
@@ -107,13 +106,12 @@ public class StartupListItemDto
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
-    public string? Industry { get; set; }
+    public string? IndustryName { get; set; }
     public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public string? Location { get; set; }
     public string? Country { get; set; }
     public string? LogoURL { get; set; }
-    public string? FundingStage { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

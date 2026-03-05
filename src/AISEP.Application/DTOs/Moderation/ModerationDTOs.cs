@@ -30,7 +30,6 @@ public class FlaggedContentDetailDto
     public DateTime FlaggedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public int? ReviewedBy { get; set; }
-    public string? ModerationAction { get; set; }
     public string? ModeratorNotes { get; set; }
     public List<ModerationActionDto> Actions { get; set; } = new();
 }
