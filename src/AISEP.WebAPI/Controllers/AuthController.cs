@@ -27,7 +27,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await _authService.RegisterAsync(request);
-        return result.ToMessageEnvelope(message: "Registered successfully");
+        return result.ToMessageEnvelope(message: "Registered successfully, open your email to get the otp code");
     }
 
     /// <summary>Login with email and password</summary>

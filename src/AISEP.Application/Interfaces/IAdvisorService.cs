@@ -10,8 +10,8 @@ public interface IAdvisorService
     Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId);
     Task<ApiResponse<AdvisorMeDto>> UpdateProfileAsync(int userId, UpdateAdvisorRequest request);
 
-    // Expertise
-    Task<ApiResponse<List<ExpertiseItemDto>>> UpdateExpertiseAsync(int userId, UpdateExpertiseRequest request);
+    //// Expertise
+    //Task<ApiResponse<List<ExpertiseItemDto>>> UpdateExpertiseAsync(int userId, UpdateExpertiseRequest request);
 
     // Availability
     Task<ApiResponse<AvailabilityDto>> UpdateAvailabilityAsync(int userId, UpdateAvailabilityRequest request);

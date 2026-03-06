@@ -31,10 +31,6 @@ public class CreateAdvisorRequestValidator : AbstractValidator<CreateAdvisorRequ
             .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
             .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
 
-        RuleFor(x => x.ProfilePhotoURL)
-            .Must(BeAValidUrlOrNull).WithMessage("Profile photo URL must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.ProfilePhotoURL));
-
         RuleFor(x => x.MentorshipPhilosophy)
             .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")
             .When(x => x.MentorshipPhilosophy != null);
@@ -75,10 +71,6 @@ public class UpdateAdvisorRequestValidator : AbstractValidator<UpdateAdvisorRequ
         RuleFor(x => x.LinkedInURL)
             .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
             .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
-
-        RuleFor(x => x.ProfilePhotoURL)
-            .Must(BeAValidUrlOrNull).WithMessage("Profile photo URL must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.ProfilePhotoURL));
 
         RuleFor(x => x.MentorshipPhilosophy)
             .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")

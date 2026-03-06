@@ -1,3 +1,6 @@
+using AISEP.Domain.Enums;
+using Microsoft.AspNetCore.Http;
+
 namespace AISEP.Application.DTOs.Advisor;
 
 // ========== REQUEST DTOs ==========
@@ -14,10 +17,11 @@ public class CreateAdvisorRequest
     public string? Title { get; set; }
     public string? Company { get; set; }
     public string? Bio { get; set; }
-    public string? ProfilePhotoURL { get; set; }
+    public IFormFile? ProfilePhotoURL { get; set; }
     public string? Website { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public List<ExpertiseItemDto> Items { get; set; } = new();
 }
 
 /// <summary>
@@ -29,10 +33,11 @@ public class UpdateAdvisorRequest
     public string? Title { get; set; }
     public string? Company { get; set; }
     public string? Bio { get; set; }
-    public string? ProfilePhotoURL { get; set; }
+    public IFormFile? ProfilePhotoURL { get; set; }
     public string? Website { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public List<ExpertiseItemDto> Items { get; set; } = new();
 }
 
 /// <summary>
@@ -93,7 +98,7 @@ public class ExpertiseItemDto
 {
     public string Category { get; set; } = null!;
     public string? SubTopic { get; set; }
-    public string? ProficiencyLevel { get; set; }
+    public ProficiencyLevel? ProficiencyLevel { get; set; }
     public int? YearsOfExperience { get; set; }
 }
 

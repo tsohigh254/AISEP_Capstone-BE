@@ -14,6 +14,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
+using CloudinaryDotNet;
+using Microsoft.Extensions.Options;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -80,12 +82,12 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAdvisorService, AdvisorService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IStartupService, StartupService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IInvestorService, InvestorService>();
-builder.Services.AddScoped<IAdvisorService, AdvisorService>();
 builder.Services.AddScoped<IMentorshipService, MentorshipService>();
 builder.Services.AddScoped<IConnectionsService, ConnectionsService>();
 builder.Services.AddScoped<IChatService, ChatService>();
@@ -94,11 +96,17 @@ builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddSingleton<IBlockchainService, StubBlockchainService>(); // TODO: swap with real blockchain RPC for production
 
+
 // Storage (local file system for dev — swap to Azure Blob / S3 for production)
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
 builder.Services.AddSingleton<IStorageService>(new LocalStorageService(uploadsPath));
 
-// Authentication
+builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
+
+builder.Services.Configure<CloudinaryOptions>(
+    builder.Configuration.GetSection("CloudinaryOptions"));
+
+    // Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

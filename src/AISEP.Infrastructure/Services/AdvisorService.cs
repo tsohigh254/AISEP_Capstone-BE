@@ -14,12 +14,14 @@ public class AdvisorService : IAdvisorService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<AdvisorService> _logger;
-
-    public AdvisorService(ApplicationDbContext db, IAuditService audit, ILogger<AdvisorService> logger)
+    private readonly ICloudinaryService _cloudinaryService;
+    private const string Folder = "ProfilePic";
+    public AdvisorService(ApplicationDbContext db, IAuditService audit, ILogger<AdvisorService> logger, ICloudinaryService cloudinaryService)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _cloudinaryService = cloudinaryService;
     }
 
     // ================================================================
@@ -33,6 +35,8 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_EXISTS",
                 "Advisor profile already exists for this user.");
 
+        var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
+
         var advisor = new Advisor
         {
             UserID = userId,
@@ -40,7 +44,7 @@ public class AdvisorService : IAdvisorService
             Title = request.Title,
             Company = request.Company,
             Bio = request.Bio,
-            ProfilePhotoURL = request.ProfilePhotoURL,
+            ProfilePhotoURL = profilePhotoUrl,
             Website = request.Website,
             LinkedInURL = request.LinkedInURL,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
@@ -48,7 +52,21 @@ public class AdvisorService : IAdvisorService
             CreatedAt = DateTime.UtcNow
         };
 
-        _db.Advisors.Add(advisor);
+        foreach(var item in request.Items)
+        {
+            var newItem = new AdvisorExpertise
+            {
+                AdvisorID = advisor.AdvisorID,
+                Category = item.Category,
+                SubTopic = item.SubTopic,
+                ProficiencyLevel = item.ProficiencyLevel,
+                YearsOfExperience = item.YearsOfExperience
+            };
+
+            advisor.Expertise.Add(newItem);
+        }
+    
+        await _db.Advisors.AddAsync(advisor);
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
@@ -89,61 +107,38 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
 
+        var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
+
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
         if (request.Company != null) advisor.Company = request.Company;
         if (request.Bio != null) advisor.Bio = request.Bio;
-        if (request.ProfilePhotoURL != null) advisor.ProfilePhotoURL = request.ProfilePhotoURL;
         if (request.Website != null) advisor.Website = request.Website;
         if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
         advisor.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        if (request.ProfilePhotoURL != null)
+        {
+            await _cloudinaryService.DeleteImage(advisor.ProfilePhotoURL);
+            advisor.ProfilePhotoURL = profilePhotoUrl;
+        }
 
-        await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
-        _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
-
-        return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, advisor.Availability, advisor.Expertise, advisor.IndustryFocus));
-    }
-
-    // ================================================================
-    // EXPERTISE (replace-all)
-    // ================================================================
-
-    public async Task<ApiResponse<List<ExpertiseItemDto>>> UpdateExpertiseAsync(int userId, UpdateExpertiseRequest request)
-    {
-        var advisor = await _db.Advisors
-            .Include(a => a.Expertise)
-            .FirstOrDefaultAsync(a => a.UserID == userId);
-
-        if (advisor == null)
-            return ApiResponse<List<ExpertiseItemDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
-                "Advisor profile not found.");
-
-        // Replace-all: remove old, insert new
-        _db.AdvisorExpertises.RemoveRange(advisor.Expertise);
-
-        var newItems = request.Items
-            .Select(item => new AdvisorExpertise
+        foreach (var item in request.Items)
+        {
+            var newItem = new AdvisorExpertise
             {
                 AdvisorID = advisor.AdvisorID,
                 Category = item.Category,
                 SubTopic = item.SubTopic,
                 ProficiencyLevel = Enum.TryParse<ProficiencyLevel>(item.ProficiencyLevel, true, out var pl) ? pl : null,
                 YearsOfExperience = item.YearsOfExperience
-            })
-            .ToList();
+            };
 
-        _db.AdvisorExpertises.AddRange(newItems);
-        advisor.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+            advisor.Expertise.Add(newItem);
+        }
 
-        await _audit.LogAsync("UPDATE_ADVISOR_EXPERTISE", "AdvisorExpertise", advisor.AdvisorID,
-            $"Count={newItems.Count}");
-        _logger.LogInformation("Advisor {AdvisorId} expertise updated ({Count} items)",
-            advisor.AdvisorID, newItems.Count);
+        _db.Advisors.Update(advisor);
 
         var result = newItems.Select(e => new ExpertiseItemDto
         {
@@ -153,8 +148,13 @@ public class AdvisorService : IAdvisorService
             YearsOfExperience = e.YearsOfExperience
         }).ToList();
 
-        return ApiResponse<List<ExpertiseItemDto>>.SuccessResponse(result);
+        await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
+        _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
+
+        return ApiResponse<AdvisorMeDto>.SuccessResponse(
+            MapToMeDto(advisor, advisor.Availability, advisor.Expertise, advisor.IndustryFocus));
     }
+
 
     // ================================================================
     // AVAILABILITY (upsert one-to-one)
@@ -299,6 +299,7 @@ public class AdvisorService : IAdvisorService
     // MAPPING
     // ================================================================
 
+    #region helper method
     private static AdvisorMeDto MapToMeDto(
         Advisor a,
         AdvisorAvailability? availability,
@@ -350,4 +351,5 @@ public class AdvisorService : IAdvisorService
         if (bio.Length <= maxLength) return bio;
         return bio[..maxLength] + "…";
     }
+    #endregion
 }

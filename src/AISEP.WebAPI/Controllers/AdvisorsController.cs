@@ -44,7 +44,7 @@ public class AdvisorsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateProfile(
-        [FromBody] CreateAdvisorRequest request,
+        [FromForm] CreateAdvisorRequest request,
         CancellationToken ct = default)
     {
         var userId = GetCurrentUserId();
@@ -83,32 +83,11 @@ public class AdvisorsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateProfile(
-        [FromBody] UpdateAdvisorRequest request,
+        [FromForm] UpdateAdvisorRequest request,
         CancellationToken ct = default)
     {
         var userId = GetCurrentUserId();
         var result = await _advisorService.UpdateProfileAsync(userId, request);
-        return result.ToActionResult();
-    }
-
-    // ================================================================
-    // 4) PUT /api/advisors/me/expertise — Replace-all expertise
-    // ================================================================
-
-    /// <summary>
-    /// Replace all expertise items for the current advisor.
-    /// Old items are deleted and new items are inserted.
-    /// </summary>
-    [HttpPut("me/expertise")]
-    [Authorize(Policy = "AdvisorOnly")]
-    [ProducesResponseType(typeof(ApiResponse<List<ExpertiseItemDto>>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<List<ExpertiseItemDto>>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateExpertise(
-        [FromBody] UpdateExpertiseRequest request,
-        CancellationToken ct = default)
-    {
-        var userId = GetCurrentUserId();
-        var result = await _advisorService.UpdateExpertiseAsync(userId, request);
         return result.ToActionResult();
     }
 
