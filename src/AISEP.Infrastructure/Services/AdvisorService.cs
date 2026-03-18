@@ -37,6 +37,8 @@ public class AdvisorService : IAdvisorService
                 "Advisor profile already exists for this user.");
 
         var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinarySavingFolder.ProfilePicFolder);
+        var normalizedWebsite = NormalizeOptionalUrl(request.Website);
+        var normalizedLinkedInUrl = NormalizeOptionalUrl(request.LinkedInURL);
 
         var advisor = new Advisor
         {
@@ -46,8 +48,8 @@ public class AdvisorService : IAdvisorService
             Company = request.Company,
             Bio = request.Bio,
             ProfilePhotoURL = profilePhotoUrl,
-            Website = request.Website,
-            LinkedInURL = request.LinkedInURL,
+            Website = normalizedWebsite,
+            LinkedInURL = normalizedLinkedInUrl,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
             ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
@@ -114,8 +116,8 @@ public class AdvisorService : IAdvisorService
         if (request.Title != null) advisor.Title = request.Title;
         if (request.Company != null) advisor.Company = request.Company;
         if (request.Bio != null) advisor.Bio = request.Bio;
-        if (request.Website != null) advisor.Website = request.Website;
-        if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
+        if (request.Website != null) advisor.Website = NormalizeOptionalUrl(request.Website);
+        if (request.LinkedInURL != null) advisor.LinkedInURL = NormalizeOptionalUrl(request.LinkedInURL);
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
         advisor.UpdatedAt = DateTime.UtcNow;
 
@@ -286,6 +288,41 @@ public class AdvisorService : IAdvisorService
                 TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         });
+    }
+
+    private static string? NormalizeOptionalUrl(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        var value = input.Trim();
+        if (IsPlaceholderValue(value))
+            return null;
+
+        if (!value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            value = $"https://{value}";
+        }
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            return null;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return null;
+
+        return uri.ToString();
+    }
+
+    private static bool IsPlaceholderValue(string value)
+    {
+        return value.Equals("k co", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("khong co", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("khong", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("none", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("n/a", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("na", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("null", StringComparison.OrdinalIgnoreCase);
     }
 
     // ================================================================

@@ -24,23 +24,16 @@ public class CreateAdvisorRequestValidator : AbstractValidator<CreateAdvisorRequ
             .When(x => x.Bio != null);
 
         RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.Website));
+            .Must(AdvisorUrlValidationHelper.BeAValidUrlOrDomainOrNull).WithMessage("Website must be a valid URL.")
+            .When(x => !AdvisorUrlValidationHelper.IsNullOrPlaceholder(x.Website));
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
+            .Must(AdvisorUrlValidationHelper.BeAValidUrlOrDomainOrNull).WithMessage("LinkedIn URL must be a valid URL.")
+            .When(x => !AdvisorUrlValidationHelper.IsNullOrPlaceholder(x.LinkedInURL));
 
         RuleFor(x => x.MentorshipPhilosophy)
             .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")
             .When(x => x.MentorshipPhilosophy != null);
-    }
-
-    private static bool BeAValidUrlOrNull(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return true;
-        return Uri.TryCreate(url, UriKind.Absolute, out var result)
-            && (result.Scheme == Uri.UriSchemeHttp || result.Scheme == Uri.UriSchemeHttps);
     }
 }
 
@@ -65,23 +58,65 @@ public class UpdateAdvisorRequestValidator : AbstractValidator<UpdateAdvisorRequ
             .When(x => x.Bio != null);
 
         RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.Website));
+            .Must(AdvisorUrlValidationHelper.BeAValidUrlOrDomainOrNull).WithMessage("Website must be a valid URL.")
+            .When(x => !AdvisorUrlValidationHelper.IsNullOrPlaceholder(x.Website));
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
+            .Must(AdvisorUrlValidationHelper.BeAValidUrlOrDomainOrNull).WithMessage("LinkedIn URL must be a valid URL.")
+            .When(x => !AdvisorUrlValidationHelper.IsNullOrPlaceholder(x.LinkedInURL));
 
         RuleFor(x => x.MentorshipPhilosophy)
             .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")
             .When(x => x.MentorshipPhilosophy != null);
     }
+}
 
-    private static bool BeAValidUrlOrNull(string? url)
+internal static class AdvisorUrlValidationHelper
+{
+    private static readonly HashSet<string> PlaceholderValues = new(StringComparer.OrdinalIgnoreCase)
     {
-        if (string.IsNullOrWhiteSpace(url)) return true;
-        return Uri.TryCreate(url, UriKind.Absolute, out var result)
-            && (result.Scheme == Uri.UriSchemeHttp || result.Scheme == Uri.UriSchemeHttps);
+        "k co", "khong co", "khong", "none", "n/a", "na", "null"
+    };
+
+    public static bool IsNullOrPlaceholder(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        return PlaceholderValues.Contains(value.Trim());
+    }
+
+    public static bool BeAValidUrlOrDomainOrNull(string? value)
+    {
+        if (IsNullOrPlaceholder(value))
+            return true;
+
+        var normalized = Normalize(value!);
+        return normalized is not null;
+    }
+
+    public static string? Normalize(string value)
+    {
+        var input = value.Trim();
+        if (string.IsNullOrWhiteSpace(input) || PlaceholderValues.Contains(input))
+            return null;
+
+        if (!input.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !input.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            input = $"https://{input}";
+        }
+
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri))
+            return null;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(uri.Host) || !uri.Host.Contains('.'))
+            return null;
+
+        return uri.ToString();
     }
 }
 

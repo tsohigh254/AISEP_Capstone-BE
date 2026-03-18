@@ -39,7 +39,11 @@ public class AuthController : ControllerBase
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.LoginAsync(request, HttpContext, ipAddress, userAgent);
+        var result = await _authService.LoginAsync(request, ipAddress, userAgent);
+
+        if (result.Success && result.Data != null)
+            SetRefreshTokenCookie(result.Data.RefreshToken, result.Data.RefreshTokenExpires);
+
         return result.ToAuthEnvelope(message: "Login successful");
     }
 
@@ -49,10 +53,19 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RefreshToken()
     {
+        var currentRefreshToken = Request.Cookies["refreshToken"];
+
+        if (string.IsNullOrEmpty(currentRefreshToken))
+            return ApiEnvelopeExtensions.ErrorEnvelope("Invalid refresh token", StatusCodes.Status401Unauthorized);
+
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.RefreshTokenAsync(HttpContext, ipAddress, userAgent);
+        var result = await _authService.RefreshTokenAsync(currentRefreshToken, ipAddress, userAgent);
+
+        if (result.Success && result.Data != null)
+            SetRefreshTokenCookie(result.Data.RefreshToken, result.Data.RefreshTokenExpires);
+
         return result.ToAuthEnvelope(message: "Token refreshed");
     }
 
@@ -63,10 +76,14 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Logout()
     {
-        var result = await _authService.LogoutAsync(HttpContext);
+        var refreshToken = Request.Cookies["refreshToken"];
+        var result = await _authService.LogoutAsync(refreshToken ?? string.Empty);
 
         if (!result)
             return ApiEnvelopeExtensions.ErrorEnvelope("Logout failed", StatusCodes.Status400BadRequest);
+
+        // Clear the refresh token cookie
+        ClearRefreshTokenCookie();
 
         return ApiEnvelopeExtensions.OkEnvelope<object>(null, "Logged out successfully");
     }
@@ -149,7 +166,11 @@ public class AuthController : ControllerBase
         var ipAddress = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var result = await _authService.VerifyEmailAsync(emailVerifyRequest, HttpContext, ipAddress, userAgent);
+        var result = await _authService.VerifyEmailAsync(emailVerifyRequest, ipAddress, userAgent);
+
+        if (result.Success && result.Data != null)
+            SetRefreshTokenCookie(result.Data.RefreshToken, result.Data.RefreshTokenExpires);
+
         return result.ToAuthEnvelope(message: "Email verified successfully");
     }
 
@@ -177,6 +198,30 @@ public class AuthController : ControllerBase
         if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var userId))
             return userId;
         return null;
+    }
+
+    private void SetRefreshTokenCookie(string refreshToken, DateTime expires)
+    {
+        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.None,
+            Secure = true,
+            Expires = expires,
+            Path = ""
+        });
+    }
+
+    private void ClearRefreshTokenCookie()
+    {
+        Response.Cookies.Append("refreshToken", string.Empty, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.None,
+            Secure = true,
+            Expires = DateTime.UnixEpoch,
+            Path = ""
+        });
     }
     #endregion
 }

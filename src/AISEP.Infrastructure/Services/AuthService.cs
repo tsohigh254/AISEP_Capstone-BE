@@ -5,20 +5,13 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Settings;
-using MediatR;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Org.BouncyCastle.Asn1.Ocsp;
-using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -27,18 +20,15 @@ public class AuthService : IAuthService
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
-    private readonly EmailSettings _emailSettings;
 
     public AuthService(
-        ApplicationDbContext context, 
+        ApplicationDbContext context,
         IOptions<JwtSettings> jwtSettings,
-        IEmailService emailService,
-        IOptions<EmailSettings> emailSettings)
+        IEmailService emailService)
     {
         _context = context;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
-        _emailSettings = emailSettings.Value;
     }
 
     public async Task<AuthResponse<string>> RegisterAsync(RegisterRequest request)
@@ -105,10 +95,10 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task<AuthResponse<AuthData>> LoginAsync(LoginRequest request, HttpContext context, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<AuthData>> LoginAsync(LoginRequest request, string? ipAddress = null, string? userAgent = null)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
-        
+
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             return new AuthResponse<AuthData>
@@ -138,26 +128,24 @@ public class AuthService : IAuthService
         // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
 
-        SetupToken(context, refreshTokenExpires, refreshToken);
-
         return new AuthResponse<AuthData>
         {
             Success = true,
             Message = "Login successful",
             Data = new AuthData
             {
-                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),          
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = accessToken,
                 AccessTokenExpires = accessTokenExpires,
+                RefreshToken = refreshToken,
+                RefreshTokenExpires = refreshTokenExpires,
             }
         };
     }
 
-    public async Task<AuthResponse<AuthData>> RefreshTokenAsync(HttpContext context, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<AuthData>> RefreshTokenAsync(string refreshToken, string? ipAddress = null, string? userAgent = null)
     {
-        var refreshToken = context.Request.Cookies["refreshToken"];
-
-        if (refreshToken == null)
+        if (string.IsNullOrEmpty(refreshToken))
         {
             return new AuthResponse<AuthData>
             {
@@ -203,8 +191,6 @@ public class AuthService : IAuthService
         // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
 
-        SetupToken(context, refreshTokenExpires, newRefreshToken);
-
         return new AuthResponse<AuthData>
         {
             Success = true,
@@ -214,13 +200,15 @@ public class AuthService : IAuthService
                 Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = newAccessToken,
                 AccessTokenExpires = accessTokenExpires,
+                RefreshToken = newRefreshToken,
+                RefreshTokenExpires = refreshTokenExpires,
             }
         };
     }
 
-    public async Task<bool> LogoutAsync(HttpContext context)
+    public async Task<bool> LogoutAsync(string refreshToken)
     {
-        var refreshToken = context.Request.Cookies["refreshToken"];
+        if (string.IsNullOrEmpty(refreshToken)) return false;
 
         var token = await _context.RefreshTokens
             .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
@@ -230,9 +218,7 @@ public class AuthService : IAuthService
         token.RevokedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        SetupToken(context, DateTime.UnixEpoch, string.Empty);
-
-        return true;   
+        return true;
     }
 
     public async Task<bool> RevokeAllTokensAsync(int userId)
@@ -367,13 +353,13 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task<AuthResponse<AuthData>> VerifyEmailAsync(EmailVerifyRequest emailVerifyRequest, HttpContext context, string? ipAddress = null, string? userAgent = null)
+    public async Task<AuthResponse<AuthData>> VerifyEmailAsync(EmailVerifyRequest emailVerifyRequest, string? ipAddress = null, string? userAgent = null)
     {
         var user = await _context.Users
             .Include(u => u.EmailOtps)
             .FirstOrDefaultAsync(u => u.Email == emailVerifyRequest.Email);
 
-        if (user != null && !user.IsActive)      
+        if (user != null && !user.IsActive)
             return new AuthResponse<AuthData>            {
                 Success = false,
                 Message = "Account is deactivated"
@@ -385,7 +371,7 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = "Otp code expired"
             };
-     
+
         // Update last login
         user.LastLoginAt = DateTime.UtcNow;
 
@@ -408,8 +394,6 @@ public class AuthService : IAuthService
         // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
 
-        SetupToken(context, refreshTokenExpires, refreshToken);
-
         return new AuthResponse<AuthData>
         {
             Success = true,
@@ -419,6 +403,8 @@ public class AuthService : IAuthService
                 Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = accessToken,
                 AccessTokenExpires = accessTokenExpires,
+                RefreshToken = refreshToken,
+                RefreshTokenExpires = refreshTokenExpires,
             }
         };
     }
@@ -536,28 +522,73 @@ public class AuthService : IAuthService
             .ToListAsync();
     }
 
-    private void SetupToken(HttpContext context, DateTime dateTime, string refreshToken)
-    {
-        context.Response.Cookies.Append(
-            "refreshToken",
-            refreshToken,
-            new CookieOptions
-            {
-                HttpOnly = true,
-                SameSite = SameSiteMode.None,
-                Secure = true,
-                Expires = dateTime,
-                Path = ""
-            });
-    }
-
     private async Task SendEmail(int userId, string email, string otp)
     {
-        var htmlBody = $"<p>M� x�c nh?n email c?a b?n l�:</p> " +
-            $" <p class=\"otp\">{otp}</p> " +
-            $"<p>M� s? h?t h?n trong {5} ph�t. Kh�ng chia s? m� otp n�y cho b?t k� ai</p>";
+        var otpChars = string.Join("", otp.Select(c =>
+            $"<td style='width:48px;height:56px;background-color:#FFFDE7;border:2px solid #FFD54F;border-radius:12px;text-align:center;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:700;color:#F9A825;letter-spacing:2px;'>{c}</td>"));
 
-        await _emailService.SendEmailAsync(email, "M?t email ?� g?i ??n email c?a b?n . H�y nh?p m� x�c nh?n", htmlBody);
+        var htmlBody = $@"
+<!DOCTYPE html>
+<html lang=""vi"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width,initial-scale=1.0"">
+    <title>AISEP - Email Verification</title>
+</head>
+<body style=""margin:0;padding:0;background-color:#FFF9C4;font-family:Arial,Helvetica,sans-serif;"">
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color:#FFF9C4;padding:40px 0;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" width=""480"" cellpadding=""0"" cellspacing=""0"" style=""background-color:#FFFFFF;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08);overflow:hidden;"">
+                    <!-- Header -->
+                    <tr>
+                        <td style=""background:linear-gradient(135deg,#FFD54F,#FFECB3);padding:32px 40px;text-align:center;"">
+                            <h1 style=""margin:0;font-size:28px;font-weight:700;color:#F57F17;letter-spacing:1px;"">AISEP</h1>
+                            <p style=""margin:8px 0 0;font-size:14px;color:#F9A825;font-weight:500;"">AI-powered Startup Ecosystem Platform</p>
+                        </td>
+                    </tr>
+                    <!-- Body -->
+                    <tr>
+                        <td style=""padding:36px 40px 20px;"">
+                            <h2 style=""margin:0 0 8px;font-size:22px;font-weight:700;color:#333333;text-align:center;"">X&#225;c nh&#7853;n email c&#7911;a b&#7841;n</h2>
+                            <p style=""margin:0 0 28px;font-size:15px;color:#666666;text-align:center;line-height:1.6;"">
+                                Vui l&#242;ng s&#7917; d&#7909;ng m&#227; OTP b&#234;n d&#432;&#7899;i &#273;&#7875; ho&#224;n t&#7845;t x&#225;c minh email.
+                            </p>
+                            <!-- OTP Code -->
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""8"" style=""margin:0 auto 28px;"">
+                                <tr>
+                                    {otpChars}
+                                </tr>
+                            </table>
+                            <!-- Timer notice -->
+                            <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"">
+                                <tr>
+                                    <td style=""background-color:#FFFDE7;border-left:4px solid #FFD54F;border-radius:0 8px 8px 0;padding:14px 18px;"">
+                                        <p style=""margin:0;font-size:14px;color:#F57F17;font-weight:600;"">&#9200; M&#227; s&#7869; h&#7871;t h&#7841;n trong 5 ph&#250;t</p>
+                                        <p style=""margin:6px 0 0;font-size:13px;color:#999999;"">Kh&#244;ng chia s&#7867; m&#227; n&#224;y cho b&#7845;t k&#7923; ai.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style=""padding:20px 40px 32px;"">
+                            <hr style=""border:none;border-top:1px solid #FFF3C4;margin:0 0 20px;"">
+                            <p style=""margin:0;font-size:12px;color:#BDBDBD;text-align:center;line-height:1.6;"">
+                                &#272;&#226;y l&#224; email t&#7921; &#273;&#7897;ng t&#7915; AISEP. Vui l&#242;ng kh&#244;ng tr&#7843; l&#7901;i email n&#224;y.<br>
+                                &copy; 2026 AISEP. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+
+        await _emailService.SendEmailAsync(email, "AISEP - Ma xac nhan email cua ban", htmlBody);
     }
     #endregion
 }
