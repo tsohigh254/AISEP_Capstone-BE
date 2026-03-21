@@ -1,4 +1,5 @@
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
 
 namespace AISEP.Application.Interfaces;
@@ -16,6 +17,11 @@ public interface IStartupService
     Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(
         string? keyword, string? industry, string? stage,
         int page, int pageSize);
+
+    // Browse investors (Startup role)
+    Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(
+        string? keyword, string? stage, string? industry, string? sortBy, int page, int pageSize);
+    Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId);
 
     // Team members (owner)
     Task<ApiResponse<List<TeamMemberDto>>> GetTeamMembersAsync(int userId);

@@ -96,9 +96,9 @@ public class ConnectionsController : ControllerBase
     [HttpGet("received")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<ConnectionListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int? investorId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), status, page, pageSize);
+        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), status, investorId, page, pageSize);
         return result.ToPagedEnvelope();
     }
 

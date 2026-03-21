@@ -1,4 +1,5 @@
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
@@ -480,6 +481,110 @@ public class StartupService : IStartupService
             YearsOfExperience = tm.YearsOfExperience,
             CreatedAt = tm.CreatedAt
         };
+    }
+
+    // ========== BROWSE INVESTORS (Startup role) ==========
+
+    public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(
+        string? keyword, string? stage, string? industry, string? sortBy, int page, int pageSize)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = _context.Investors
+            .AsNoTracking()
+            .Include(i => i.Preferences)
+            .Include(i => i.StageFocus)
+            .Include(i => i.IndustryFocus)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim().ToLower();
+            query = query.Where(i =>
+                i.FullName.ToLower().Contains(kw) ||
+                (i.FirmName != null && i.FirmName.ToLower().Contains(kw)) ||
+                (i.Bio != null && i.Bio.ToLower().Contains(kw)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(stage))
+        {
+            query = query.Where(i => i.StageFocus.Any(sf => sf.Stage == stage));
+        }
+
+        if (!string.IsNullOrWhiteSpace(industry))
+        {
+            var ind = industry.Trim().ToLower();
+            query = query.Where(i => i.IndustryFocus.Any(f => f.Industry.ToLower() == ind));
+        }
+
+        query = query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt);
+
+        var totalItems = await query.CountAsync();
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var dtos = items.Select(i => new InvestorSearchItemDto
+        {
+            InvestorID = i.InvestorID,
+            FullName = i.FullName,
+            FirmName = i.FirmName,
+            Title = i.Title,
+            Bio = i.Bio,
+            ProfilePhotoURL = i.ProfilePhotoURL,
+            Location = i.Location,
+            Country = i.Country,
+            LinkedInURL = i.LinkedInURL,
+            Website = i.Website,
+            PreferredStages = i.StageFocus.Select(sf => sf.Stage).ToList(),
+            PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
+            PreferredGeographies = i.Preferences?.PreferredGeographies,
+            TicketSizeMin = i.Preferences?.MinInvestmentSize,
+            TicketSizeMax = i.Preferences?.MaxInvestmentSize,
+            UpdatedAt = i.UpdatedAt
+        }).ToList();
+
+        return ApiResponse<PagedResponse<InvestorSearchItemDto>>.SuccessResponse(new PagedResponse<InvestorSearchItemDto>
+        {
+            Items = dtos,
+            Paging = new PagingInfo
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalItems = totalItems,
+                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
+            }
+        });
+    }
+
+    public async Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId)
+    {
+        var investor = await _context.Investors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+
+        if (investor == null)
+            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
+
+        return ApiResponse<InvestorDto>.SuccessResponse(new InvestorDto
+        {
+            InvestorID = investor.InvestorID,
+            FullName = investor.FullName,
+            FirmName = investor.FirmName,
+            Title = investor.Title,
+            Bio = investor.Bio,
+            ProfilePhotoURL = investor.ProfilePhotoURL,
+            InvestmentThesis = investor.InvestmentThesis,
+            Location = investor.Location,
+            Country = investor.Country,
+            LinkedInURL = investor.LinkedInURL,
+            Website = investor.Website,
+            CreatedAt = investor.CreatedAt,
+            UpdatedAt = investor.UpdatedAt
+        });
     }
 
     private static int CalculateProfileCompleteness(CreateStartupRequest r)

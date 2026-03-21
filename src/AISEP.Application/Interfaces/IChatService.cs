@@ -30,4 +30,7 @@ public interface IChatService
 
     Task<ApiResponse<string>> MarkReadAllAsync(
         int userId, MarkReadAllRequest request);
+
+    /// <summary>Mark all unread messages in a conversation as read — called by PUT /api/conversations/{id}/read.</summary>
+    Task<ApiResponse<string>> MarkConversationReadAsync(int userId, int conversationId);
 }
