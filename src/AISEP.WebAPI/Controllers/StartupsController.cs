@@ -1,4 +1,5 @@
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
 using AISEP.Application.Interfaces;
 using AISEP.WebAPI.Extensions;
@@ -166,6 +167,47 @@ public class StartupsController : ControllerBase
     {
         var result = await _startupService.SearchStartupsAsync(q, industry, stage, page, pageSize);
         return result.ToPagedEnvelope();
+    }
+
+    // ================================================================
+    // BROWSE INVESTORS (Startup role — discover investors)
+    // ================================================================
+
+    /// <summary>
+    /// Search/filter investors for connection opportunities (Startup role only)
+    /// </summary>
+    /// <param name="keyword">Keyword search by name, firm or bio</param>
+    /// <param name="stage">Filter by preferred stage (e.g. Seed, Series A)</param>
+    /// <param name="industry">Filter by preferred industry name</param>
+    /// <param name="sortBy">Sort: recent (default)</param>
+    /// <param name="page">Page number (default 1)</param>
+    /// <param name="pageSize">Items per page (default 12, max 100)</param>
+    [HttpGet("investors")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<InvestorSearchItemDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchInvestors(
+        [FromQuery] string? keyword = null,
+        [FromQuery] string? stage = null,
+        [FromQuery] string? industry = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 12)
+    {
+        var result = await _startupService.SearchInvestorsAsync(keyword, stage, industry, sortBy, page, pageSize);
+        return result.ToPagedEnvelope();
+    }
+
+    /// <summary>
+    /// Get investor profile by ID (Startup role only)
+    /// </summary>
+    [HttpGet("investors/{investorId:int}")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInvestorById(int investorId)
+    {
+        var result = await _startupService.GetInvestorByIdAsync(investorId);
+        return result.ToActionResult();
     }
 
     // ================================================================

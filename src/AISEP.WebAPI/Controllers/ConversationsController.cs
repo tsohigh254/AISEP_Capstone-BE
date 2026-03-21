@@ -77,6 +77,16 @@ public class ConversationsController : ControllerBase
         return result.ToActionResult();
     }
 
+    /// <summary>Mark all messages in a conversation as read.</summary>
+    [HttpPut("{id:int}/read")]
+    [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkRead(int id)
+    {
+        var result = await _chatService.MarkConversationReadAsync(GetCurrentUserId(), id);
+        return result.ToActionResult();
+    }
+
     /// <summary>Get messages in a conversation (paged, newest first).</summary>
     [HttpGet("{id:int}/messages")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<MessageDto>>), StatusCodes.Status200OK)]

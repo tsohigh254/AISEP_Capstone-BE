@@ -108,7 +108,7 @@ public class ConnectionsService : IConnectionsService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(
-        int userId, string? status, int page, int pageSize)
+        int userId, string? status, int? investorId, int page, int pageSize)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
@@ -124,6 +124,9 @@ public class ConnectionsService : IConnectionsService
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(c => c.ConnectionStatus == status);
+
+        if (investorId.HasValue)
+            query = query.Where(c => c.InvestorID == investorId.Value);
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
