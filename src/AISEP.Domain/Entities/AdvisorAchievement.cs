@@ -1,10 +1,12 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class AdvisorAchievement
 {
     public int AchievementID { get; set; }
     public int AdvisorID { get; set; }
-    public string AchievementType { get; set; } = string.Empty;
+    public AchievementType AchievementType { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public DateTime? Date { get; set; }

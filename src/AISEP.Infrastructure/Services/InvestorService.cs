@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -160,11 +161,14 @@ public class InvestorService : IInvestorService
             _db.InvestorStageFocuses.RemoveRange(investor.StageFocus);
             foreach (var stage in request.PreferredStages.Distinct())
             {
-                _db.InvestorStageFocuses.Add(new InvestorStageFocus
+                if (Enum.TryParse<StartupStage>(stage, true, out var stageEnum))
                 {
-                    InvestorID = investor.InvestorID,
-                    Stage = stage
-                });
+                    _db.InvestorStageFocuses.Add(new InvestorStageFocus
+                    {
+                        InvestorID = investor.InvestorID,
+                        Stage = stageEnum
+                    });
+                }
             }
         }
 
@@ -215,6 +219,7 @@ public class InvestorService : IInvestorService
 
         // Check startup exists
         var startup = await _db.Startups.AsNoTracking()
+            .Include(s => s.Industry)
             .FirstOrDefaultAsync(s => s.StartupID == request.StartupId);
 
         if (startup == null)
@@ -236,7 +241,8 @@ public class InvestorService : IInvestorService
             InvestorID = investor.InvestorID,
             StartupID = request.StartupId,
             WatchReason = request.WatchReason,
-            Priority = request.Priority ?? "Medium",
+            Priority = !string.IsNullOrWhiteSpace(request.Priority) && Enum.TryParse<WatchlistPriority>(request.Priority, true, out var prioEnum)
+                ? prioEnum : null,  // null → DB default (Medium=1)
             IsActive = true,
             AddedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
@@ -255,12 +261,12 @@ public class InvestorService : IInvestorService
             StartupID = startup.StartupID,
             CompanyName = startup.CompanyName,
             OneLiner = startup.OneLiner,
-            Industry = startup.Industry,
-            Stage = startup.Stage,
+            Industry = startup.Industry?.IndustryName,
+            Stage = startup.Stage?.ToString(),
             Location = startup.Location,
             LogoURL = startup.LogoURL,
             WatchReason = entry.WatchReason,
-            Priority = entry.Priority,
+            Priority = (entry.Priority ?? WatchlistPriority.Medium).ToString(),
             AddedAt = entry.AddedAt
         });
     }
@@ -293,12 +299,12 @@ public class InvestorService : IInvestorService
                 StartupID = w.StartupID,
                 CompanyName = w.Startup.CompanyName,
                 OneLiner = w.Startup.OneLiner,
-                Industry = w.Startup.Industry,
-                Stage = w.Startup.Stage,
+                Industry = w.Startup.Industry != null ? w.Startup.Industry.IndustryName : null,
+                Stage = w.Startup.Stage != null ? w.Startup.Stage.ToString() : null,
                 Location = w.Startup.Location,
                 LogoURL = w.Startup.LogoURL,
                 WatchReason = w.WatchReason,
-                Priority = w.Priority,
+                Priority = (w.Priority ?? WatchlistPriority.Medium).ToString(),
                 AddedAt = w.AddedAt
             })
             .ToListAsync();
@@ -368,25 +374,17 @@ public class InvestorService : IInvestorService
                 (s.Description != null && s.Description.ToLower().Contains(keyword)));
         }
 
-        // Industry filter by ID: resolve industry name from Industries table
+        // Industry filter by ID
         if (industryId.HasValue)
         {
-            var industryName = await _db.Set<Industry>()
-                .AsNoTracking()
-                .Where(ind => ind.IndustryID == industryId.Value)
-                .Select(ind => ind.IndustryName)
-                .FirstOrDefaultAsync();
-
-            if (industryName != null)
-            {
-                query = query.Where(s => s.Industry == industryName || s.SubIndustry == industryName);
-            }
+            query = query.Where(s => s.IndustryID == industryId.Value);
         }
 
         // Stage filter
         if (!string.IsNullOrWhiteSpace(stage))
         {
-            query = query.Where(s => s.Stage == stage);
+            if (Enum.TryParse<StartupStage>(stage, true, out var stageEnum))
+                query = query.Where(s => s.Stage == stageEnum);
         }
 
         // Location filter
@@ -416,14 +414,13 @@ public class InvestorService : IInvestorService
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
                 OneLiner = s.OneLiner,
-                Stage = s.Stage,
-                Industry = s.Industry,
+                Stage = s.Stage != null ? s.Stage.ToString() : null,
+                IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
                 SubIndustry = s.SubIndustry,
                 Location = s.Location,
                 Country = s.Country,
                 LogoURL = s.LogoURL,
-                FundingStage = s.FundingStage,
-                ProfileStatus = s.ProfileStatus,
+                ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt
             })
             .ToListAsync();
@@ -469,7 +466,7 @@ public class InvestorService : IInvestorService
         {
             TicketMin = pref?.MinInvestmentSize,
             TicketMax = pref?.MaxInvestmentSize,
-            PreferredStages = investor.StageFocus.Select(sf => sf.Stage).ToList(),
+            PreferredStages = investor.StageFocus.Select(sf => sf.Stage.ToString()).ToList(),
             PreferredIndustries = investor.IndustryFocus.Select(inf => inf.Industry).ToList(),
             PreferredGeographies = pref?.PreferredGeographies,
             MinPotentialScore = pref?.MinPotentialScore,

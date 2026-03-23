@@ -378,9 +378,8 @@ public class AuthService : IAuthService
                 Success = false,
                 Message = "Account is deactivated"
             };
-        
 
-        if (user.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
+        if (user!.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
             return new AuthResponse<AuthData>
             {
                 Success = false,

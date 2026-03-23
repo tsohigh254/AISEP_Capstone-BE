@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class FlaggedContent
@@ -10,11 +12,10 @@ public class FlaggedContent
     public string? FlagSource { get; set; }
     public string? Severity { get; set; }
     public string? FlagDetails { get; set; }
-    public string ModerationStatus { get; set; } = string.Empty;
+    public ModerationStatus ModerationStatus { get; set; } = ModerationStatus.None;
     public DateTime FlaggedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public int? ReviewedBy { get; set; }
-    public string? ModerationAction { get; set; }
     public string? ModeratorNotes { get; set; }
 
     // Navigation properties

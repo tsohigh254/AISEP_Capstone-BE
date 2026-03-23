@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class StartupInvestorConnection
@@ -5,7 +7,7 @@ public class StartupInvestorConnection
     public int ConnectionID { get; set; }
     public int StartupID { get; set; }
     public int InvestorID { get; set; }
-    public string ConnectionStatus { get; set; } = string.Empty;
+    public ConnectionStatus ConnectionStatus { get; set; } = ConnectionStatus.Requested;
     public int? InitiatedBy { get; set; }
     public float? MatchScore { get; set; }
     public string? PersonalizedMessage { get; set; }

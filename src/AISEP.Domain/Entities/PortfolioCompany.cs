@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class PortfolioCompany
@@ -6,11 +8,11 @@ public class PortfolioCompany
     public int InvestorID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string? Industry { get; set; }
-    public string? InvestmentStage { get; set; }
+    public InvestmentStage? InvestmentStage { get; set; }
     public DateTime? InvestmentDate { get; set; }
     public decimal? InvestmentAmount { get; set; }
-    public string? CurrentStatus { get; set; }
-    public string? ExitType { get; set; }
+    public PortfolioCompanyStatus? CurrentStatus { get; set; }
+    public ExitType? ExitType { get; set; }
     public DateTime? ExitDate { get; set; }
     public decimal? ExitValue { get; set; }
     public string? Description { get; set; }

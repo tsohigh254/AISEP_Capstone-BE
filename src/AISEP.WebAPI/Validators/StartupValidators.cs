@@ -5,10 +5,10 @@ namespace AISEP.WebAPI.Validators;
 
 public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequest>
 {
-    // Allowed stages matching MasterData /api/master/stages
+    // Allowed stages matching StartupStage enum
     private static readonly string[] AllowedStages =
     {
-        "Idea", "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "IPO Ready"
+        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
     };
 
     public CreateStartupRequestValidator()
@@ -22,9 +22,9 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
             .Must(s => AllowedStages.Contains(s!))
             .WithMessage($"Stage must be one of: {string.Join(", ", AllowedStages)}");
 
-        RuleFor(x => x.Industry)
-            .NotEmpty().WithMessage("Industry is required")
-            .MaximumLength(200).WithMessage("Industry must not exceed 200 characters");
+        RuleFor(x => x.IndustryID)
+            .GreaterThan(0).When(x => x.IndustryID.HasValue)
+            .WithMessage("IndustryID must be a positive integer");
 
         RuleFor(x => x.OneLiner)
             .MaximumLength(500).WithMessage("One-liner must not exceed 500 characters");
@@ -71,7 +71,7 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
 {
     private static readonly string[] AllowedStages =
     {
-        "Idea", "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "IPO Ready"
+        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
     };
 
     public UpdateStartupRequestValidator()
@@ -84,8 +84,9 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
             .Must(s => s == null || AllowedStages.Contains(s))
             .WithMessage($"Stage must be one of: {string.Join(", ", AllowedStages)}");
 
-        RuleFor(x => x.Industry)
-            .MaximumLength(200).WithMessage("Industry must not exceed 200 characters");
+        RuleFor(x => x.IndustryID)
+            .GreaterThan(0).When(x => x.IndustryID.HasValue)
+            .WithMessage("IndustryID must be a positive integer");
 
         RuleFor(x => x.OneLiner)
             .MaximumLength(500).WithMessage("One-liner must not exceed 500 characters");

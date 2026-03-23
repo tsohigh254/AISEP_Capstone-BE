@@ -3,6 +3,7 @@ using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -34,17 +35,17 @@ public class StartupService : IStartupService
                 "You already have a startup profile. Each user can only create one startup.");
         }
 
-        // Validate industry exists in master data (optional - store as string)
-        if (!string.IsNullOrWhiteSpace(request.Industry))
+        // Validate industry exists in master data
+        if (request.IndustryID.HasValue)
         {
             var industryExists = await _context.Industries
                 .AsNoTracking()
-                .AnyAsync(i => i.IndustryName == request.Industry);
+                .AnyAsync(i => i.IndustryID == request.IndustryID.Value);
 
             if (!industryExists)
             {
                 return ApiResponse<StartupMeDto>.ErrorResponse("INVALID_INDUSTRY",
-                    $"Industry '{request.Industry}' does not exist in master data.");
+                    $"Industry with ID {request.IndustryID} does not exist in master data.");
             }
         }
 
@@ -54,9 +55,9 @@ public class StartupService : IStartupService
             CompanyName = request.CompanyName,
             OneLiner = request.OneLiner,
             Description = request.Description,
-            Industry = request.Industry,
+            IndustryID = request.IndustryID,
             SubIndustry = request.SubIndustry,
-            Stage = request.Stage,
+            Stage = !string.IsNullOrWhiteSpace(request.Stage) && Enum.TryParse<StartupStage>(request.Stage, true, out var stageVal) ? stageVal : null,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
                 : null,
@@ -64,11 +65,10 @@ public class StartupService : IStartupService
             Location = request.Location,
             Country = request.Country,
             Website = request.Website,
-            FundingStage = request.FundingStage,
             FundingAmountSought = request.FundingAmountSought,
             CurrentFundingRaised = request.CurrentFundingRaised,
             Valuation = request.Valuation,
-            ProfileStatus = "Draft",
+            ProfileStatus = ProfileStatus.Draft,
             ProfileCompleteness = CalculateProfileCompleteness(request),
             CreatedAt = DateTime.UtcNow
         };
@@ -87,6 +87,7 @@ public class StartupService : IStartupService
         var startup = await _context.Startups
             .AsNoTracking()
             .Include(s => s.TeamMembers)
+            .Include(s => s.Industry)
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
@@ -111,16 +112,16 @@ public class StartupService : IStartupService
         }
 
         // Validate industry if provided
-        if (request.Industry != null && !string.IsNullOrWhiteSpace(request.Industry))
+        if (request.IndustryID.HasValue)
         {
             var industryExists = await _context.Industries
                 .AsNoTracking()
-                .AnyAsync(i => i.IndustryName == request.Industry);
+                .AnyAsync(i => i.IndustryID == request.IndustryID.Value);
 
             if (!industryExists)
             {
                 return ApiResponse<StartupMeDto>.ErrorResponse("INVALID_INDUSTRY",
-                    $"Industry '{request.Industry}' does not exist in master data.");
+                    $"Industry with ID {request.IndustryID} does not exist in master data.");
             }
         }
 
@@ -128,9 +129,10 @@ public class StartupService : IStartupService
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
         if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.Description != null) startup.Description = request.Description;
-        if (request.Industry != null) startup.Industry = request.Industry;
+        if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
         if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
-        if (request.Stage != null) startup.Stage = request.Stage;
+        if (request.Stage != null && Enum.TryParse<StartupStage>(request.Stage, true, out var stageVal))
+            startup.Stage = stageVal;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
         if (request.TeamSize.HasValue) startup.TeamSize = request.TeamSize;
         if (request.Location != null) startup.Location = request.Location;
@@ -138,7 +140,6 @@ public class StartupService : IStartupService
         if (request.Website != null) startup.Website = request.Website;
         if (request.LogoURL != null) startup.LogoURL = request.LogoURL;
         if (request.CoverImageURL != null) startup.CoverImageURL = request.CoverImageURL;
-        if (request.FundingStage != null) startup.FundingStage = request.FundingStage;
         if (request.FundingAmountSought.HasValue) startup.FundingAmountSought = request.FundingAmountSought;
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;
@@ -165,19 +166,19 @@ public class StartupService : IStartupService
                 "You haven't created a startup profile yet.");
         }
 
-        if (startup.ProfileStatus == "PendingApproval")
+        if (startup.ProfileStatus == ProfileStatus.Pending)
         {
             return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_PENDING",
                 "Your startup profile is already pending approval.");
         }
 
-        if (startup.ProfileStatus == "Approved")
+        if (startup.ProfileStatus == ProfileStatus.Approved)
         {
             return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_APPROVED",
                 "Your startup profile is already approved.");
         }
 
-        startup.ProfileStatus = "PendingApproval";
+        startup.ProfileStatus = ProfileStatus.Pending;
         startup.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -194,6 +195,7 @@ public class StartupService : IStartupService
         var startup = await _context.Startups
             .AsNoTracking()
             .Include(s => s.TeamMembers)
+            .Include(s => s.Industry)
             .FirstOrDefaultAsync(s => s.StartupID == startupId);
 
         if (startup == null)
@@ -227,13 +229,13 @@ public class StartupService : IStartupService
         // Filter by industry
         if (!string.IsNullOrWhiteSpace(industry))
         {
-            query = query.Where(s => s.Industry == industry);
+            query = query.Where(s => s.Industry != null && s.Industry.IndustryName == industry);
         }
 
         // Filter by stage
-        if (!string.IsNullOrWhiteSpace(stage))
+        if (!string.IsNullOrWhiteSpace(stage) && Enum.TryParse<StartupStage>(stage, true, out var stageFilter))
         {
-            query = query.Where(s => s.Stage == stage);
+            query = query.Where(s => s.Stage == stageFilter);
         }
 
         var totalItems = await query.CountAsync();
@@ -248,14 +250,13 @@ public class StartupService : IStartupService
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
                 OneLiner = s.OneLiner,
-                Industry = s.Industry,
+                IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
                 SubIndustry = s.SubIndustry,
-                Stage = s.Stage,
+                Stage = s.Stage != null ? s.Stage.ToString() : null,
                 Location = s.Location,
                 Country = s.Country,
                 LogoURL = s.LogoURL,
-                FundingStage = s.FundingStage,
-                ProfileStatus = s.ProfileStatus,
+                ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt
             })
             .ToListAsync();
@@ -406,9 +407,10 @@ public class StartupService : IStartupService
             CompanyName = s.CompanyName,
             OneLiner = s.OneLiner,
             Description = s.Description,
-            Industry = s.Industry,
+            IndustryID = s.IndustryID,
+            IndustryName = s.Industry?.IndustryName,
             SubIndustry = s.SubIndustry,
-            Stage = s.Stage,
+            Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
             TeamSize = s.TeamSize,
             Location = s.Location,
@@ -416,11 +418,10 @@ public class StartupService : IStartupService
             Website = s.Website,
             LogoURL = s.LogoURL,
             CoverImageURL = s.CoverImageURL,
-            FundingStage = s.FundingStage,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
-            ProfileStatus = s.ProfileStatus,
+            ProfileStatus = s.ProfileStatus.ToString(),
             ProfileCompleteness = s.ProfileCompleteness,
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
@@ -437,9 +438,10 @@ public class StartupService : IStartupService
             CompanyName = s.CompanyName,
             OneLiner = s.OneLiner,
             Description = s.Description,
-            Industry = s.Industry,
+            IndustryID = s.IndustryID,
+            IndustryName = s.Industry?.IndustryName,
             SubIndustry = s.SubIndustry,
-            Stage = s.Stage,
+            Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
             TeamSize = s.TeamSize,
             Location = s.Location,
@@ -447,10 +449,9 @@ public class StartupService : IStartupService
             Website = s.Website,
             LogoURL = s.LogoURL,
             CoverImageURL = s.CoverImageURL,
-            FundingStage = s.FundingStage,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
-            ProfileStatus = s.ProfileStatus,
+            ProfileStatus = s.ProfileStatus.ToString(),
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
             TeamMembers = s.TeamMembers?.Select(tm => new TeamMemberPublicDto
@@ -591,9 +592,9 @@ public class StartupService : IStartupService
     {
         var fields = new object?[]
         {
-            r.CompanyName, r.OneLiner, r.Description, r.Industry,
+            r.CompanyName, r.OneLiner, r.Description, r.IndustryID,
             r.Stage, r.Location, r.Country, r.Website,
-            r.FoundedDate, r.TeamSize, r.FundingStage
+            r.FoundedDate, r.TeamSize
         };
         var filled = fields.Count(f => f != null && f.ToString() != string.Empty);
         return (int)Math.Round(filled * 100.0 / fields.Length);

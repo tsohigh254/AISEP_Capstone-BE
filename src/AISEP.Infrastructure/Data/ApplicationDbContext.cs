@@ -1,4 +1,5 @@
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace AISEP.Infrastructure.Data;
@@ -82,6 +83,57 @@ public class ApplicationDbContext : DbContext
         
         // Configure relationships and constraints here
         ConfigureRelationships(modelBuilder);
+
+        // Configure enum → smallint conversions
+        ConfigureEnumConversions(modelBuilder);
+    }
+
+    private void ConfigureEnumConversions(ModelBuilder modelBuilder)
+    {
+        // Shared ProfileStatus
+        modelBuilder.Entity<Advisor>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
+        modelBuilder.Entity<Investor>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
+        modelBuilder.Entity<Startup>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
+
+        // Advisor
+        modelBuilder.Entity<AdvisorAchievement>().Property(e => e.AchievementType).HasConversion<short>();
+        modelBuilder.Entity<AdvisorExpertise>().Property(e => e.ProficiencyLevel).HasConversion<short?>();
+
+        // Chat
+        modelBuilder.Entity<Conversation>().Property(e => e.ConversationStatus).HasConversion<short>().HasDefaultValue(ConversationStatus.Active);
+
+        // Blockchain
+        modelBuilder.Entity<DocumentBlockchainProof>().Property(e => e.ProofStatus).HasConversion<short>().HasDefaultValue(ProofStatus.Anchored);
+
+        // Moderation
+        modelBuilder.Entity<FlaggedContent>().Property(e => e.ModerationStatus).HasConversion<short>().HasDefaultValue(ModerationStatus.None);
+
+        // InformationRequest
+        modelBuilder.Entity<InformationRequest>().Property(e => e.RequestStatus).HasConversion<short>().HasDefaultValue(RequestStatus.Pending);
+
+        // Investor
+        modelBuilder.Entity<InvestorStageFocus>().Property(e => e.Stage).HasConversion<short>();
+        modelBuilder.Entity<InvestorWatchlist>().Property(e => e.Priority).HasConversion<short?>().HasDefaultValueSql("1");
+
+        // Portfolio
+        modelBuilder.Entity<PortfolioCompany>().Property(e => e.InvestmentStage).HasConversion<short?>();
+        modelBuilder.Entity<PortfolioCompany>().Property(e => e.CurrentStatus).HasConversion<short?>();
+        modelBuilder.Entity<PortfolioCompany>().Property(e => e.ExitType).HasConversion<short?>();
+
+        // Startup
+        modelBuilder.Entity<Startup>().Property(e => e.Stage).HasConversion<short?>();
+
+        // Report
+        modelBuilder.Entity<SavedReport>().Property(e => e.ReportType).HasConversion<short>();
+
+        // Score
+        modelBuilder.Entity<ScoreImprovementRecommendation>().Property(e => e.Priority).HasConversion<short>();
+
+        // Connection
+        modelBuilder.Entity<StartupInvestorConnection>().Property(e => e.ConnectionStatus).HasConversion<short>().HasDefaultValue(ConnectionStatus.Requested);
+
+        // Mentorship
+        modelBuilder.Entity<StartupAdvisorMentorship>().Property(e => e.MentorshipStatus).HasConversion<short>().HasDefaultValue(MentorshipStatus.Requested);
     }
 
     private void ConfigurePrimaryKeys(ModelBuilder modelBuilder)
@@ -165,6 +217,13 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Startup>()
             .HasIndex(s => s.UserID)
             .IsUnique();
+
+        // Startup → Industry FK
+        modelBuilder.Entity<Startup>()
+            .HasOne(s => s.Industry)
+            .WithMany()
+            .HasForeignKey(s => s.IndustryID)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // DocumentBlockchainProof - one-to-one with Document
         modelBuilder.Entity<DocumentBlockchainProof>()

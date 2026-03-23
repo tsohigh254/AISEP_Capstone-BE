@@ -1,3 +1,4 @@
+using AISEP.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace AISEP.Application.DTOs.Advisor;
@@ -98,7 +99,7 @@ public class ExpertiseItemDto
 {
     public string Category { get; set; } = null!;
     public string? SubTopic { get; set; }
-    public string? ProficiencyLevel { get; set; }
+    public ProficiencyLevel? ProficiencyLevel { get; set; }
     public int? YearsOfExperience { get; set; }
 }
 

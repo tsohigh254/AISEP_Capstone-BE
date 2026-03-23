@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class Advisor
@@ -12,7 +14,7 @@ public class Advisor
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
-    public string? ProfileStatus { get; set; }
+    public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public int? ProfileCompleteness { get; set; }
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }

@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Entities;
 
 public class InformationRequest
@@ -7,7 +9,7 @@ public class InformationRequest
     public int InvestorID { get; set; }
     public string RequestType { get; set; } = string.Empty;
     public string? RequestMessage { get; set; }
-    public string RequestStatus { get; set; } = string.Empty;
+    public RequestStatus RequestStatus { get; set; } = RequestStatus.Pending;
     public DateTime? RequestedAt { get; set; }
     public DateTime? FulfilledAt { get; set; }
     public string? ResponseDocumentIDs { get; set; } // JSON

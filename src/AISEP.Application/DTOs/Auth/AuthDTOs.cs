@@ -60,12 +60,12 @@ public class AdminResetPasswordRequest
 
 public class EmailVerifyRequest
 {
-    public string Email { get; set; }
-    public string Otp { get; set; }
+    public string Email { get; set; } = null!;
+    public string Otp { get; set; } = null!;
 }
 
 public class ResendEmailRequest
 {
-    public string Email { get; set; }
+    public string Email { get; set; } = null!;
 }
 
