@@ -5,6 +5,7 @@ using AISEP.Domain.Interfaces;
 using AISEP.Infrastructure.Services;
 using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Settings;
+using AISEP.WebAPI.Hubs;
 using AISEP.WebAPI.Middlewares;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -103,6 +104,8 @@ builder.Services.AddSingleton<IStorageService>(new LocalStorageService(uploadsPa
 
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 
+builder.Services.AddSignalR();
+
 builder.Services.Configure<CloudinaryOptions>(
     builder.Configuration.GetSection("CloudinaryOptions"));
 
@@ -115,6 +118,22 @@ builder.Services.AddAuthentication(options =>
 .AddJwtBearer(options =>
 {
     options.MapInboundClaims = false; // Don't remap JWT claim names to .NET claim names
+
+    // SignalR gửi token qua query string ?access_token= (không thể dùng Authorization header với WebSocket)
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -218,6 +237,16 @@ var app = builder.Build();
             diagnosticContext.Set("RequestId", httpContext.TraceIdentifier);
             diagnosticContext.Set("UserId", httpContext.User?.FindFirst("sub")?.Value ?? "anonymous");
         };
+        // Giảm noise: OPTIONS preflight + polling endpoints chỉ log ở Debug
+        options.GetLevel = (httpContext, elapsed, ex) =>
+        {
+            if (ex != null) return Serilog.Events.LogEventLevel.Error;
+            if (httpContext.Request.Method == "OPTIONS") return Serilog.Events.LogEventLevel.Debug;
+            var path = httpContext.Request.Path.Value ?? "";
+            if (path.StartsWith("/api/notifications", StringComparison.OrdinalIgnoreCase))
+                return Serilog.Events.LogEventLevel.Debug;
+            return Serilog.Events.LogEventLevel.Information;
+        };
     });
     
     if (app.Environment.IsDevelopment())
@@ -231,6 +260,7 @@ var app = builder.Build();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHub<ChatHub>("/hubs/chat");
 
     app.Run();
 }

@@ -39,6 +39,11 @@ public class ConversationListItemDto
     public int? MentorshipId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
+    // Other participant info (for FE display)
+    public int ParticipantId { get; set; }
+    public string ParticipantName { get; set; } = string.Empty;
+    public string ParticipantRole { get; set; } = string.Empty;   // "Startup" | "Investor" | "Advisor"
+    public string? ParticipantAvatarUrl { get; set; }
     public string? LastMessagePreview { get; set; }
     public int UnreadCount { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -76,4 +81,15 @@ public class MessageDto
     public bool IsRead { get; set; }
     public DateTime SentAt { get; set; }
     public DateTime? ReadAt { get; set; }
+}
+
+/// <summary>Payload broadcast qua SignalR event "ReceiveMessage" — aligned với FE IIncomingMessage.</summary>
+public class SignalRMessageDto
+{
+    public int MessageId { get; set; }
+    public int ConversationId { get; set; }
+    public int SenderId { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public string? AttachmentUrl { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

@@ -78,6 +78,8 @@ public class ChatService : IChatService
                               && m.SenderUserID != userId
                               && !m.IsRead);
 
+            var (participantId, participantName, participantRole) = GetOtherParticipant(c, userId);
+
             items.Add(new ConversationListItemDto
             {
                 ConversationId = c.ConversationID,
@@ -85,6 +87,9 @@ public class ChatService : IChatService
                 MentorshipId = c.MentorshipID,
                 Status = c.ConversationStatus.ToString(),
                 Title = title,
+                ParticipantId = participantId,
+                ParticipantName = participantName,
+                ParticipantRole = participantRole,
                 LastMessagePreview = lastMsg != null
                     ? (lastMsg.Length > 80 ? lastMsg[..80] + "…" : lastMsg)
                     : null,
@@ -414,6 +419,37 @@ public class ChatService : IChatService
             $"{unreadMessages.Count} message(s) marked as read.");
     }
 
+    public async Task<ApiResponse<string>> MarkConversationReadAsync(int userId, int conversationId)
+    {
+        var conv = await LoadConversationWithParticipants(conversationId);
+
+        if (conv == null)
+            return ApiResponse<string>.ErrorResponse(
+                "CONVERSATION_NOT_FOUND", "Conversation not found.");
+
+        if (!IsParticipant(userId, conv))
+            return ApiResponse<string>.ErrorResponse(
+                "ACCESS_DENIED", "You are not a participant of this conversation.");
+
+        var unreadMessages = await _db.Messages
+            .Where(m => m.ConversationID == conversationId
+                     && m.SenderUserID != userId
+                     && !m.IsRead)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var msg in unreadMessages)
+        {
+            msg.IsRead = true;
+            msg.ReadAt = now;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse(
+            $"{unreadMessages.Count} message(s) marked as read.");
+    }
+
     // ════════════════════════════════════════════════════════════
     //  HELPERS
     // ════════════════════════════════════════════════════════════
@@ -439,6 +475,23 @@ public class ChatService : IChatService
                 || conv.Mentorship.Advisor.UserID == userId;
 
         return false;
+    }
+
+    private static (int id, string name, string role) GetOtherParticipant(Conversation conv, int userId)
+    {
+        if (conv.Connection != null)
+        {
+            if (conv.Connection.Startup.UserID == userId)
+                return (conv.Connection.Investor.UserID, conv.Connection.Investor.FullName, "Investor");
+            return (conv.Connection.Startup.UserID, conv.Connection.Startup.CompanyName, "Startup");
+        }
+        if (conv.Mentorship != null)
+        {
+            if (conv.Mentorship.Startup.UserID == userId)
+                return (conv.Mentorship.Advisor.UserID, conv.Mentorship.Advisor.FullName, "Advisor");
+            return (conv.Mentorship.Startup.UserID, conv.Mentorship.Startup.CompanyName, "Startup");
+        }
+        return (0, "Unknown", "Unknown");
     }
 
     private static string BuildTitle(Conversation conv, int currentUserId)

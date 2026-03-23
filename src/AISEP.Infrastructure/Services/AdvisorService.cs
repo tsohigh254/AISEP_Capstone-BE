@@ -35,7 +35,9 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_EXISTS",
                 "Advisor profile already exists for this user.");
 
-        var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
+        var profilePhotoUrl = request.ProfilePhotoURL != null
+            ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder)
+            : null;
 
         var advisor = new Advisor
         {
@@ -107,8 +109,6 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
 
-        var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
-
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
         if (request.Company != null) advisor.Company = request.Company;
@@ -120,22 +120,26 @@ public class AdvisorService : IAdvisorService
 
         if (request.ProfilePhotoURL != null)
         {
-            await _cloudinaryService.DeleteImage(advisor.ProfilePhotoURL);
+            var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
+            if (!string.IsNullOrEmpty(advisor.ProfilePhotoURL))
+                await _cloudinaryService.DeleteImage(advisor.ProfilePhotoURL);
             advisor.ProfilePhotoURL = profilePhotoUrl;
         }
 
-        foreach (var item in request.Items)
+        if (request.Items.Count > 0)
         {
-            var newItem = new AdvisorExpertise
+            _db.AdvisorExpertises.RemoveRange(advisor.Expertise);
+            foreach (var item in request.Items)
             {
-                AdvisorID = advisor.AdvisorID,
-                Category = item.Category,
-                SubTopic = item.SubTopic,
-                ProficiencyLevel = Enum.TryParse<ProficiencyLevel>(item.ProficiencyLevel, true, out var pl) ? pl : null,
-                YearsOfExperience = item.YearsOfExperience
-            };
-
-            advisor.Expertise.Add(newItem);
+                advisor.Expertise.Add(new AdvisorExpertise
+                {
+                    AdvisorID = advisor.AdvisorID,
+                    Category = item.Category,
+                    SubTopic = item.SubTopic,
+                    ProficiencyLevel = item.ProficiencyLevel,
+                    YearsOfExperience = item.YearsOfExperience
+                });
+            }
         }
 
         _db.Advisors.Update(advisor);
@@ -307,6 +311,7 @@ public class AdvisorService : IAdvisorService
         IEnumerable<AdvisorIndustryFocus> industryFocus) => new()
     {
         AdvisorID = a.AdvisorID,
+        UserId = a.UserID,
         FullName = a.FullName,
         Title = a.Title,
         Company = a.Company,
@@ -322,7 +327,7 @@ public class AdvisorService : IAdvisorService
         AverageRating = a.AverageRating,
         CreatedAt = a.CreatedAt,
         UpdatedAt = a.UpdatedAt,
-        Expertise = expertise.Select(e => new ExpertiseItemDto
+        Items = expertise.Select(e => new ExpertiseItemDto
         {
             Category = e.Category,
             SubTopic = e.SubTopic,

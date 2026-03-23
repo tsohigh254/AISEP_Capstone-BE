@@ -92,6 +92,27 @@ public class WatchlistItemDto
     public DateTime AddedAt { get; set; }
 }
 
+/// <summary>Investor search result DTO — used by Startup role to browse investors</summary>
+public class InvestorSearchItemDto
+{
+    public int InvestorID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? FirmName { get; set; }
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? Website { get; set; }
+    public List<string> PreferredIndustries { get; set; } = new();
+    public List<string> PreferredStages { get; set; } = new();
+    public string? PreferredGeographies { get; set; }
+    public decimal? TicketSizeMin { get; set; }
+    public decimal? TicketSizeMax { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
 /// <summary>Startup search result DTO (no sensitive data exposed)</summary>
 public class StartupSearchItemDto
 {
