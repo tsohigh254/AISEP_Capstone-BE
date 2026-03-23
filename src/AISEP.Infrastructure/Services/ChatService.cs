@@ -107,7 +107,6 @@ public class ChatService : IChatService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         };
 
@@ -301,7 +300,6 @@ public class ChatService : IChatService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         };
 

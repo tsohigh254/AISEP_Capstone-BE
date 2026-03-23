@@ -182,7 +182,6 @@ public class DocumentService : IDocumentService
                     Page = page,
                     PageSize = pageSize,
                     TotalItems = totalItems,
-                    TotalPages = totalPages
                 }
             });
     }

@@ -82,7 +82,6 @@ public class ModerationService : IModerationService
                     Page = page,
                     PageSize = pageSize,
                     TotalItems = totalItems,
-                    TotalPages = totalPages
                 }
             });
     }

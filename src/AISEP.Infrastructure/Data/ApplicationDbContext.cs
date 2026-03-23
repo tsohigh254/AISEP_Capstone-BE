@@ -33,9 +33,7 @@ public class ApplicationDbContext : DbContext
     // Advisor
     public DbSet<Advisor> Advisors => Set<Advisor>();
     public DbSet<AdvisorAvailability> AdvisorAvailabilities => Set<AdvisorAvailability>();
-    public DbSet<AdvisorExpertise> AdvisorExpertises => Set<AdvisorExpertise>();
     public DbSet<AdvisorIndustryFocus> AdvisorIndustryFocuses => Set<AdvisorIndustryFocus>();
-    public DbSet<AdvisorAchievement> AdvisorAchievements => Set<AdvisorAchievement>();
     public DbSet<AdvisorTestimonial> AdvisorTestimonials => Set<AdvisorTestimonial>();
 
     // Investor
@@ -67,7 +65,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<FlaggedContent> FlaggedContents => Set<FlaggedContent>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
-    public DbSet<ProfileView> ProfileViews => Set<ProfileView>();
     public DbSet<Industry> Industries => Set<Industry>();
     public DbSet<IndustryTrend> IndustryTrends => Set<IndustryTrend>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
@@ -94,10 +91,6 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Advisor>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
         modelBuilder.Entity<Investor>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
         modelBuilder.Entity<Startup>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
-
-        // Advisor
-        modelBuilder.Entity<AdvisorAchievement>().Property(e => e.AchievementType).HasConversion<short>();
-        modelBuilder.Entity<AdvisorExpertise>().Property(e => e.ProficiencyLevel).HasConversion<short?>();
 
         // Chat
         modelBuilder.Entity<Conversation>().Property(e => e.ConversationStatus).HasConversion<short>().HasDefaultValue(ConversationStatus.Active);
@@ -156,9 +149,7 @@ public class ApplicationDbContext : DbContext
         // Advisor
         modelBuilder.Entity<Advisor>().HasKey(a => a.AdvisorID);
         modelBuilder.Entity<AdvisorAvailability>().HasKey(aa => aa.AvailabilityID);
-        modelBuilder.Entity<AdvisorExpertise>().HasKey(ae => ae.ExpertiseID);
         modelBuilder.Entity<AdvisorIndustryFocus>().HasKey(aif => aif.IndustryFocusID);
-        modelBuilder.Entity<AdvisorAchievement>().HasKey(aa => aa.AchievementID);
         modelBuilder.Entity<AdvisorTestimonial>().HasKey(at => at.TestimonialID);
 
         // Investor
@@ -190,7 +181,6 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AuditLog>().HasKey(al => al.LogID);
         modelBuilder.Entity<FlaggedContent>().HasKey(fc => fc.FlagID);
         modelBuilder.Entity<ModerationAction>().HasKey(ma => ma.ActionID);
-        modelBuilder.Entity<ProfileView>().HasKey(pv => pv.ViewID);
         modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
         modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
         modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
@@ -304,24 +294,6 @@ public class ApplicationDbContext : DbContext
             .HasOne(t => t.Mentorship)
             .WithMany(m => m.Testimonials)
             .HasForeignKey(t => t.MentorshipID)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<ProfileView>()
-            .HasOne(pv => pv.ViewedStartup)
-            .WithMany(s => s.ProfileViews)
-            .HasForeignKey(pv => pv.ViewedStartupID)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<ProfileView>()
-            .HasOne(pv => pv.ViewedAdvisor)
-            .WithMany(a => a.ProfileViews)
-            .HasForeignKey(pv => pv.ViewedAdvisorID)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<ProfileView>()
-            .HasOne(pv => pv.ViewedInvestor)
-            .WithMany(i => i.ProfileViews)
-            .HasForeignKey(pv => pv.ViewedInvestorID)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Prevent cascade in InformationRequest
