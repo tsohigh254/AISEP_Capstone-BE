@@ -554,11 +554,63 @@ public class AuthService : IAuthService
 
     private async Task SendEmail(int userId, string email, string otp)
     {
-        var htmlBody = $"<p>M� x�c nh?n email c?a b?n l�:</p> " +
-            $" <p class=\"otp\">{otp}</p> " +
-            $"<p>M� s? h?t h?n trong {5} ph�t. Kh�ng chia s? m� otp n�y cho b?t k� ai</p>";
+        var htmlBody = $@"
+<!DOCTYPE html>
+<html lang='vi'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Mã xác nhận OTP</title>
+</head>
+<body style='margin:0; padding:0; background-color:#f4f6f9; font-family: Arial, Helvetica, sans-serif;'>
+    <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#f4f6f9; padding: 40px 0;'>
+        <tr>
+            <td align='center'>
+                <table width='560' cellpadding='0' cellspacing='0' style='background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);'>
+                    <!-- Header -->
+                    <tr>
+                        <td style='background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 36px 40px; text-align:center;'>
+                            <h1 style='margin:0; color:#ffffff; font-size:22px; font-weight:700; letter-spacing:0.5px;'>AISEP</h1>
+                            <p style='margin:8px 0 0; color:#bfdbfe; font-size:13px;'>Hệ thống tư vấn học thuật thông minh</p>
+                        </td>
+                    </tr>
+                    <!-- Body -->
+                    <tr>
+                        <td style='padding: 40px 48px;'>
+                            <p style='margin:0 0 12px; font-size:16px; color:#374151;'>Xin chào,</p>
+                            <p style='margin:0 0 28px; font-size:15px; color:#6b7280; line-height:1.6;'>
+                                Chúng tôi đã nhận được yêu cầu xác nhận email của bạn. Vui lòng sử dụng mã OTP dưới đây:
+                            </p>
+                            <!-- OTP Box -->
+                            <div style='background-color:#f0f4ff; border: 2px dashed #2563eb; border-radius:10px; padding: 28px 20px; text-align:center; margin-bottom:28px;'>
+                                <p style='margin:0 0 8px; font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:1px;'>Mã xác nhận của bạn</p>
+                                <p style='margin:0; font-size:42px; font-weight:800; letter-spacing:10px; color:#2563eb;'>{otp}</p>
+                            </div>
+                            <p style='margin:0 0 8px; font-size:14px; color:#6b7280; line-height:1.6;'>
+                                ⏱️ Mã có hiệu lực trong <strong style='color:#374151;'>5 phút</strong>.
+                            </p>
+                            <p style='margin:0; font-size:14px; color:#6b7280; line-height:1.6;'>
+                                🔒 Không chia sẻ mã OTP này với bất kỳ ai, kể cả nhân viên AISEP.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style='background-color:#f9fafb; padding: 20px 48px; border-top: 1px solid #e5e7eb;'>
+                            <p style='margin:0; font-size:12px; color:#9ca3af; text-align:center; line-height:1.6;'>
+                                Đây là email tự động từ hệ thống AISEP. Vui lòng không trả lời email này.<br>
+                                Nếu bạn không thực hiện yêu cầu này, hãy bỏ qua email này.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
 
-        await _emailService.SendEmailAsync(email, "M?t email ?� g?i ??n email c?a b?n . H�y nh?p m� x�c nh?n", htmlBody);
+        await _emailService.SendEmailAsync(email, "Mã xác nhận OTP - AISEP", htmlBody);
     }
     #endregion
 }

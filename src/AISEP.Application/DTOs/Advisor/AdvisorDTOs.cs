@@ -72,6 +72,7 @@ public class UpdateAvailabilityRequest
 public class AdvisorMeDto
 {
     public int AdvisorID { get; set; }
+    public int UserId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
     public string? Company { get; set; }
@@ -87,7 +88,7 @@ public class AdvisorMeDto
     public float? AverageRating { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
-    public List<ExpertiseItemDto> Expertise { get; set; } = new();
+    public List<ExpertiseItemDto> Items { get; set; } = new();
     public AvailabilityDto? Availability { get; set; }
     public List<string> IndustryFocus { get; set; } = new();
 }
