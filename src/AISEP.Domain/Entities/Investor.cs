@@ -29,5 +29,4 @@ public class Investor
     public ICollection<PortfolioCompany> PortfolioCompanies { get; set; } = new List<PortfolioCompany>();
     public ICollection<StartupInvestorConnection> StartupConnections { get; set; } = new List<StartupInvestorConnection>();
     public ICollection<InformationRequest> InformationRequests { get; set; } = new List<InformationRequest>();
-    public ICollection<ProfileView> ProfileViews { get; set; } = new List<ProfileView>();
 }

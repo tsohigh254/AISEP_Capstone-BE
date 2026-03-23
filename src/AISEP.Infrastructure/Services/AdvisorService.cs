@@ -1,5 +1,7 @@
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.QueryParams;
+using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
@@ -44,29 +46,25 @@ public class AdvisorService : IAdvisorService
             UserID = userId,
             FullName = request.FullName,
             Title = request.Title,
-            Company = request.Company,
             Bio = request.Bio,
             ProfilePhotoURL = profilePhotoUrl,
-            Website = request.Website,
             LinkedInURL = request.LinkedInURL,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
             ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
 
-        foreach(var item in request.Items)
+        foreach(var industry in request.AdvisorIndustryFocus)
         {
-            var newItem = new AdvisorExpertise
+            var industryFocus = new AdvisorIndustryFocus
             {
                 AdvisorID = advisor.AdvisorID,
-                Category = item.Category,
-                SubTopic = item.SubTopic,
-                ProficiencyLevel = item.ProficiencyLevel,
-                YearsOfExperience = item.YearsOfExperience
+                IndustryFocusID = industry.IndustryId
             };
 
-            advisor.Expertise.Add(newItem);
+            advisor.IndustryFocus.Add(industryFocus);
         }
+
     
         await _db.Advisors.AddAsync(advisor);
         await _db.SaveChangesAsync();
@@ -75,7 +73,7 @@ public class AdvisorService : IAdvisorService
         _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, null, Array.Empty<AdvisorExpertise>(), Array.Empty<AdvisorIndustryFocus>()));
+            MapToMeDto(advisor, null, Array.Empty<AdvisorIndustryFocus>()));
     }
 
     public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId)
@@ -84,7 +82,6 @@ public class AdvisorService : IAdvisorService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(a => a.Availability)
-            .Include(a => a.Expertise)
             .Include(a => a.IndustryFocus)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
@@ -93,7 +90,7 @@ public class AdvisorService : IAdvisorService
                 "Advisor profile not found. Please create your profile first.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, advisor.Availability, advisor.Expertise, advisor.IndustryFocus));
+            MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
     }
 
     public async Task<ApiResponse<AdvisorMeDto>> UpdateProfileAsync(int userId, UpdateAdvisorRequest request)
@@ -101,7 +98,6 @@ public class AdvisorService : IAdvisorService
         var advisor = await _db.Advisors
             .AsSplitQuery()
             .Include(a => a.Availability)
-            .Include(a => a.Expertise)
             .Include(a => a.IndustryFocus)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
@@ -111,9 +107,7 @@ public class AdvisorService : IAdvisorService
 
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
-        if (request.Company != null) advisor.Company = request.Company;
         if (request.Bio != null) advisor.Bio = request.Bio;
-        if (request.Website != null) advisor.Website = request.Website;
         if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
         advisor.UpdatedAt = DateTime.UtcNow;
@@ -126,37 +120,24 @@ public class AdvisorService : IAdvisorService
             advisor.ProfilePhotoURL = profilePhotoUrl;
         }
 
-        if (request.Items.Count > 0)
+        foreach (var industry in request.AdvisorIndustryFocus)
         {
-            _db.AdvisorExpertises.RemoveRange(advisor.Expertise);
-            foreach (var item in request.Items)
+            var industryFocus = new AdvisorIndustryFocus
             {
-                advisor.Expertise.Add(new AdvisorExpertise
-                {
-                    AdvisorID = advisor.AdvisorID,
-                    Category = item.Category,
-                    SubTopic = item.SubTopic,
-                    ProficiencyLevel = item.ProficiencyLevel,
-                    YearsOfExperience = item.YearsOfExperience
-                });
-            }
+                AdvisorID = advisor.AdvisorID,
+                IndustryFocusID = industry.IndustryId
+            };
+
+            advisor.IndustryFocus.Add(industryFocus);
         }
 
-        _db.Advisors.Update(advisor);
-
-        var result = newItems.Select(e => new ExpertiseItemDto
-        {
-            Category = e.Category,
-            SubTopic = e.SubTopic,
-            ProficiencyLevel = e.ProficiencyLevel?.ToString(),
-            YearsOfExperience = e.YearsOfExperience
-        }).ToList();
+        _db.Advisors.Update(advisor);   
 
         await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
         _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, advisor.Availability, advisor.Expertise, advisor.IndustryFocus));
+            MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
     }
 
 
@@ -205,96 +186,55 @@ public class AdvisorService : IAdvisorService
     // SEARCH
     // ================================================================
 
-    public async Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(
-        string? q, int? industryId, string? expertise, int page, int pageSize)
+    public async Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
-        page = Math.Max(page, 1);
 
         var query = _db.Advisors
             .AsNoTracking()
             .AsSplitQuery()
-            .Include(a => a.Expertise)
             .Include(a => a.IndustryFocus)
             .Include(a => a.Availability)
             .AsQueryable();
 
-        // Keyword search on FullName / Title / Bio / Company
-        if (!string.IsNullOrWhiteSpace(q))
+        // Keyword search on FullName
+        if (!string.IsNullOrWhiteSpace(advisorQueryParams.Key))
         {
-            var keyword = q.Trim().ToLower();
-            query = query.Where(a =>
-                a.FullName.ToLower().Contains(keyword) ||
-                (a.Title != null && a.Title.ToLower().Contains(keyword)) ||
-                (a.Bio != null && a.Bio.ToLower().Contains(keyword)) ||
-                (a.Company != null && a.Company.ToLower().Contains(keyword)));
+            query = query.Where(q => q.FullName.ToLower().Trim().Contains(advisorQueryParams.Key.ToLower().Trim()));
         }
 
         // Filter by industry (look up name from Industries table)
-        if (industryId.HasValue)
+        if (advisorQueryParams.Industry.HasValue)
         {
-            var industryName = await _db.Industries
-                .AsNoTracking()
-                .Where(i => i.IndustryID == industryId.Value)
-                .Select(i => i.IndustryName)
-                .FirstOrDefaultAsync();
-
-            if (industryName != null)
-            {
-                query = query.Where(a =>
-                    a.IndustryFocus.Any(f => f.Industry == industryName));
-            }
-        }
-
-        // Filter by expertise keyword
-        if (!string.IsNullOrWhiteSpace(expertise))
-        {
-            var expKeyword = expertise.Trim().ToLower();
-            query = query.Where(a =>
-                a.Expertise.Any(e =>
-                    e.Category.ToLower().Contains(expKeyword) ||
-                    (e.SubTopic != null && e.SubTopic.ToLower().Contains(expKeyword))));
+            query = query.Where(q =>
+                  q.IndustryFocus.Any(i => i.IndustryID == advisorQueryParams.Industry)
+             );
         }
 
         // Order by UpdatedAt desc
         query = query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt);
 
-        var totalItems = await query.CountAsync();
-
-        var advisors = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var items = advisors.Select(a => new AdvisorSearchItemDto
+        var items = query.Select(a => new AdvisorSearchItemDto
         {
             AdvisorID = a.AdvisorID,
-            DisplayName = a.FullName,
+            FullName  = a.FullName,
             Title = a.Title,
-            Company = a.Company,
             BioShort = TruncateBio(a.Bio, 200),
-            Website = a.Website,
             AverageRating = a.AverageRating,
-            IsAcceptingNewMentees = a.Availability?.IsAcceptingNewMentees ?? false,
-            Industries = a.IndustryFocus.Select(f => f.Industry).ToList(),
-            Expertise = a.Expertise.Select(e => new ExpertiseItemDto
+            Industries = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
             {
-                Category = e.Category,
-                SubTopic = e.SubTopic,
-                ProficiencyLevel = e.ProficiencyLevel?.ToString(),
-                YearsOfExperience = e.YearsOfExperience
-            }).ToList()
-        }).ToList();
+                IndustryId = i.IndustryID,
+                Industry = i.Industry.IndustryName
+            }).ToList()       
+        }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize);
 
         return ApiResponse<PagedResponse<AdvisorSearchItemDto>>.SuccessResponse(new PagedResponse<AdvisorSearchItemDto>
         {
-            Items = items,
+            Items = await items.ToListAsync(),
             Paging = new PagingInfo
             {
-                Page = page,
-                PageSize = pageSize,
-                TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
+                Page = advisorQueryParams.Page,
+                PageSize = advisorQueryParams.PageSize,
+                TotalItems = await query.CountAsync(),
             }
         });
     }
@@ -307,35 +247,28 @@ public class AdvisorService : IAdvisorService
     private static AdvisorMeDto MapToMeDto(
         Advisor a,
         AdvisorAvailability? availability,
-        IEnumerable<AdvisorExpertise> expertise,
         IEnumerable<AdvisorIndustryFocus> industryFocus) => new()
     {
         AdvisorID = a.AdvisorID,
         UserId = a.UserID,
         FullName = a.FullName,
         Title = a.Title,
-        Company = a.Company,
         Bio = a.Bio,
         ProfilePhotoURL = a.ProfilePhotoURL,
         MentorshipPhilosophy = a.MentorshipPhilosophy,
         LinkedInURL = a.LinkedInURL,
-        Website = a.Website,
         ProfileStatus = a.ProfileStatus.ToString(),
-        ProfileCompleteness = a.ProfileCompleteness,
         TotalMentees = a.TotalMentees,
         TotalSessionHours = a.TotalSessionHours,
         AverageRating = a.AverageRating,
         CreatedAt = a.CreatedAt,
         UpdatedAt = a.UpdatedAt,
-        Items = expertise.Select(e => new ExpertiseItemDto
-        {
-            Category = e.Category,
-            SubTopic = e.SubTopic,
-            ProficiencyLevel = e.ProficiencyLevel?.ToString(),
-            YearsOfExperience = e.YearsOfExperience
-        }).ToList(),
         Availability = availability != null ? MapAvailabilityDto(availability) : null,
-        IndustryFocus = industryFocus.Select(f => f.Industry).ToList()
+        IndustryFocus = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
+        {
+            IndustryId = i.IndustryID,
+            Industry = i.Industry.IndustryName
+        }).ToList()
     };
 
     private static AvailabilityDto MapAvailabilityDto(AdvisorAvailability av) => new()

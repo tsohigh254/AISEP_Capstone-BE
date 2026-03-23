@@ -15,13 +15,11 @@ public class CreateAdvisorRequest
 {
     public string FullName { get; set; } = null!;
     public string? Title { get; set; }
-    public string? Company { get; set; }
     public string? Bio { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
-    public string? Website { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
-    public List<ExpertiseItemDto> Items { get; set; } = new();
+    public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
 }
 
 /// <summary>
@@ -31,22 +29,11 @@ public class UpdateAdvisorRequest
 {
     public string? FullName { get; set; }
     public string? Title { get; set; }
-    public string? Company { get; set; }
     public string? Bio { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
-    public string? Website { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
-    public List<ExpertiseItemDto> Items { get; set; } = new();
-}
-
-/// <summary>
-/// Replace-all expertise items.
-/// Example: { "items": [{ "category": "Strategy", "subTopic": "Go-to-market", "proficiencyLevel": "Expert" }] }
-/// </summary>
-public class UpdateExpertiseRequest
-{
-    public List<ExpertiseItemDto> Items { get; set; } = new();
+    public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
 }
 
 /// <summary>
@@ -76,32 +63,20 @@ public class AdvisorMeDto
     public int UserId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
-    public string? Company { get; set; }
     public string? Bio { get; set; }
     public string? ProfilePhotoURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
-    public string? Website { get; set; }
     public string? ProfileStatus { get; set; }
-    public int? ProfileCompleteness { get; set; }
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
     public float? AverageRating { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
-    public List<ExpertiseItemDto> Items { get; set; } = new();
     public AvailabilityDto? Availability { get; set; }
-    public List<string> IndustryFocus { get; set; } = new();
+    public List<AdvisorIndustryFocusDto> IndustryFocus { get; set; } = new();
 }
 
-/// <summary>Expertise item used in both request and response.</summary>
-public class ExpertiseItemDto
-{
-    public string Category { get; set; } = null!;
-    public string? SubTopic { get; set; }
-    public ProficiencyLevel? ProficiencyLevel { get; set; }
-    public int? YearsOfExperience { get; set; }
-}
 
 /// <summary>Advisor availability configuration.</summary>
 public class AvailabilityDto
@@ -123,13 +98,20 @@ public class AvailabilityDto
 public class AdvisorSearchItemDto
 {
     public int AdvisorID { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
-    public string? Company { get; set; }
     public string? BioShort { get; set; }
-    public string? Website { get; set; }
     public float? AverageRating { get; set; }
-    public bool IsAcceptingNewMentees { get; set; }
-    public List<string> Industries { get; set; } = new();
-    public List<ExpertiseItemDto> Expertise { get; set; } = new();
+    public List<AdvisorIndustryFocusDto> Industries { get; set; } = new();
+}
+
+public class AdvisorIndustryFocusDto
+{
+    public int IndustryId { get; set; }
+    public string Industry { get; set; }
+}
+
+public class AdvisorIndustryFocusRequest
+{
+    public int IndustryId { get; set; }
 }

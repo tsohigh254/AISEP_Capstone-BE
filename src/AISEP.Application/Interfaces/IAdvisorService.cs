@@ -1,5 +1,6 @@
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.QueryParams;
 
 namespace AISEP.Application.Interfaces;
 
@@ -17,6 +18,5 @@ public interface IAdvisorService
     Task<ApiResponse<AvailabilityDto>> UpdateAvailabilityAsync(int userId, UpdateAvailabilityRequest request);
 
     // Search
-    Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(
-        string? q, int? industryId, string? expertise, int page, int pageSize);
+    Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams);
 }

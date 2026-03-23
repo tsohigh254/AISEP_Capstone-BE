@@ -39,6 +39,5 @@ public class Startup
     public ICollection<StartupAdvisorMentorship> Mentorships { get; set; } = new List<StartupAdvisorMentorship>();
     public ICollection<StartupInvestorConnection> InvestorConnections { get; set; } = new List<StartupInvestorConnection>();
     public ICollection<InvestorWatchlist> WatchedByInvestors { get; set; } = new List<InvestorWatchlist>();
-    public ICollection<ProfileView> ProfileViews { get; set; } = new List<ProfileView>();
     public ICollection<AdvisorTestimonial> AdvisorTestimonials { get; set; } = new List<AdvisorTestimonial>();
 }

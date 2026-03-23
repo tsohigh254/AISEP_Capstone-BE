@@ -1,5 +1,6 @@
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.QueryParams;
 using AISEP.Application.Interfaces;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
@@ -127,14 +128,10 @@ public class AdvisorsController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<AdvisorSearchItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchAdvisors(
-        [FromQuery] string? q = null,
-        [FromQuery] int? industryId = null,
-        [FromQuery] string? expertise = null,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] AdvisorQueryParams advisorQueryParams,
         CancellationToken ct = default)
     {
-        var result = await _advisorService.SearchAdvisorsAsync(q, industryId, expertise, page, pageSize);
+        var result = await _advisorService.SearchAdvisorsAsync(advisorQueryParams);
         return result.ToPagedEnvelope();
     }
 }

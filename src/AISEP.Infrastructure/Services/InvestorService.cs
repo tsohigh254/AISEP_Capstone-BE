@@ -317,7 +317,6 @@ public class InvestorService : IInvestorService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         });
     }
@@ -433,7 +432,6 @@ public class InvestorService : IInvestorService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         });
     }

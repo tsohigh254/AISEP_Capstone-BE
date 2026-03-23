@@ -269,7 +269,6 @@ public class StartupService : IStartupService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = totalPages
             }
         };
 
@@ -508,10 +507,6 @@ public class StartupService : IStartupService
                 (i.Bio != null && i.Bio.ToLower().Contains(kw)));
         }
 
-        if (!string.IsNullOrWhiteSpace(stage))
-        {
-            query = query.Where(i => i.StageFocus.Any(sf => sf.Stage == stage));
-        }
 
         if (!string.IsNullOrWhiteSpace(industry))
         {
@@ -540,7 +535,7 @@ public class StartupService : IStartupService
             Country = i.Country,
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
-            PreferredStages = i.StageFocus.Select(sf => sf.Stage).ToList(),
+            //PreferredStages = i.StageFocus.Select(sf => sf.Stage).ToList(),
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
             PreferredGeographies = i.Preferences?.PreferredGeographies,
             TicketSizeMin = i.Preferences?.MinInvestmentSize,
@@ -556,7 +551,6 @@ public class StartupService : IStartupService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
             }
         });
     }

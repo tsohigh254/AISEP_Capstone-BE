@@ -100,7 +100,7 @@ public class ConnectionsService : IConnectionsService
             new PagedResponse<ConnectionListItemDto>
             {
                 Items = items,
-                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total, TotalPages = (int)Math.Ceiling(total / (double)pageSize) }
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
             });
     }
 
@@ -141,7 +141,7 @@ public class ConnectionsService : IConnectionsService
             new PagedResponse<ConnectionListItemDto>
             {
                 Items = items,
-                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total, TotalPages = (int)Math.Ceiling(total / (double)pageSize) }
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total}
             });
     }
 
@@ -433,7 +433,7 @@ public class ConnectionsService : IConnectionsService
             new PagedResponse<PortfolioCompanyDto>
             {
                 Items = items,
-                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total, TotalPages = (int)Math.Ceiling(total / (double)pageSize) }
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total}
             });
     }
 

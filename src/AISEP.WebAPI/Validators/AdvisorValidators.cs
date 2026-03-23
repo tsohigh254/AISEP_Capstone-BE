@@ -15,17 +15,10 @@ public class CreateAdvisorRequestValidator : AbstractValidator<CreateAdvisorRequ
             .MaximumLength(120).WithMessage("Title must not exceed 120 characters.")
             .When(x => x.Title != null);
 
-        RuleFor(x => x.Company)
-            .MaximumLength(200).WithMessage("Company must not exceed 200 characters.")
-            .When(x => x.Company != null);
-
         RuleFor(x => x.Bio)
             .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters.")
             .When(x => x.Bio != null);
 
-        RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.Website));
 
         RuleFor(x => x.LinkedInURL)
             .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
@@ -56,17 +49,9 @@ public class UpdateAdvisorRequestValidator : AbstractValidator<UpdateAdvisorRequ
             .MaximumLength(120).WithMessage("Title must not exceed 120 characters.")
             .When(x => x.Title != null);
 
-        RuleFor(x => x.Company)
-            .MaximumLength(200).WithMessage("Company must not exceed 200 characters.")
-            .When(x => x.Company != null);
-
         RuleFor(x => x.Bio)
             .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters.")
             .When(x => x.Bio != null);
-
-        RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL.")
-            .When(x => !string.IsNullOrWhiteSpace(x.Website));
 
         RuleFor(x => x.LinkedInURL)
             .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
@@ -85,33 +70,6 @@ public class UpdateAdvisorRequestValidator : AbstractValidator<UpdateAdvisorRequ
     }
 }
 
-public class UpdateExpertiseRequestValidator : AbstractValidator<UpdateExpertiseRequest>
-{
-    public UpdateExpertiseRequestValidator()
-    {
-        RuleFor(x => x.Items)
-            .NotNull().WithMessage("Items list is required.");
-
-        RuleForEach(x => x.Items).ChildRules(item =>
-        {
-            item.RuleFor(e => e.Category)
-                .NotEmpty().WithMessage("Expertise category is required.")
-                .MaximumLength(100).WithMessage("Category must not exceed 100 characters.");
-
-            item.RuleFor(e => e.SubTopic)
-                .MaximumLength(200).WithMessage("SubTopic must not exceed 200 characters.")
-                .When(e => e.SubTopic != null);
-
-            item.RuleFor(e => e.ProficiencyLevel)
-                .MaximumLength(50).WithMessage("Proficiency level must not exceed 50 characters.")
-                .When(e => e.ProficiencyLevel != null);
-
-            item.RuleFor(e => e.YearsOfExperience)
-                .GreaterThanOrEqualTo(0).WithMessage("Years of experience must be >= 0.")
-                .When(e => e.YearsOfExperience.HasValue);
-        });
-    }
-}
 
 public class UpdateAvailabilityRequestValidator : AbstractValidator<UpdateAvailabilityRequest>
 {

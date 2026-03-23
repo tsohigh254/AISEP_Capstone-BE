@@ -153,7 +153,6 @@ public class MentorshipService : IMentorshipService
                     Page = page,
                     PageSize = pageSize,
                     TotalItems = totalItems,
-                    TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize)
                 }
             });
     }

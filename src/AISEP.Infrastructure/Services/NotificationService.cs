@@ -64,7 +64,6 @@ public class NotificationService : INotificationService
                 Page = page,
                 PageSize = pageSize,
                 TotalItems = totalItems,
-                TotalPages = totalPages
             }
         };
 

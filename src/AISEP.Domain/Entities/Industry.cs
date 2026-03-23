@@ -11,4 +11,5 @@ public class Industry
     public Industry? ParentIndustry { get; set; }
     public ICollection<Industry> SubIndustries { get; set; } = new List<Industry>();
     public ICollection<IndustryTrend> Trends { get; set; } = new List<IndustryTrend>();
+    public ICollection<AdvisorIndustryFocus> AdvisorIndustries { get; set; } = new List<AdvisorIndustryFocus>();
 }
