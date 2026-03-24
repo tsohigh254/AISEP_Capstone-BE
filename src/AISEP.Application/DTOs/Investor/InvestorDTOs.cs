@@ -82,12 +82,9 @@ public class WatchlistItemDto
     public int WatchlistID { get; set; }
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
     public string? Industry { get; set; }
     public string? Stage { get; set; }
-    public string? Location { get; set; }
     public string? LogoURL { get; set; }
-    public string? WatchReason { get; set; }
     public string Priority { get; set; } = "Medium";
     public DateTime AddedAt { get; set; }
 }
@@ -118,12 +115,9 @@ public class StartupSearchItemDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
     public string? Stage { get; set; }
     public string? IndustryName { get; set; }
     public string? SubIndustry { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }

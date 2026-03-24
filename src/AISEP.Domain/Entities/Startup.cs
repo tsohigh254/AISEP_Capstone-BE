@@ -7,26 +7,20 @@ public class Startup
     public int StartupID { get; set; }
     public int UserID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
+    public string OneLiner { get; set; }
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
     public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
-    public int? TeamSize { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
-    public string? CoverImageURL { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
-    public int? ProfileCompleteness { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public int? ApprovedBy { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; } 
     public DateTime? UpdatedAt { get; set; }
 
     // Navigation properties

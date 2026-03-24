@@ -100,7 +100,8 @@ public class AdvisorSearchItemDto
     public int AdvisorID { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
-    public string? BioShort { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+    public string? Bio { get; set; }
     public float? AverageRating { get; set; }
     public List<AdvisorIndustryFocusDto> Industries { get; set; } = new();
 }

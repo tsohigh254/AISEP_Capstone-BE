@@ -1,6 +1,6 @@
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
-using AISEP.Application.DTOs.QueryParams;
+using AISEP.Application.QueryParams;
 
 namespace AISEP.Application.Interfaces;
 
