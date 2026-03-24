@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AISEP.Application.DTOs.QueryParams
+namespace AISEP.Application.QueryParams
 {
     public abstract class BaseQueryParams
     {

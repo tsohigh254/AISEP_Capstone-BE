@@ -260,12 +260,9 @@ public class InvestorService : IInvestorService
             WatchlistID = entry.WatchlistID,
             StartupID = startup.StartupID,
             CompanyName = startup.CompanyName,
-            OneLiner = startup.OneLiner,
             Industry = startup.Industry?.IndustryName,
             Stage = startup.Stage?.ToString(),
-            Location = startup.Location,
             LogoURL = startup.LogoURL,
-            WatchReason = entry.WatchReason,
             Priority = (entry.Priority ?? WatchlistPriority.Medium).ToString(),
             AddedAt = entry.AddedAt
         });
@@ -298,12 +295,9 @@ public class InvestorService : IInvestorService
                 WatchlistID = w.WatchlistID,
                 StartupID = w.StartupID,
                 CompanyName = w.Startup.CompanyName,
-                OneLiner = w.Startup.OneLiner,
                 Industry = w.Startup.Industry != null ? w.Startup.Industry.IndustryName : null,
                 Stage = w.Startup.Stage != null ? w.Startup.Stage.ToString() : null,
-                Location = w.Startup.Location,
                 LogoURL = w.Startup.LogoURL,
-                WatchReason = w.WatchReason,
                 Priority = (w.Priority ?? WatchlistPriority.Medium).ToString(),
                 AddedAt = w.AddedAt
             })
@@ -369,7 +363,6 @@ public class InvestorService : IInvestorService
             var keyword = q.Trim().ToLower();
             query = query.Where(s =>
                 s.CompanyName.ToLower().Contains(keyword) ||
-                (s.OneLiner != null && s.OneLiner.ToLower().Contains(keyword)) ||
                 (s.Description != null && s.Description.ToLower().Contains(keyword)));
         }
 
@@ -384,15 +377,6 @@ public class InvestorService : IInvestorService
         {
             if (Enum.TryParse<StartupStage>(stage, true, out var stageEnum))
                 query = query.Where(s => s.Stage == stageEnum);
-        }
-
-        // Location filter
-        if (!string.IsNullOrWhiteSpace(location))
-        {
-            var loc = location.Trim().ToLower();
-            query = query.Where(s =>
-                (s.Location != null && s.Location.ToLower().Contains(loc)) ||
-                (s.Country != null && s.Country.ToLower().Contains(loc)));
         }
 
         // Sorting
@@ -412,12 +396,8 @@ public class InvestorService : IInvestorService
             {
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
-                OneLiner = s.OneLiner,
                 Stage = s.Stage != null ? s.Stage.ToString() : null,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
-                SubIndustry = s.SubIndustry,
-                Location = s.Location,
-                Country = s.Country,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt

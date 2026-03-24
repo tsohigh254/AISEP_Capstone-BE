@@ -1,8 +1,9 @@
+using AISEP.Application.Const;
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
-using AISEP.Application.DTOs.QueryParams;
 using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
@@ -17,7 +18,6 @@ public class AdvisorService : IAdvisorService
     private readonly IAuditService _audit;
     private readonly ILogger<AdvisorService> _logger;
     private readonly ICloudinaryService _cloudinaryService;
-    private const string Folder = "ProfilePic";
     public AdvisorService(ApplicationDbContext db, IAuditService audit, ILogger<AdvisorService> logger, ICloudinaryService cloudinaryService)
     {
         _db = db;
@@ -38,7 +38,7 @@ public class AdvisorService : IAdvisorService
                 "Advisor profile already exists for this user.");
 
         var profilePhotoUrl = request.ProfilePhotoURL != null
-            ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder)
+            ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinaryFolderSaving.Profile)
             : null;
 
         var advisor = new Advisor
@@ -114,7 +114,7 @@ public class AdvisorService : IAdvisorService
 
         if (request.ProfilePhotoURL != null)
         {
-            var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, Folder);
+            var profilePhotoUrl = await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinaryFolderSaving.Profile);
             if (!string.IsNullOrEmpty(advisor.ProfilePhotoURL))
                 await _cloudinaryService.DeleteImage(advisor.ProfilePhotoURL);
             advisor.ProfilePhotoURL = profilePhotoUrl;
@@ -199,16 +199,10 @@ public class AdvisorService : IAdvisorService
         // Keyword search on FullName
         if (!string.IsNullOrWhiteSpace(advisorQueryParams.Key))
         {
-            query = query.Where(q => q.FullName.ToLower().Trim().Contains(advisorQueryParams.Key.ToLower().Trim()));
+            query = query.Where(q => q.FullName.ToLower().Trim().Contains(advisorQueryParams.Key.ToLower().Trim()) ||
+            q.IndustryFocus.Any(i => i.Industry.IndustryName == advisorQueryParams.Key));
         }
 
-        // Filter by industry (look up name from Industries table)
-        if (advisorQueryParams.Industry.HasValue)
-        {
-            query = query.Where(q =>
-                  q.IndustryFocus.Any(i => i.IndustryID == advisorQueryParams.Industry)
-             );
-        }
 
         // Order by UpdatedAt desc
         query = query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt);
@@ -218,7 +212,8 @@ public class AdvisorService : IAdvisorService
             AdvisorID = a.AdvisorID,
             FullName  = a.FullName,
             Title = a.Title,
-            BioShort = TruncateBio(a.Bio, 200),
+            Bio = TruncateBio(a.Bio, 200),
+            ProfilePhotoURL = a.ProfilePhotoURL,
             AverageRating = a.AverageRating,
             Industries = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
             {

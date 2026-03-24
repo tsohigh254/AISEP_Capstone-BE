@@ -1,3 +1,6 @@
+using AISEP.Domain.Enums;
+using Microsoft.AspNetCore.Http;
+
 namespace AISEP.Application.DTOs.Startup;
 
 // ========== REQUEST DTOs ==========
@@ -5,18 +8,15 @@ namespace AISEP.Application.DTOs.Startup;
 public class CreateStartupRequest
 {
     public string CompanyName { get; set; } = null!;
-    public string? OneLiner { get; set; }
+    public string OneLiner { get; set; }
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
     /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
-    public string? Stage { get; set; }
+    public StartupStage Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
-    public int? TeamSize { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? Website { get; set; }
+    public IFormFile? LogoUrl { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -25,18 +25,13 @@ public class CreateStartupRequest
 public class UpdateStartupRequest
 {
     public string? CompanyName { get; set; }
-    public string? OneLiner { get; set; }
+    public string OneLiner { get; set; }
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
-    public string? Stage { get; set; }
+    public StartupStage Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
-    public int? TeamSize { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? Website { get; set; }
-    public string? LogoURL { get; set; }
-    public string? CoverImageURL { get; set; }
+    public IFormFile? LogoUrl { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -50,24 +45,18 @@ public class StartupMeDto
     public int StartupID { get; set; }
     public int UserID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
+    public string OneLiner { get; set; }    
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
-    public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
-    public int? TeamSize { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
-    public string? CoverImageURL { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
     public string? ProfileStatus { get; set; }
-    public int? ProfileCompleteness { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -79,19 +68,14 @@ public class StartupPublicDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
+    public string OneLiner { get; set; }
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
-    public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
-    public int? TeamSize { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
-    public string? CoverImageURL { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public string? ProfileStatus { get; set; }
@@ -105,12 +89,8 @@ public class StartupListItemDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? OneLiner { get; set; }
     public string? IndustryName { get; set; }
-    public string? SubIndustry { get; set; }
     public string? Stage { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -151,7 +131,7 @@ public class CreateTeamMemberRequest
     public string? Title { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Bio { get; set; }
-    public string? PhotoURL { get; set; }
+    public IFormFile? PhotoURL { get; set; }
     public bool IsFounder { get; set; }
     public int? YearsOfExperience { get; set; }
 }
@@ -163,7 +143,7 @@ public class UpdateTeamMemberRequest
     public string? Title { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Bio { get; set; }
-    public string? PhotoURL { get; set; }
+    public IFormFile? PhotoURL { get; set; }
     public bool? IsFounder { get; set; }
     public int? YearsOfExperience { get; set; }
 }

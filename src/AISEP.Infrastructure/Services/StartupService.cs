@@ -1,7 +1,10 @@
+using AISEP.Application.Const;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
+using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
@@ -15,12 +18,14 @@ public class StartupService : IStartupService
     private readonly ApplicationDbContext _context;
     private readonly IAuditService _auditService;
     private readonly ILogger<StartupService> _logger;
+    private readonly ICloudinaryService _cloudinaryService;
 
-    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger)
+    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger, ICloudinaryService cloudinaryService)
     {
         _context = context;
         _auditService = auditService;
         _logger = logger;
+        _cloudinaryService = cloudinaryService;
     }
 
     // ========== STARTUP PROFILE ==========
@@ -49,29 +54,30 @@ public class StartupService : IStartupService
             }
         }
 
-        var startup = new Domain.Entities.Startup
+        var startup = new Startup
         {
             UserID = userId,
             CompanyName = request.CompanyName,
             OneLiner = request.OneLiner,
             Description = request.Description,
             IndustryID = request.IndustryID,
-            SubIndustry = request.SubIndustry,
-            Stage = !string.IsNullOrWhiteSpace(request.Stage) && Enum.TryParse<StartupStage>(request.Stage, true, out var stageVal) ? stageVal : null,
+            Stage = request.Stage,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
                 : null,
-            TeamSize = request.TeamSize,
-            Location = request.Location,
-            Country = request.Country,
             Website = request.Website,
             FundingAmountSought = request.FundingAmountSought,
             CurrentFundingRaised = request.CurrentFundingRaised,
             Valuation = request.Valuation,
             ProfileStatus = ProfileStatus.Draft,
-            ProfileCompleteness = CalculateProfileCompleteness(request),
             CreatedAt = DateTime.UtcNow
         };
+
+        var logoUrl = request.LogoUrl != null
+            ? await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo)
+            : null;
+
+        startup.LogoURL = logoUrl;
 
         _context.Startups.Add(startup);
         await _context.SaveChangesAsync();
@@ -127,22 +133,23 @@ public class StartupService : IStartupService
 
         // Apply partial updates (only non-null fields)
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
-        if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.Description != null) startup.Description = request.Description;
         if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
-        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
-        if (request.Stage != null && Enum.TryParse<StartupStage>(request.Stage, true, out var stageVal))
-            startup.Stage = stageVal;
+        if (request.Stage != null) startup.Stage = request.Stage;
+        if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
-        if (request.TeamSize.HasValue) startup.TeamSize = request.TeamSize;
-        if (request.Location != null) startup.Location = request.Location;
-        if (request.Country != null) startup.Country = request.Country;
         if (request.Website != null) startup.Website = request.Website;
-        if (request.LogoURL != null) startup.LogoURL = request.LogoURL;
-        if (request.CoverImageURL != null) startup.CoverImageURL = request.CoverImageURL;
         if (request.FundingAmountSought.HasValue) startup.FundingAmountSought = request.FundingAmountSought;
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;
+
+        if (request.LogoUrl != null)
+        {
+            var logoUrl = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            if (!string.IsNullOrEmpty(startup.LogoURL))
+                await _cloudinaryService.DeleteImage(startup.LogoURL);
+            startup.LogoURL = logoUrl;
+        }
 
         startup.UpdatedAt = DateTime.UtcNow;
 
@@ -207,68 +214,47 @@ public class StartupService : IStartupService
         return ApiResponse<StartupPublicDto>.SuccessResponse(MapToPublicDto(startup));
     }
 
-    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(
-        string? keyword, string? industry, string? stage,
-        int page, int pageSize)
+    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery)
     {
-        // Clamp pageSize
-        if (pageSize < 1) pageSize = 20;
-        if (pageSize > 100) pageSize = 100;
-        if (page < 1) page = 1;
 
         var query = _context.Startups.AsNoTracking().AsQueryable();
 
         // Keyword search on CompanyName
-        if (!string.IsNullOrWhiteSpace(keyword))
+        if (!string.IsNullOrWhiteSpace(startupQuery.Key))
         {
-            var lowerKeyword = keyword.ToLower();
-            query = query.Where(s => s.CompanyName.ToLower().Contains(lowerKeyword)
-                                  || (s.OneLiner != null && s.OneLiner.ToLower().Contains(lowerKeyword)));
+            query = query.Where(s => s.CompanyName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower())
+            || s.Industry.IndustryName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower()));
         }
 
-        // Filter by industry
-        if (!string.IsNullOrWhiteSpace(industry))
-        {
-            query = query.Where(s => s.Industry != null && s.Industry.IndustryName == industry);
-        }
 
         // Filter by stage
-        if (!string.IsNullOrWhiteSpace(stage) && Enum.TryParse<StartupStage>(stage, true, out var stageFilter))
+        if (startupQuery.Stage.HasValue)
         {
-            query = query.Where(s => s.Stage == stageFilter);
+            query = query.Where(s => s.Stage == startupQuery.Stage.Value);
         }
 
-        var totalItems = await query.CountAsync();
-        var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
 
-        var items = await query
+        var items = query
             .OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
             .Select(s => new StartupListItemDto
             {
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
-                OneLiner = s.OneLiner,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
-                SubIndustry = s.SubIndustry,
                 Stage = s.Stage != null ? s.Stage.ToString() : null,
-                Location = s.Location,
-                Country = s.Country,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt
-            })
-            .ToListAsync();
+            }).Paging(startupQuery.Page, startupQuery.PageSize);
 
         var result = new PagedResponse<StartupListItemDto>
         {
-            Items = items,
+            Items = await items.ToListAsync(),
             Paging = new PagingInfo
             {
-                Page = page,
-                PageSize = pageSize,
-                TotalItems = totalItems,
+                Page = startupQuery.Page,
+                PageSize = startupQuery.PageSize,
+                TotalItems = await query.CountAsync(),
             }
         };
 
@@ -309,6 +295,7 @@ public class StartupService : IStartupService
                 "You haven't created a startup profile yet.");
         }
 
+
         var member = new TeamMember
         {
             StartupID = startup.StartupID,
@@ -317,11 +304,16 @@ public class StartupService : IStartupService
             Title = request.Title,
             LinkedInURL = request.LinkedInURL,
             Bio = request.Bio,
-            PhotoURL = request.PhotoURL,
             IsFounder = request.IsFounder,
             YearsOfExperience = request.YearsOfExperience,
             CreatedAt = DateTime.UtcNow
         };
+
+        var photo = request.PhotoURL != null
+            ? await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member)
+            : null;
+
+        member.PhotoURL = photo;
 
         _context.TeamMembers.Add(member);
         await _context.SaveChangesAsync();
@@ -356,9 +348,16 @@ public class StartupService : IStartupService
         if (request.Title != null) member.Title = request.Title;
         if (request.LinkedInURL != null) member.LinkedInURL = request.LinkedInURL;
         if (request.Bio != null) member.Bio = request.Bio;
-        if (request.PhotoURL != null) member.PhotoURL = request.PhotoURL;
         if (request.IsFounder.HasValue) member.IsFounder = request.IsFounder.Value;
         if (request.YearsOfExperience.HasValue) member.YearsOfExperience = request.YearsOfExperience;
+
+        if (request.PhotoURL != null)
+        {
+            var photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Logo);
+            if (!string.IsNullOrEmpty(startup.LogoURL))
+                await _cloudinaryService.DeleteImage(member.PhotoURL);
+            member.PhotoURL = photo;
+        }
 
         await _context.SaveChangesAsync();
 
@@ -397,7 +396,7 @@ public class StartupService : IStartupService
 
     // ========== MAPPING HELPERS ==========
 
-    private static StartupMeDto MapToMeDto(Domain.Entities.Startup s)
+    private static StartupMeDto MapToMeDto(Startup s)
     {
         return new StartupMeDto
         {
@@ -408,20 +407,14 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
-            SubIndustry = s.SubIndustry,
             Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
-            TeamSize = s.TeamSize,
-            Location = s.Location,
-            Country = s.Country,
             Website = s.Website,
             LogoURL = s.LogoURL,
-            CoverImageURL = s.CoverImageURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
             ProfileStatus = s.ProfileStatus.ToString(),
-            ProfileCompleteness = s.ProfileCompleteness,
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
@@ -429,7 +422,7 @@ public class StartupService : IStartupService
         };
     }
 
-    private static StartupPublicDto MapToPublicDto(Domain.Entities.Startup s)
+    private static StartupPublicDto MapToPublicDto(Startup s)
     {
         return new StartupPublicDto
         {
@@ -439,15 +432,10 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
-            SubIndustry = s.SubIndustry,
             Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
-            TeamSize = s.TeamSize,
-            Location = s.Location,
-            Country = s.Country,
             Website = s.Website,
             LogoURL = s.LogoURL,
-            CoverImageURL = s.CoverImageURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
             ProfileStatus = s.ProfileStatus.ToString(),
@@ -485,12 +473,8 @@ public class StartupService : IStartupService
 
     // ========== BROWSE INVESTORS (Startup role) ==========
 
-    public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(
-        string? keyword, string? stage, string? industry, string? sortBy, int page, int pageSize)
+    public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
-        page = Math.Max(page, 1);
-
         var query = _context.Investors
             .AsNoTracking()
             .Include(i => i.Preferences)
@@ -498,32 +482,17 @@ public class StartupService : IStartupService
             .Include(i => i.IndustryFocus)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(keyword))
+        if (!string.IsNullOrWhiteSpace(investorQuery.Key))
         {
-            var kw = keyword.Trim().ToLower();
+            var kw = investorQuery.Key.Trim().ToLower();
             query = query.Where(i =>
-                i.FullName.ToLower().Contains(kw) ||
-                (i.FirmName != null && i.FirmName.ToLower().Contains(kw)) ||
-                (i.Bio != null && i.Bio.ToLower().Contains(kw)));
-        }
-
-
-        if (!string.IsNullOrWhiteSpace(industry))
-        {
-            var ind = industry.Trim().ToLower();
-            query = query.Where(i => i.IndustryFocus.Any(f => f.Industry.ToLower() == ind));
+                i.FullName.Trim().ToLower().Contains(kw) ||
+                (i.FirmName != null && i.FirmName.ToLower().Contains(kw)));
         }
 
         query = query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt);
 
-        var totalItems = await query.CountAsync();
-
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var dtos = items.Select(i => new InvestorSearchItemDto
+        var items = query.Select(i => new InvestorSearchItemDto
         {
             InvestorID = i.InvestorID,
             FullName = i.FullName,
@@ -535,22 +504,22 @@ public class StartupService : IStartupService
             Country = i.Country,
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
-            //PreferredStages = i.StageFocus.Select(sf => sf.Stage).ToList(),
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
-            PreferredGeographies = i.Preferences?.PreferredGeographies,
-            TicketSizeMin = i.Preferences?.MinInvestmentSize,
-            TicketSizeMax = i.Preferences?.MaxInvestmentSize,
+            //PreferredGeographies = i.Preferences?.PreferredGeographies,
+            //TicketSizeMin = i.Preferences?.MinInvestmentSize,
+            //TicketSizeMax = i.Preferences?.MaxInvestmentSize,
             UpdatedAt = i.UpdatedAt
-        }).ToList();
+        }).Paging(investorQuery.Page, investorQuery.PageSize);
+
 
         return ApiResponse<PagedResponse<InvestorSearchItemDto>>.SuccessResponse(new PagedResponse<InvestorSearchItemDto>
         {
-            Items = dtos,
+            Items = await items.ToListAsync(),
             Paging = new PagingInfo
             {
-                Page = page,
-                PageSize = pageSize,
-                TotalItems = totalItems,
+                Page = investorQuery.Page,
+                PageSize = investorQuery.PageSize,
+                TotalItems = await query.CountAsync()
             }
         });
     }
@@ -580,17 +549,5 @@ public class StartupService : IStartupService
             CreatedAt = investor.CreatedAt,
             UpdatedAt = investor.UpdatedAt
         });
-    }
-
-    private static int CalculateProfileCompleteness(CreateStartupRequest r)
-    {
-        var fields = new object?[]
-        {
-            r.CompanyName, r.OneLiner, r.Description, r.IndustryID,
-            r.Stage, r.Location, r.Country, r.Website,
-            r.FoundedDate, r.TeamSize
-        };
-        var filled = fields.Count(f => f != null && f.ToString() != string.Empty);
-        return (int)Math.Round(filled * 100.0 / fields.Length);
     }
 }

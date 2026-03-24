@@ -1,7 +1,7 @@
 using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
-using AISEP.Application.DTOs.QueryParams;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

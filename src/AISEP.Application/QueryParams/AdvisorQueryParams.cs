@@ -5,12 +5,9 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AISEP.Application.DTOs.QueryParams
+namespace AISEP.Application.QueryParams
 {
     public class AdvisorQueryParams : BaseQueryParams
     {
-        [JsonPropertyName("industry")]
-
-        public int? Industry { get; set; }
     }
 }
