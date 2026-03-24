@@ -83,16 +83,16 @@ public class MasterDataController : ControllerBase
         return OkEnvelope<List<IndustryDto>>(tree);
     }
 
-    // Hardcoded startup stages (matches ERD: Stage varchar in Startups table)
+    // Startup stages matching StartupStage enum
     private static readonly List<StartupStageDto> _stages = new()
     {
         new() { StageName = "Idea", Description = "Concept stage - validating the idea" },
-        new() { StageName = "Pre-Seed", Description = "Building MVP and early validation" },
+        new() { StageName = "PreSeed", Description = "Building MVP and early validation" },
         new() { StageName = "Seed", Description = "Product-market fit and early traction" },
-        new() { StageName = "Series A", Description = "Scaling product and team" },
-        new() { StageName = "Series B", Description = "Expansion and growth" },
-        new() { StageName = "Series C+", Description = "Late stage growth and profitability" },
-        new() { StageName = "IPO Ready", Description = "Preparing for public offering" }
+        new() { StageName = "SeriesA", Description = "Scaling product and team" },
+        new() { StageName = "SeriesB", Description = "Expansion and growth" },
+        new() { StageName = "SeriesC", Description = "Late stage growth and profitability" },
+        new() { StageName = "Growth", Description = "Scaling and preparing for exit" }
     };
 
     /// <summary>

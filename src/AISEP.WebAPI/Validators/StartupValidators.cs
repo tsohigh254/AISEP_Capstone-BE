@@ -1,15 +1,14 @@
 using AISEP.Application.DTOs.Startup;
+using AISEP.Domain.Enums;
 using FluentValidation;
 
 namespace AISEP.WebAPI.Validators;
 
 public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequest>
 {
-    // Allowed stages matching StartupStage enum
+    // Allowed stages derived from StartupStage enum
     private static readonly string[] AllowedStages =
-    {
-        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
-    };
+        Enum.GetNames<StartupStage>();
 
     public CreateStartupRequestValidator()
     {
@@ -53,9 +52,7 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
 public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequest>
 {
     private static readonly string[] AllowedStages =
-    {
-        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
-    };
+        Enum.GetNames<StartupStage>();
 
     public UpdateStartupRequestValidator()
     {

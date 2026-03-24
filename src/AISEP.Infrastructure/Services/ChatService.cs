@@ -61,22 +61,33 @@ public class ChatService : IChatService
             .Take(pageSize)
             .ToListAsync();
 
+        // Batch load last messages and unread counts to avoid N+1
+        var conversationIds = conversations.Select(c => c.ConversationID).ToList();
+
+        var lastMessages = await _db.Messages
+            .Where(m => conversationIds.Contains(m.ConversationID))
+            .GroupBy(m => m.ConversationID)
+            .Select(g => new
+            {
+                ConversationID = g.Key,
+                LastMessage = g.OrderByDescending(m => m.SentAt).Select(m => m.MessageText).FirstOrDefault()
+            })
+            .ToDictionaryAsync(x => x.ConversationID, x => x.LastMessage);
+
+        var unreadCounts = await _db.Messages
+            .Where(m => conversationIds.Contains(m.ConversationID)
+                     && m.SenderUserID != userId
+                     && !m.IsRead)
+            .GroupBy(m => m.ConversationID)
+            .Select(g => new { ConversationID = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ConversationID, x => x.Count);
+
         var items = new List<ConversationListItemDto>();
         foreach (var c in conversations)
         {
             var title = BuildTitle(c, userId);
-
-            // Last message preview + unread count
-            var lastMsg = await _db.Messages
-                .Where(m => m.ConversationID == c.ConversationID)
-                .OrderByDescending(m => m.SentAt)
-                .Select(m => m.MessageText)
-                .FirstOrDefaultAsync();
-
-            var unread = await _db.Messages
-                .CountAsync(m => m.ConversationID == c.ConversationID
-                              && m.SenderUserID != userId
-                              && !m.IsRead);
+            lastMessages.TryGetValue(c.ConversationID, out var lastMsg);
+            unreadCounts.TryGetValue(c.ConversationID, out var unread);
 
             var (participantId, participantName, participantRole) = GetOtherParticipant(c, userId);
 

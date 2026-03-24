@@ -293,8 +293,8 @@ public class AuthService : IAuthService
         if (user == null)
             return new AuthResponse<string>
             {
-                Success = false,
-                Message = "User does not exists"
+                Success = true,
+                Message = "If your email is registered, you will receive a reset link shortly"
             };
 
         // Invalidate any existing reset tokens
@@ -379,11 +379,26 @@ public class AuthService : IAuthService
                 Message = "Account is deactivated"
             };
 
-        if (user!.EmailOtps.Any(otp => otp.Otp == emailVerifyRequest.Otp && otp.IsUsed || otp.Otp == emailVerifyRequest.Otp && otp.ExpiredAt < DateTime.UtcNow))
+        if (user == null)
             return new AuthResponse<AuthData>
             {
                 Success = false,
-                Message = "Otp code expired"
+                Message = "Invalid email or OTP"
+            };
+
+        var matchedOtp = user.EmailOtps.FirstOrDefault(otp => otp.Otp == emailVerifyRequest.Otp);
+        if (matchedOtp == null)
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "Invalid email or OTP"
+            };
+
+        if (matchedOtp.IsUsed || matchedOtp.ExpiredAt < DateTime.UtcNow)
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "OTP code has expired or already been used"
             };
      
         // Update last login
@@ -454,13 +469,14 @@ public class AuthService : IAuthService
     #region helper method
     private async Task<string> GenerateOtp(int userId)
     {
-        var otp = new Random().Next(100000, 999999).ToString();
+        var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
         var emailOtp = new EmailOtp
         {
             UserId = userId,
             IsUsed = false,
-            Otp = otp
+            Otp = otp,
+            ExpiredAt = DateTime.UtcNow.AddMinutes(5)
         };
 
         _context.EmailOtps.Add(emailOtp);

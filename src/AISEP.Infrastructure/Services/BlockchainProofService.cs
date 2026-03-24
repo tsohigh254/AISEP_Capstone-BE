@@ -5,10 +5,12 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Domain.Interfaces;
+using AISEP.Application.Configuration;
 using AISEP.Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -19,19 +21,22 @@ public class BlockchainProofService : IBlockchainProofService
     private readonly IBlockchainService _blockchain;
     private readonly IAuditService _audit;
     private readonly ILogger<BlockchainProofService> _logger;
+    private readonly BlockchainSettings _blockchainSettings;
 
     public BlockchainProofService(
         ApplicationDbContext context,
         IStorageService storage,
         IBlockchainService blockchain,
         IAuditService audit,
-        ILogger<BlockchainProofService> logger)
+        ILogger<BlockchainProofService> logger,
+        IOptions<BlockchainSettings> blockchainSettings)
     {
         _context = context;
         _storage = storage;
         _blockchain = blockchain;
         _audit = audit;
         _logger = logger;
+        _blockchainSettings = blockchainSettings.Value;
     }
 
     // ================================================================
@@ -146,7 +151,7 @@ public class BlockchainProofService : IBlockchainProofService
         proof.TransactionHash = txHash;
         proof.ProofStatus = ProofStatus.Pending;
         proof.AnchoredAt = DateTime.UtcNow;
-        proof.BlockchainNetwork = "Stub"; // TODO: set from config when using real blockchain
+        proof.BlockchainNetwork = _blockchainSettings.NetworkName;
 
         await _context.SaveChangesAsync(ct);
 
@@ -203,11 +208,14 @@ public class BlockchainProofService : IBlockchainProofService
                 "Failed to check transaction status on blockchain.");
         }
 
-        // Update proof in DB
-        if (Enum.TryParse<ProofStatus>(txStatus.Status, true, out var parsedProofStatus))
-            proof.ProofStatus = parsedProofStatus;
-        else if (string.Equals(txStatus.Status, "Confirmed", StringComparison.OrdinalIgnoreCase))
-            proof.ProofStatus = ProofStatus.Anchored;
+        // Update proof in DB — map blockchain status strings to ProofStatus enum
+        proof.ProofStatus = txStatus.Status?.ToLowerInvariant() switch
+        {
+            "confirmed" => ProofStatus.Anchored,
+            "pending"   => ProofStatus.Pending,
+            "failed"    => proof.ProofStatus, // keep current status on failure
+            _           => proof.ProofStatus  // unknown status — no change
+        };
         if (txStatus.BlockNumber != null) proof.BlockNumber = txStatus.BlockNumber;
 
         await _context.SaveChangesAsync(ct);
@@ -216,7 +224,7 @@ public class BlockchainProofService : IBlockchainProofService
         {
             DocumentID = documentId,
             TransactionHash = proof.TransactionHash,
-            Status = txStatus.Status,
+            Status = txStatus.Status ?? "Unknown",
             BlockNumber = txStatus.BlockNumber,
             ConfirmedAt = txStatus.ConfirmedAt
         });
