@@ -120,18 +120,21 @@ public class AdvisorService : IAdvisorService
             advisor.ProfilePhotoURL = profilePhotoUrl;
         }
 
-        foreach (var industry in request.AdvisorIndustryFocus)
+        if (request.AdvisorIndustryFocus is { Count: > 0 })
         {
-            var industryFocus = new AdvisorIndustryFocus
-            {
-                AdvisorID = advisor.AdvisorID,
-                IndustryFocusID = industry.IndustryId
-            };
+            _db.AdvisorIndustryFocuses.RemoveRange(advisor.IndustryFocus);
 
-            advisor.IndustryFocus.Add(industryFocus);
+            foreach (var industry in request.AdvisorIndustryFocus)
+            {
+                advisor.IndustryFocus.Add(new AdvisorIndustryFocus
+                {
+                    AdvisorID = advisor.AdvisorID,
+                    IndustryFocusID = industry.IndustryId
+                });
+            }
         }
 
-        _db.Advisors.Update(advisor);   
+        _db.Advisors.Update(advisor);
 
         await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
         _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);

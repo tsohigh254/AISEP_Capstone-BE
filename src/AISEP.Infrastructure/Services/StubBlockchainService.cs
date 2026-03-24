@@ -71,7 +71,7 @@ public class StubBlockchainService : IBlockchainService
         var result = new BlockchainTxStatusResult
         {
             Status = found ? "Confirmed" : "Failed",
-            BlockNumber = found ? new Random().Next(1_000_000, 99_999_999).ToString() : null,
+            BlockNumber = found ? Random.Shared.Next(1_000_000, 99_999_999).ToString() : null,
             ConfirmedAt = found ? DateTime.UtcNow : null
         };
 

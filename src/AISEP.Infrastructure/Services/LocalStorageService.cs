@@ -27,7 +27,15 @@ public class LocalStorageService : IStorageService
 
     public LocalStorageService(string basePath)
     {
-        _basePath = basePath;
+        _basePath = Path.GetFullPath(basePath);
+    }
+
+    private string ResolveSafePath(string pathOrKey)
+    {
+        var fullPath = Path.GetFullPath(Path.Combine(_basePath, pathOrKey));
+        if (!fullPath.StartsWith(_basePath, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Invalid file path");
+        return fullPath;
     }
 
     public async Task<StoredFileResult> SaveAsync(Stream stream, string fileName, string folder, CancellationToken ct = default)
@@ -35,7 +43,7 @@ public class LocalStorageService : IStorageService
         var safeFileName = SanitizeFileName(fileName);
         var uniqueName = $"{Guid.NewGuid():N}_{safeFileName}";
         var relativePath = Path.Combine(folder, uniqueName).Replace('\\', '/');
-        var fullPath = Path.Combine(_basePath, relativePath);
+        var fullPath = ResolveSafePath(relativePath);
 
         var directory = Path.GetDirectoryName(fullPath)!;
         if (!Directory.Exists(directory))
@@ -58,7 +66,7 @@ public class LocalStorageService : IStorageService
 
     public Task<Stream> OpenReadAsync(string pathOrKey, CancellationToken ct = default)
     {
-        var fullPath = Path.Combine(_basePath, pathOrKey);
+        var fullPath = ResolveSafePath(pathOrKey);
         if (!File.Exists(fullPath))
             throw new FileNotFoundException($"File not found: {pathOrKey}");
 
@@ -68,7 +76,7 @@ public class LocalStorageService : IStorageService
 
     public Task DeleteAsync(string pathOrKey, CancellationToken ct = default)
     {
-        var fullPath = Path.Combine(_basePath, pathOrKey);
+        var fullPath = ResolveSafePath(pathOrKey);
         if (File.Exists(fullPath))
             File.Delete(fullPath);
         return Task.CompletedTask;
@@ -76,7 +84,7 @@ public class LocalStorageService : IStorageService
 
     public Task<bool> ExistsAsync(string pathOrKey, CancellationToken ct = default)
     {
-        var fullPath = Path.Combine(_basePath, pathOrKey);
+        var fullPath = ResolveSafePath(pathOrKey);
         return Task.FromResult(File.Exists(fullPath));
     }
 

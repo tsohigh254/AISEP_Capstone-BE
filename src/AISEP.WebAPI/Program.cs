@@ -54,6 +54,16 @@ try
 
     builder.Host.UseSerilog();
 
+// Limit upload size to 20 MB
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 20 * 1024 * 1024;
+});
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 20 * 1024 * 1024;
+});
+
 // Add services to the container.
 
 // CORS — allow FE origin(s) with credentials (cookies)
@@ -95,8 +105,18 @@ builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
-builder.Services.AddSingleton<IBlockchainService, StubBlockchainService>(); // TODO: swap with real blockchain RPC for production
 
+// Blockchain — toggle between Stub and Ethereum via config
+builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
+var blockchainProvider = builder.Configuration.GetValue<string>("Blockchain:Provider") ?? "Stub";
+if (string.Equals(blockchainProvider, "Ethereum", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
+}
+else
+{
+    builder.Services.AddSingleton<IBlockchainService, StubBlockchainService>();
+}
 
 // Storage (local file system for dev — swap to Azure Blob / S3 for production)
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");

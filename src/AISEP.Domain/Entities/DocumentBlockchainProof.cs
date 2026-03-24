@@ -13,7 +13,7 @@ public class DocumentBlockchainProof
     public string? BlockNumber { get; set; }
     public DateTime? AnchoredAt { get; set; }
     public int? AnchoredBy { get; set; }
-    public ProofStatus ProofStatus { get; set; } = ProofStatus.Anchored;
+    public ProofStatus ProofStatus { get; set; } = ProofStatus.HashComputed;
 
     // Navigation properties
     public Document Document { get; set; } = null!;
