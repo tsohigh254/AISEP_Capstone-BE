@@ -17,7 +17,6 @@ namespace AISEP.Infrastructure.Services;
 public class BlockchainProofService : IBlockchainProofService
 {
     private readonly ApplicationDbContext _context;
-    private readonly IStorageService _storage;
     private readonly IBlockchainService _blockchain;
     private readonly IAuditService _audit;
     private readonly ILogger<BlockchainProofService> _logger;
@@ -25,14 +24,12 @@ public class BlockchainProofService : IBlockchainProofService
 
     public BlockchainProofService(
         ApplicationDbContext context,
-        IStorageService storage,
         IBlockchainService blockchain,
         IAuditService audit,
         ILogger<BlockchainProofService> logger,
         IOptions<BlockchainSettings> blockchainSettings)
     {
         _context = context;
-        _storage = storage;
         _blockchain = blockchain;
         _audit = audit;
         _logger = logger;
@@ -126,13 +123,16 @@ public class BlockchainProofService : IBlockchainProofService
             fileHash = proof.FileHash;
         }
 
+        // Extract filename from Cloudinary URL
+        var fileName = ExtractFileNameFromCloudinaryUrl(doc.FileURL) ?? "Unknown";
+
         // Submit to blockchain
         var metadata = new BlockchainSubmitMeta
         {
             DocumentID = doc.DocumentID,
             StartupID = doc.StartupID,
             DocumentType = doc.DocumentType,
-            FileName = doc.FileName
+            FileName = fileName
         };
 
         string txHash;
@@ -262,10 +262,23 @@ public class BlockchainProofService : IBlockchainProofService
 
     private async Task<string> ComputeFileHashAsync(string fileUrl, CancellationToken ct)
     {
-        await using var stream = await _storage.OpenReadAsync(fileUrl, ct);
-        using var sha256 = SHA256.Create();
-        var hashBytes = await sha256.ComputeHashAsync(stream, ct);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+        using var httpClient = new HttpClient();
+
+        try
+        {
+            using var response = await httpClient.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var sha256 = SHA256.Create();
+            var hashBytes = await sha256.ComputeHashAsync(stream, ct);
+            return Convert.ToHexString(hashBytes).ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to compute hash for URL: {FileUrl}", fileUrl);
+            throw;
+        }
     }
 
     private async Task<ApiResponse<VerifyChainResponseDto>> VerifyHashInternalAsync(Document doc, CancellationToken ct)
@@ -352,5 +365,25 @@ public class BlockchainProofService : IBlockchainProofService
             .Include(d => d.BlockchainProof)
             .Where(d => d.DocumentID == documentId && d.Startup.UserID == userId)
             .FirstOrDefaultAsync(ct);
+    }
+
+
+    /// <summary>Extract filename from Cloudinary URL.</summary>
+    /// <example>
+    /// Input: "https://res.cloudinary.com/xxx/image/upload/v123/document_abc123.pdf"
+    /// Output: "document_abc123.pdf"
+    /// </example>
+    private static string? ExtractFileNameFromCloudinaryUrl(string cloudinaryUrl)
+    {
+        try
+        {
+            var uri = new Uri(cloudinaryUrl);
+            var lastSegment = uri.Segments.Last();
+            return Uri.UnescapeDataString(lastSegment);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

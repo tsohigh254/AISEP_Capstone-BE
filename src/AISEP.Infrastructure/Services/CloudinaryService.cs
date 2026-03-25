@@ -14,9 +14,12 @@ namespace AISEP.Infrastructure.Services
 {
     public class CloudinaryService : ICloudinaryService
     {
-        private readonly string[] allowedExtensions = { ".jpeg", ".gif", ".png", ".jpg" };
+        private readonly string[] allowedExtensionsImage = { ".jpeg", ".gif", ".png", ".jpg" };
+        private readonly string[] allowedExtensionsDocument = { ".pdf", ".ppt", ".pptx", ".doc", ".docx" };
         private readonly Cloudinary _cloudinary;
-        private const int MaxFileSize = 5 * 1024 * 1024;
+        private const int MaxFileSizeImage = 5 * 1024 * 1024;
+        private const int MaxFileSizeDocument = 20 * 1024 * 1024;
+
 
         public CloudinaryService(IOptions<CloudinaryOptions> options)
         {
@@ -48,11 +51,11 @@ namespace AISEP.Infrastructure.Services
         {
             if (file == null || file.Length == 0) throw new FileNotFoundException("File ảnh không được để trống");
 
-            if (file.Length > MaxFileSize) throw new InvalidOperationException($"Ảnh không vượt quá {MaxFileSize / (1024 * 1024)} MB");
+            if (file.Length > MaxFileSizeImage) throw new InvalidOperationException($"Ảnh không vượt quá {MaxFileSizeImage / (1024 * 1024)} MB");
 
             var fileExtension = Path.GetExtension(file.FileName);
 
-            if (!allowedExtensions.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensions)}");
+            if (!allowedExtensionsImage.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensionsImage)}");
 
             using var stream = file.OpenReadStream();
 
@@ -63,6 +66,35 @@ namespace AISEP.Infrastructure.Services
             };
 
             var result = await _cloudinary.UploadAsync(uploadParams);
+
+            //Console.WriteLine(result);
+            return result.SecureUrl.ToString();
+        }
+
+
+        public async Task<string> UploadDocument(IFormFile file, string folder)
+        {
+            if (file == null || file.Length == 0) throw new FileNotFoundException("File không được để trống");
+
+            if (file.Length > MaxFileSizeDocument) throw new InvalidOperationException($"Tài liệu không vượt quá {MaxFileSizeDocument / (1024 * 1024)} MB");
+
+            var fileExtension = Path.GetExtension(file.FileName);
+
+            if (!allowedExtensionsDocument.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensionsDocument)}");
+
+            using var stream = file.OpenReadStream();
+
+            var uploadParams = new RawUploadParams
+            {
+                File = new FileDescription(file.FileName, stream),
+                Folder = folder,
+                //ResourceType = "raw"
+            };
+
+            var result = await _cloudinary.UploadAsync(uploadParams);
+
+            if (result == null || result.SecureUrl == null)
+                throw new InvalidOperationException("Upload tài liệu thất bại: không nhận được response từ Cloudinary");
 
             //Console.WriteLine(result);
             return result.SecureUrl.ToString();

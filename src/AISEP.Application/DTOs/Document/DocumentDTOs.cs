@@ -1,3 +1,4 @@
+using AISEP.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace AISEP.Application.DTOs.Document;
@@ -11,12 +12,13 @@ namespace AISEP.Application.DTOs.Document;
 /// The actual file is IFormFile bound separately in the controller.
 /// </summary>
 public class DocumentCreateRequest
-{
+{   
+    public IFormFile File { get; set; }
     /// <summary>PitchDeck | BusinessPlan | Financials | Legal | Other</summary>
-    public string DocumentType { get; set; } = null!;
+    public DocumentType DocumentType { get; set; }
 
     /// <summary>Optional: custom title. If null, the original file name is used.</summary>
-    public string? Title { get; set; }
+    public string Title { get; set; }
 
     /// <summary>Optional: explicit version string. If null, auto-incremented ("1", "2", …).</summary>
     public string? Version { get; set; }
@@ -48,9 +50,6 @@ public class DocumentUpdateMetadataRequest
     /// <summary>New title (optional).</summary>
     public string? Title { get; set; }
 
-    /// <summary>Change document type (optional).</summary>
-    public string? DocumentType { get; set; }
-
     /// <summary>Set archived state (optional).</summary>
     public bool? IsArchived { get; set; }
 }
@@ -69,31 +68,13 @@ public class DocumentDto
     public string DocumentType { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string? Version { get; set; }
-
-    /// <summary>Relative download URL: /api/documents/{id}/download</summary>
-    public string DownloadUrl { get; set; } = null!;
-
-    public int FileSize { get; set; }
-    public string? ContentType { get; set; }
+    public string FileUrl { get; set; }
     public bool IsArchived { get; set; }
     public bool IsAnalyzed { get; set; }
     public string? AnalysisStatus { get; set; }
     public DateTime UploadedAt { get; set; }
-    public DateTime? UpdatedAt { get; set; }
+    public string ProofStatus { get; set; } = null!;
+    public string FileHash { get; set; }
+    public string TransactionHash { get; set; }
 }
 
-/// <summary>
-/// Compact list item for document listing.
-/// </summary>
-public class DocumentListItemDto
-{
-    public int DocumentID { get; set; }
-    public string DocumentType { get; set; } = null!;
-    public string Title { get; set; } = null!;
-    public string? Version { get; set; }
-    public int FileSize { get; set; }
-    public string? ContentType { get; set; }
-    public bool IsArchived { get; set; }
-    public string? AnalysisStatus { get; set; }
-    public DateTime UploadedAt { get; set; }
-}

@@ -51,18 +51,11 @@ public class DocumentsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Upload(
-        [FromForm] DocumentUploadForm form,
+        [FromForm] DocumentCreateRequest createRequest,
         CancellationToken ct = default)
-    {
-        var request = new DocumentCreateRequest
-        {
-            DocumentType = form.DocumentType,
-            Title = form.Title,
-            Version = form.Version
-        };
-
+    {     
         var userId = GetCurrentUserId();
-        var result = await _documentService.UploadAsync(form.File, request, userId, ct);
+        var result = await _documentService.UploadAsync(createRequest, userId, ct);
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
     }
@@ -82,19 +75,12 @@ public class DocumentsController : ControllerBase
     /// <param name="pageSize">Items per page (default 20, max 100).</param>
     [HttpGet]
     [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<PagedResponse<DocumentListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMyDocuments(
-        [FromQuery] string? documentType = null,
-        [FromQuery] bool? isArchived = null,
-        [FromQuery] string? q = null,
-        [FromQuery] string sortBy = "uploadedAt",
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
-        CancellationToken ct = default)
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<DocumentDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyDocuments(CancellationToken ct = default)
     {
         var userId = GetCurrentUserId();
-        var result = await _documentService.GetMyDocumentsAsync(userId, documentType, isArchived, q, sortBy, page, pageSize, ct);
-        return result.ToPagedEnvelope();
+        var result = await _documentService.GetMyDocumentsAsync(userId, ct);
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -113,30 +99,6 @@ public class DocumentsController : ControllerBase
         var userId = GetCurrentUserId();
         var result = await _documentService.GetMyDocumentAsync(documentId, userId, ct);
         return result.ToActionResult();
-    }
-
-    // ================================================================
-    // 4) GET /api/documents/{documentId}/download — Download file
-    // ================================================================
-
-    /// <summary>
-    /// Download the physical file for a document (owner only).
-    /// Returns the file stream with correct Content-Type and Content-Disposition.
-    /// </summary>
-    [HttpGet("{documentId:int}/download")]
-    [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Download(int documentId, CancellationToken ct = default)
-    {
-        var userId = GetCurrentUserId();
-        var result = await _documentService.DownloadMyDocumentAsync(documentId, userId, ct);
-
-        if (!result.Success)
-            return ApiEnvelopeExtensions.ErrorEnvelope(result.Error!.Message, StatusCodes.Status404NotFound);
-
-        var (stream, contentType, fileName) = result.Data;
-        return File(stream, contentType, fileName);
     }
 
     // ================================================================

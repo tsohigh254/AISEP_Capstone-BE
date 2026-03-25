@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Domain.Interfaces;
 
 /// <summary>
@@ -28,7 +30,7 @@ public class BlockchainSubmitMeta
 {
     public int DocumentID { get; set; }
     public int StartupID { get; set; }
-    public string DocumentType { get; set; } = null!;
+    public DocumentType DocumentType { get; set; }
     public string FileName { get; set; } = null!;
 }
 

@@ -112,6 +112,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PortfolioCompany>().Property(e => e.InvestmentStage).HasConversion<short?>();
         modelBuilder.Entity<PortfolioCompany>().Property(e => e.CurrentStatus).HasConversion<short?>();
         modelBuilder.Entity<PortfolioCompany>().Property(e => e.ExitType).HasConversion<short?>();
+        modelBuilder.Entity<Document>().Property(e => e.DocumentType).HasConversion<short?>();
+        modelBuilder.Entity<Document>().Property(e => e.AnalysisStatus).HasConversion<short?>();
 
         // Startup
         modelBuilder.Entity<Startup>().Property(e => e.Stage).HasConversion<short?>();
