@@ -192,3 +192,17 @@ public enum MentorshipStatus : short
     Cancelled = 7,
     Expired = 8
 }
+
+// ───────────────────────── Document ───────────────────────────
+public enum DocumentType : short
+{
+    Pitch_Deck = 0,
+    Bussiness_Plan = 1
+}
+
+public enum AnalysisStatus : short
+{
+    NOTANALYZE = 0,
+    COMPLETED = 1,
+    FAILED = 2
+}

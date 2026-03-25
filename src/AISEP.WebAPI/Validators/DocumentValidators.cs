@@ -10,11 +10,6 @@ public class DocumentCreateRequestValidator : AbstractValidator<DocumentCreateRe
 
     public DocumentCreateRequestValidator()
     {
-        RuleFor(x => x.DocumentType)
-            .NotEmpty().WithMessage("DocumentType is required.")
-            .Must(t => AllowedDocumentTypes.Contains(t, StringComparer.OrdinalIgnoreCase))
-            .WithMessage($"DocumentType must be one of: {string.Join(", ", AllowedDocumentTypes)}.");
-
         RuleFor(x => x.Title)
             .MaximumLength(200).WithMessage("Title must not exceed 200 characters.")
             .When(x => x.Title != null);
@@ -35,10 +30,5 @@ public class DocumentUpdateMetadataRequestValidator : AbstractValidator<Document
         RuleFor(x => x.Title)
             .MaximumLength(200).WithMessage("Title must not exceed 200 characters.")
             .When(x => x.Title != null);
-
-        RuleFor(x => x.DocumentType)
-            .Must(t => AllowedDocumentTypes.Contains(t!, StringComparer.OrdinalIgnoreCase))
-            .WithMessage($"DocumentType must be one of: {string.Join(", ", AllowedDocumentTypes)}.")
-            .When(x => x.DocumentType != null);
     }
 }

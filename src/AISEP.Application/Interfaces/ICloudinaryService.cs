@@ -11,5 +11,6 @@ namespace AISEP.Application.Interfaces
     {
         public Task DeleteImage(string url);
         public Task<string> UploadImage(IFormFile file, string folder);
+        public Task<string> UploadDocument(IFormFile file, string folder);
     }
 }

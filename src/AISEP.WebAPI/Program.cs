@@ -79,6 +79,11 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Cloudinary Configuration
+builder.Services.Configure<CloudinaryOptions>(
+builder.Configuration.GetSection("CloudinaryOptions"));
+
+
 // JWT Settings
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()!;
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
@@ -105,6 +110,7 @@ builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
+builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 
 // Blockchain — toggle between Stub and Ethereum via config
 builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
@@ -120,7 +126,6 @@ else
 
 // Storage (local file system for dev — swap to Azure Blob / S3 for production)
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
-builder.Services.AddSingleton<IStorageService>(new LocalStorageService(uploadsPath));
 
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 
@@ -260,12 +265,12 @@ var app = builder.Build();
         // Giảm noise: OPTIONS preflight + polling endpoints chỉ log ở Debug
         options.GetLevel = (httpContext, elapsed, ex) =>
         {
-            if (ex != null) return Serilog.Events.LogEventLevel.Error;
-            if (httpContext.Request.Method == "OPTIONS") return Serilog.Events.LogEventLevel.Debug;
+            if (ex != null) return LogEventLevel.Error;
+            if (httpContext.Request.Method == "OPTIONS") return LogEventLevel.Debug;
             var path = httpContext.Request.Path.Value ?? "";
             if (path.StartsWith("/api/notifications", StringComparison.OrdinalIgnoreCase))
-                return Serilog.Events.LogEventLevel.Debug;
-            return Serilog.Events.LogEventLevel.Information;
+                return LogEventLevel.Debug;
+            return LogEventLevel.Information;
         };
     });
     
