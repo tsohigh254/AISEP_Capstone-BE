@@ -18,6 +18,7 @@ public class Startup
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
+    public bool IsVisible { get; set; } = false;
     public DateTime? ApprovedAt { get; set; }
     public int? ApprovedBy { get; set; }
     public DateTime CreatedAt { get; set; } 

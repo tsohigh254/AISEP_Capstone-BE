@@ -59,7 +59,7 @@ public class AdvisorService : IAdvisorService
             var industryFocus = new AdvisorIndustryFocus
             {
                 AdvisorID = advisor.AdvisorID,
-                IndustryFocusID = industry.IndustryId
+                IndustryID = industry.IndustryId
             };
 
             advisor.IndustryFocus.Add(industryFocus);
@@ -83,6 +83,7 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
+                .ThenInclude(aif => aif.Industry)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
@@ -129,12 +130,13 @@ public class AdvisorService : IAdvisorService
                 advisor.IndustryFocus.Add(new AdvisorIndustryFocus
                 {
                     AdvisorID = advisor.AdvisorID,
-                    IndustryFocusID = industry.IndustryId
+                    IndustryID = industry.IndustryId
                 });
             }
         }
 
         _db.Advisors.Update(advisor);
+        await _db.SaveChangesAsync();
 
         await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
         _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
@@ -196,6 +198,7 @@ public class AdvisorService : IAdvisorService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(a => a.IndustryFocus)
+                .ThenInclude(aif => aif.Industry)
             .Include(a => a.Availability)
             .AsQueryable();
 
@@ -221,8 +224,8 @@ public class AdvisorService : IAdvisorService
             Industries = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
             {
                 IndustryId = i.IndustryID,
-                Industry = i.Industry.IndustryName
-            }).ToList()       
+                Industry = i.Industry != null ? i.Industry.IndustryName : null
+            }).ToList()
         }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize);
 
         return ApiResponse<PagedResponse<AdvisorSearchItemDto>>.SuccessResponse(new PagedResponse<AdvisorSearchItemDto>
@@ -265,7 +268,7 @@ public class AdvisorService : IAdvisorService
         IndustryFocus = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
         {
             IndustryId = i.IndustryID,
-            Industry = i.Industry.IndustryName
+            Industry = i.Industry?.IndustryName
         }).ToList()
     };
 

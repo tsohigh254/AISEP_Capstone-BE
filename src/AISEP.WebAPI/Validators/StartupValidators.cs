@@ -16,6 +16,9 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
             .NotEmpty().WithMessage("Company name is required")
             .MaximumLength(200).WithMessage("Company name must not exceed 200 characters");
 
+        RuleFor(x => x.OneLiner)
+            .MaximumLength(120).WithMessage("Tagline must not exceed 120 characters");
+
         RuleFor(x => x.IndustryID)
             .GreaterThan(0).When(x => x.IndustryID.HasValue)
             .WithMessage("IndustryID must be a positive integer");
@@ -60,10 +63,12 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
             .MaximumLength(200).WithMessage("Company name must not exceed 200 characters")
             .NotEmpty().When(x => x.CompanyName != null).WithMessage("Company name cannot be empty");
 
+        RuleFor(x => x.OneLiner)
+            .MaximumLength(120).WithMessage("Tagline must not exceed 120 characters");
+
         RuleFor(x => x.IndustryID)
             .GreaterThan(0).When(x => x.IndustryID.HasValue)
             .WithMessage("IndustryID must be a positive integer");
-
 
         RuleFor(x => x.Description)
             .MaximumLength(5000).WithMessage("Description must not exceed 5000 characters");

@@ -73,11 +73,18 @@ public class StartupService : IStartupService
             CreatedAt = DateTime.UtcNow
         };
 
-        var logoUrl = request.LogoUrl != null
-            ? await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo)
-            : null;
-
-        startup.LogoURL = logoUrl;
+        if (request.LogoUrl != null)
+        {
+            try
+            {
+                startup.LogoURL = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload logo for startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<StartupMeDto>.ErrorResponse("LOGO_UPLOAD_FAILED", ex.Message);
+            }
+        }
 
         _context.Startups.Add(startup);
         await _context.SaveChangesAsync();
@@ -105,7 +112,7 @@ public class StartupService : IStartupService
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));
     }
 
-    public async Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request)
+    public async Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request, bool removeLogo = false)
     {
         var startup = await _context.Startups
             .Include(s => s.TeamMembers)
@@ -143,12 +150,28 @@ public class StartupService : IStartupService
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;
 
+        // Logo handling: file upload, remove via "null" string, or keep current
         if (request.LogoUrl != null)
         {
-            var logoUrl = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            string logoUrl;
+            try
+            {
+                logoUrl = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload logo for startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<StartupMeDto>.ErrorResponse("LOGO_UPLOAD_FAILED", ex.Message);
+            }
             if (!string.IsNullOrEmpty(startup.LogoURL))
                 await _cloudinaryService.DeleteImage(startup.LogoURL);
             startup.LogoURL = logoUrl;
+        }
+        else if (removeLogo)
+        {
+            if (!string.IsNullOrEmpty(startup.LogoURL))
+                await _cloudinaryService.DeleteImage(startup.LogoURL);
+            startup.LogoURL = null;
         }
 
         startup.UpdatedAt = DateTime.UtcNow;
@@ -159,6 +182,24 @@ public class StartupService : IStartupService
             $"Updated fields for {startup.CompanyName}");
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile updated successfully");
+    }
+
+    public async Task<ApiResponse<string>> UpdateVisibilityAsync(int userId, string visibility)
+    {
+        var startup = await _context.Startups.FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
+
+        startup.IsVisible = string.Equals(visibility, "Visible", StringComparison.OrdinalIgnoreCase);
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("UPDATE_VISIBILITY", "Startup", startup.StartupID,
+            $"Visibility set to {visibility}");
+
+        return ApiResponse<string>.SuccessResponse(startup.IsVisible ? "Visible" : "Hidden", "Visibility updated");
     }
 
     public async Task<ApiResponse<StartupMeDto>> SubmitForApprovalAsync(int userId)
@@ -172,6 +213,19 @@ public class StartupService : IStartupService
             return ApiResponse<StartupMeDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You haven't created a startup profile yet.");
         }
+
+        // Validate required fields before submission
+        if (string.IsNullOrWhiteSpace(startup.CompanyName))
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Company name is required before submission.");
+
+        if (string.IsNullOrWhiteSpace(startup.OneLiner))
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Tagline (one-liner) is required before submission.");
+
+        if (startup.Stage == null)
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Startup stage is required before submission.");
 
         if (startup.ProfileStatus == ProfileStatus.Pending)
         {
@@ -309,11 +363,18 @@ public class StartupService : IStartupService
             CreatedAt = DateTime.UtcNow
         };
 
-        var photo = request.PhotoURL != null
-            ? await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member)
-            : null;
-
-        member.PhotoURL = photo;
+        if (request.PhotoURL != null)
+        {
+            try
+            {
+                member.PhotoURL = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload photo for team member in startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<TeamMemberDto>.ErrorResponse("PHOTO_UPLOAD_FAILED", ex.Message);
+            }
+        }
 
         _context.TeamMembers.Add(member);
         await _context.SaveChangesAsync();
@@ -353,8 +414,17 @@ public class StartupService : IStartupService
 
         if (request.PhotoURL != null)
         {
-            var photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Logo);
-            if (!string.IsNullOrEmpty(startup.LogoURL))
+            string photo;
+            try
+            {
+                photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload photo for team member id={MemberId}: {Message}", teamMemberId, ex.Message);
+                return ApiResponse<TeamMemberDto>.ErrorResponse("PHOTO_UPLOAD_FAILED", ex.Message);
+            }
+            if (!string.IsNullOrEmpty(member.PhotoURL))
                 await _cloudinaryService.DeleteImage(member.PhotoURL);
             member.PhotoURL = photo;
         }
@@ -415,6 +485,7 @@ public class StartupService : IStartupService
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
             ProfileStatus = s.ProfileStatus.ToString(),
+            Visibility = s.IsVisible ? "Visible" : "Hidden",
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,

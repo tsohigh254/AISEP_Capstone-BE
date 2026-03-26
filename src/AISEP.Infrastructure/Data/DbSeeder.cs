@@ -10,6 +10,8 @@ public static class DbSeeder
         await SeedRolesAsync(context);
         await SeedPermissionsAsync(context);
         await SeedIndustriesAsync(context);
+        await SeedAdminUserAsync(context);
+        await SeedStaffUserAsync(context);
     }
 
     private static async Task SeedRolesAsync(ApplicationDbContext context)
@@ -139,6 +141,66 @@ public static class DbSeeder
         };
 
         context.Industries.AddRange(industries);
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedAdminUserAsync(ApplicationDbContext context)
+    {
+        const string adminEmail = "admin@aisep.com";
+        if (await context.Users.AnyAsync(u => u.Email == adminEmail)) return;
+
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin");
+        if (adminRole == null) return;
+
+        var admin = new User
+        {
+            Email = adminEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123456"),
+            UserType = "Admin",
+            IsActive = true,
+            EmailVerified = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.Users.Add(admin);
+        await context.SaveChangesAsync();
+
+        context.UserRoles.Add(new UserRole
+        {
+            UserID = admin.UserID,
+            RoleID = adminRole.RoleID,
+            AssignedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedStaffUserAsync(ApplicationDbContext context)
+    {
+        const string staffEmail = "staff@aisep.com";
+        if (await context.Users.AnyAsync(u => u.Email == staffEmail)) return;
+
+        var staffRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Staff");
+        if (staffRole == null) return;
+
+        var staff = new User
+        {
+            Email = staffEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Staff@123456"),
+            UserType = "Staff",
+            IsActive = true,
+            EmailVerified = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.Users.Add(staff);
+        await context.SaveChangesAsync();
+
+        context.UserRoles.Add(new UserRole
+        {
+            UserID = staff.UserID,
+            RoleID = staffRole.RoleID,
+            AssignedAt = DateTime.UtcNow
+        });
         await context.SaveChangesAsync();
     }
 }

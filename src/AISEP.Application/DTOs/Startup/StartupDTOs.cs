@@ -8,12 +8,12 @@ namespace AISEP.Application.DTOs.Startup;
 public class CreateStartupRequest
 {
     public string CompanyName { get; set; } = null!;
-    public string OneLiner { get; set; }
+    public string? OneLiner { get; set; }
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
     /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
-    public StartupStage Stage { get; set; }
+    public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public IFormFile? LogoUrl { get; set; }
@@ -25,16 +25,22 @@ public class CreateStartupRequest
 public class UpdateStartupRequest
 {
     public string? CompanyName { get; set; }
-    public string OneLiner { get; set; }
+    public string? OneLiner { get; set; }
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
-    public StartupStage Stage { get; set; }
+    public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public IFormFile? LogoUrl { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+}
+
+public class UpdateVisibilityRequest
+{
+    /// <summary>"Visible" or "Hidden"</summary>
+    public string Visibility { get; set; } = null!;
 }
 
 // ========== RESPONSE DTOs ==========
@@ -57,6 +63,7 @@ public class StartupMeDto
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
     public string? ProfileStatus { get; set; }
+    public string Visibility { get; set; } = "Hidden";
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

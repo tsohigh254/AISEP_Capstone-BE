@@ -96,7 +96,9 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> UpdateMyStartup([FromForm] UpdateStartupRequest request)
     {
         var userId = GetCurrentUserId();
-        var result = await _startupService.UpdateStartupAsync(userId, request);
+        // FE sends logoUrl = "null" (string) to remove logo
+        bool removeLogo = Request.Form.ContainsKey("logoUrl") && Request.Form["logoUrl"].ToString() == "null";
+        var result = await _startupService.UpdateStartupAsync(userId, request, removeLogo);
         return result.ToActionResult();
     }
 
@@ -112,6 +114,20 @@ public class StartupsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _startupService.SubmitForApprovalAsync(userId);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Update startup profile visibility (Visible / Hidden)
+    /// </summary>
+    [HttpPut("me/visibility")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateVisibility([FromBody] UpdateVisibilityRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.UpdateVisibilityAsync(userId, request.Visibility);
         return result.ToActionResult();
     }
 
