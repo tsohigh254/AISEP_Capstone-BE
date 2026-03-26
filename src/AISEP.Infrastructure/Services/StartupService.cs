@@ -69,6 +69,21 @@ public class StartupService : IStartupService
             FundingAmountSought = request.FundingAmountSought,
             CurrentFundingRaised = request.CurrentFundingRaised,
             Valuation = request.Valuation,
+
+            SubIndustry = request.SubIndustry,
+            MarketScope = request.MarketScope,
+            ProductStatus = request.ProductStatus,
+            Location = request.Location,
+            Country = request.Country,
+            ProblemStatement = request.ProblemStatement,
+            SolutionSummary = request.SolutionSummary,
+            CurrentNeeds = request.CurrentNeeds != null ? string.Join(",", request.CurrentNeeds) : null,
+            MetricSummary = request.MetricSummary,
+            LinkedInURL = request.LinkedInURL,
+            ContactEmail = request.ContactEmail,
+            ContactPhone = request.ContactPhone,
+            TeamSize = request.TeamSize ?? 0,
+
             ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
@@ -142,6 +157,20 @@ public class StartupService : IStartupService
         if (request.FundingAmountSought.HasValue) startup.FundingAmountSought = request.FundingAmountSought;
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;
+        
+        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
+        if (request.MarketScope != null) startup.MarketScope = request.MarketScope;
+        if (request.ProductStatus != null) startup.ProductStatus = request.ProductStatus;
+        if (request.Location != null) startup.Location = request.Location;
+        if (request.Country != null) startup.Country = request.Country;
+        if (request.ProblemStatement != null) startup.ProblemStatement = request.ProblemStatement;
+        if (request.SolutionSummary != null) startup.SolutionSummary = request.SolutionSummary;
+        if (request.CurrentNeeds != null) startup.CurrentNeeds = string.Join(",", request.CurrentNeeds);
+        if (request.MetricSummary != null) startup.MetricSummary = request.MetricSummary;
+        if (request.LinkedInURL != null) startup.LinkedInURL = request.LinkedInURL;
+        if (request.ContactEmail != null) startup.ContactEmail = request.ContactEmail;
+        if (request.ContactPhone != null) startup.ContactPhone = request.ContactPhone;
+        if (request.TeamSize.HasValue) startup.TeamSize = request.TeamSize.Value;
 
         if (request.LogoUrl != null)
         {
@@ -193,6 +222,28 @@ public class StartupService : IStartupService
             $"{startup.CompanyName} submitted for approval");
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup submitted for approval");
+    }
+
+    public async Task<ApiResponse<string>> ToggleVisibilityAsync(int userId, bool isVisible)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+        {
+            return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
+        }
+
+        startup.IsVisible = isVisible;
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        string action = isVisible ? "enabled" : "disabled";
+        await _auditService.LogAsync("TOGGLE_VISIBILITY", "Startup", startup.StartupID,
+            $"Startup visibility {action}");
+
+        return ApiResponse<string>.SuccessResponse($"Visibility {action}", $"Your profile is now {(isVisible ? "visible" : "hidden")} to investors.");
     }
 
     // ========== PUBLIC ENDPOINTS ==========
@@ -396,6 +447,31 @@ public class StartupService : IStartupService
 
     // ========== MAPPING HELPERS ==========
 
+    private static int CalculateProfileCompleteness(Startup s)
+    {
+        int totalFields = 16;
+        int filledFields = 0;
+
+        if (!string.IsNullOrEmpty(s.CompanyName)) filledFields++;
+        if (!string.IsNullOrEmpty(s.OneLiner)) filledFields++;
+        if (!string.IsNullOrEmpty(s.Description)) filledFields++;
+        if (s.IndustryID.HasValue) filledFields++;
+        if (s.Stage.HasValue) filledFields++;
+        if (s.FoundedDate.HasValue) filledFields++;
+        if (!string.IsNullOrEmpty(s.Website)) filledFields++;
+        if (!string.IsNullOrEmpty(s.LogoURL)) filledFields++;
+        if (!string.IsNullOrEmpty(s.SubIndustry)) filledFields++;
+        if (!string.IsNullOrEmpty(s.MarketScope)) filledFields++;
+        if (!string.IsNullOrEmpty(s.ProductStatus)) filledFields++;
+        if (!string.IsNullOrEmpty(s.ProblemStatement)) filledFields++;
+        if (!string.IsNullOrEmpty(s.SolutionSummary)) filledFields++;
+        if (!string.IsNullOrEmpty(s.ContactEmail)) filledFields++;
+        if (!string.IsNullOrEmpty(s.CurrentNeeds)) filledFields++;
+        if (s.TeamMembers != null && s.TeamMembers.Any()) filledFields++;
+
+        return (int)Math.Round((double)filledFields / totalFields * 100);
+    }
+
     private static StartupMeDto MapToMeDto(Startup s)
     {
         return new StartupMeDto
@@ -414,6 +490,26 @@ public class StartupService : IStartupService
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
+            
+            SubIndustry = s.SubIndustry,
+            MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
+            ProblemStatement = s.ProblemStatement,
+            SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = string.IsNullOrEmpty(s.CurrentNeeds) 
+                ? new List<string>() 
+                : s.CurrentNeeds.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(n => n.Trim()).ToList(),
+            MetricSummary = s.MetricSummary,
+            LinkedInURL = s.LinkedInURL,
+            ContactEmail = s.ContactEmail,
+            ContactPhone = s.ContactPhone,
+            VisibilityStatus = s.IsVisible ? "Visible" : "Hidden",
+            ValidationStatus = s.ProfileStatus.ToString() == "Approved" ? "Validated" : (s.ProfileStatus.ToString() == "Pending" ? "In Progress" : "Unverified"),
+            ProfileCompleteness = CalculateProfileCompleteness(s),
+            TeamSize = s.TeamSize > 0 ? s.TeamSize : (s.TeamMembers?.Count ?? 0),
+
             ProfileStatus = s.ProfileStatus.ToString(),
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
@@ -438,6 +534,23 @@ public class StartupService : IStartupService
             LogoURL = s.LogoURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
+
+            SubIndustry = s.SubIndustry,
+            MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
+            ProblemStatement = s.ProblemStatement,
+            SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = string.IsNullOrEmpty(s.CurrentNeeds) 
+                ? new List<string>() 
+                : s.CurrentNeeds.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(n => n.Trim()).ToList(),
+            MetricSummary = s.MetricSummary,
+            LinkedInURL = s.LinkedInURL,
+            ContactEmail = s.ContactEmail,
+            ContactPhone = s.ContactPhone,
+            TeamSize = s.TeamSize > 0 ? s.TeamSize : (s.TeamMembers?.Count ?? 0),
+
             ProfileStatus = s.ProfileStatus.ToString(),
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,

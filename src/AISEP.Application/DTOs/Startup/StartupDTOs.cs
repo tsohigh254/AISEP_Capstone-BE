@@ -20,6 +20,21 @@ public class CreateStartupRequest
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+
+    // UI Extra Requirements
+    public string? SubIndustry { get; set; }
+    public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? ProblemStatement { get; set; }
+    public string? SolutionSummary { get; set; }
+    public List<string>? CurrentNeeds { get; set; }
+    public string? MetricSummary { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public int? TeamSize { get; set; }
 }
 
 public class UpdateStartupRequest
@@ -35,6 +50,26 @@ public class UpdateStartupRequest
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+
+    // UI Extra Requirements
+    public string? SubIndustry { get; set; }
+    public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? ProblemStatement { get; set; }
+    public string? SolutionSummary { get; set; }
+    public List<string>? CurrentNeeds { get; set; }
+    public string? MetricSummary { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public int? TeamSize { get; set; }
+}
+
+public class ToggleVisibilityRequest
+{
+    public bool IsVisible { get; set; }
 }
 
 // ========== RESPONSE DTOs ==========
@@ -56,6 +91,25 @@ public class StartupMeDto
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+
+    // UI Additions
+    public string? SubIndustry { get; set; }
+    public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? ProblemStatement { get; set; }
+    public string? SolutionSummary { get; set; }
+    public List<string> CurrentNeeds { get; set; } = new();
+    public string? MetricSummary { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public string ValidationStatus { get; set; } = "Unverified";
+    public string VisibilityStatus { get; set; } = "Visible";
+    public int ProfileCompleteness { get; set; }
+    public int TeamSize { get; set; }
+
     public string? ProfileStatus { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -78,6 +132,22 @@ public class StartupPublicDto
     public string? LogoURL { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
+
+    // Public UI additions
+    public string? SubIndustry { get; set; }
+    public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? ProblemStatement { get; set; }
+    public string? SolutionSummary { get; set; }
+    public List<string> CurrentNeeds { get; set; } = new();
+    public string? MetricSummary { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public int TeamSize { get; set; }
+
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
