@@ -12,6 +12,7 @@ public interface IStartupService
     Task<ApiResponse<StartupMeDto>> GetMyStartupAsync(int userId);
     Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request);
     Task<ApiResponse<StartupMeDto>> SubmitForApprovalAsync(int userId);
+    Task<ApiResponse<string>> ToggleVisibilityAsync(int userId, bool isVisible);
 
     // Public (investors/advisors)
     Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId);

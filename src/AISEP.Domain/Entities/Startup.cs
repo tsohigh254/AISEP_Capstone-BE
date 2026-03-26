@@ -17,6 +17,23 @@ public class Startup
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+    
+    // UI Profile View requirements
+    public string? SubIndustry { get; set; }
+    public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? ProblemStatement { get; set; }
+    public string? SolutionSummary { get; set; }
+    public string? CurrentNeeds { get; set; } // Stored as comma-separated or JSON string
+    public string? MetricSummary { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public int TeamSize { get; set; }
+    public bool IsVisible { get; set; } = true;
+    
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public DateTime? ApprovedAt { get; set; }
     public int? ApprovedBy { get; set; }

@@ -115,6 +115,20 @@ public class StartupsController : ControllerBase
         return result.ToActionResult();
     }
 
+    /// <summary>
+    /// Update startup visibility to investors
+    /// </summary>
+    [HttpPut("me/visibility")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleVisibility([FromBody] ToggleVisibilityRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.ToggleVisibilityAsync(userId, request.IsVisible);
+        return result.ToActionResult();
+    }
+
     // ================================================================
     // PUBLIC / MARKETPLACE ENDPOINTS (Authenticated users)
     // ================================================================
