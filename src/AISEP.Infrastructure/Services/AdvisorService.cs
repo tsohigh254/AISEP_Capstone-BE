@@ -76,14 +76,14 @@ public class AdvisorService : IAdvisorService
             MapToMeDto(advisor, null, Array.Empty<AdvisorIndustryFocus>()));
     }
 
-    public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId)
+    public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int advisorId)
     {
         var advisor = await _db.Advisors
             .AsNoTracking()
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
-            .FirstOrDefaultAsync(a => a.UserID == userId);
+            .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
 
         if (advisor == null)
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
@@ -276,7 +276,6 @@ public class AdvisorService : IAdvisorService
         WeeklyAvailableHours = av.WeeklyAvailableHours,
         MaxConcurrentMentees = av.MaxConcurrentMentees,
         ResponseTimeCommitment = av.ResponseTimeCommitment,
-        CalendarConnected = av.CalendarConnected,
         IsAcceptingNewMentees = av.IsAcceptingNewMentees,
         UpdatedAt = av.UpdatedAt
     };

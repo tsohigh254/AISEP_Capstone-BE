@@ -206,3 +206,12 @@ public enum AnalysisStatus : short
     COMPLETED = 1,
     FAILED = 2
 }
+
+public enum SessionStatus : short
+{
+    Pending = 0,
+    Confirmed = 1,
+    Cancelled = 2,
+    Completed = 3
+}
+

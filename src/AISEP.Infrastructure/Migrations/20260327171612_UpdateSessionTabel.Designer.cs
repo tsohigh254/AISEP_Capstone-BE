@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260327171612_UpdateSessionTabel")]
+    partial class UpdateSessionTabel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -120,53 +123,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("AdvisorAvailabilities");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorAvailableSlot", b =>
-                {
-                    b.Property<int>("SlotID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SlotID"));
-
-                    b.Property<int>("AdvisorID")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("BookedSessionID")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("EndTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsBooked")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("TemplateID")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("SlotID");
-
-                    b.HasIndex("AdvisorID");
-
-                    b.HasIndex("BookedSessionID")
-                        .IsUnique();
-
-                    b.HasIndex("TemplateID");
-
-                    b.ToTable("AdvisorAvailableSlots");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorIndustryFocus", b =>
                 {
                     b.Property<int>("IndustryFocusID")
@@ -234,45 +190,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("StartupID");
 
                     b.ToTable("AdvisorTestimonials");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWeeklyScheduleTemplate", b =>
-                {
-                    b.Property<int>("TemplateID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TemplateID"));
-
-                    b.Property<int>("AdvisorID")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("integer");
-
-                    b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("interval");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("interval");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("TemplateID");
-
-                    b.HasIndex("AdvisorID");
-
-                    b.ToTable("AdvisorWeeklyScheduleTemplates");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
@@ -1930,31 +1847,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Advisor");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorAvailableSlot", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Advisor", "Advisor")
-                        .WithMany("AvailableSlots")
-                        .HasForeignKey("AdvisorID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AISEP.Domain.Entities.MentorshipSession", "BookedSession")
-                        .WithOne()
-                        .HasForeignKey("AISEP.Domain.Entities.AdvisorAvailableSlot", "BookedSessionID")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("AISEP.Domain.Entities.AdvisorWeeklyScheduleTemplate", "Template")
-                        .WithMany()
-                        .HasForeignKey("TemplateID")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Advisor");
-
-                    b.Navigation("BookedSession");
-
-                    b.Navigation("Template");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorIndustryFocus", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.Advisor", "Advisor")
@@ -1997,17 +1889,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Mentorship");
 
                     b.Navigation("Startup");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWeeklyScheduleTemplate", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Advisor", "Advisor")
-                        .WithMany("WeeklyScheduleTemplates")
-                        .HasForeignKey("AdvisorID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Advisor");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
@@ -2517,15 +2398,11 @@ namespace AISEP.Infrastructure.Migrations
                 {
                     b.Navigation("Availability");
 
-                    b.Navigation("AvailableSlots");
-
                     b.Navigation("IndustryFocus");
 
                     b.Navigation("Mentorships");
 
                     b.Navigation("Testimonials");
-
-                    b.Navigation("WeeklyScheduleTemplates");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Conversation", b =>
