@@ -218,11 +218,21 @@ public class AdvisorService : IAdvisorService
             Bio = TruncateBio(a.Bio, 200),
             ProfilePhotoURL = a.ProfilePhotoURL,
             AverageRating = a.AverageRating,
-            Industries = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
+            ReviewCount = a.ReviewCount,
+            CompletedSessions = a.CompletedSessions,
+            YearsOfExperience = a.YearsOfExperience,
+            IsVerified = a.IsVerified,
+            AvailabilityHint = a.Availability != null ? (a.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
+            HourlyRate = a.HourlyRate,
+            Expertise = string.IsNullOrEmpty(a.Expertise) ? new List<string>() : a.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            DomainTags = string.IsNullOrEmpty(a.DomainTags) ? new List<string>() : a.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            SuitableFor = string.IsNullOrEmpty(a.SuitableFor) ? new List<string>() : a.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            SupportedDurations = string.IsNullOrEmpty(a.SupportedDurations) ? new List<string>() : a.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            Industry = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
             {
                 IndustryId = i.IndustryID,
                 Industry = i.Industry.IndustryName
-            }).ToList()       
+            }).ToList()
         }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize);
 
         return ApiResponse<PagedResponse<AdvisorSearchItemDto>>.SuccessResponse(new PagedResponse<AdvisorSearchItemDto>
@@ -237,10 +247,52 @@ public class AdvisorService : IAdvisorService
         });
     }
 
-    // ================================================================
-    // MAPPING
-    // ================================================================
+    public async Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId)
+    {
+        var advisor = await _db.Advisors
+            .Include(a => a.IndustryFocus)
+                .ThenInclude(i => i.Industry)
+            .Include(a => a.Availability)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
 
+        if (advisor == null || advisor.ProfileStatus != AISEP.Domain.Enums.ProfileStatus.Approved)
+        {
+            return ApiResponse<AdvisorDetailDto>.ErrorResponse("NOT_FOUND", "Advisor not found or profile is not active.");
+        }
+
+        var dto = new AdvisorDetailDto
+        {
+            AdvisorID = advisor.AdvisorID,
+            FullName  = advisor.FullName,
+            Title = advisor.Title,
+            ProfilePhotoURL = advisor.ProfilePhotoURL,
+            Bio = advisor.Bio,
+            AverageRating = advisor.AverageRating,
+            ReviewCount = advisor.ReviewCount,
+            CompletedSessions = advisor.CompletedSessions,
+            YearsOfExperience = advisor.YearsOfExperience,
+            IsVerified = advisor.IsVerified,
+            AvailabilityHint = advisor.Availability != null ? (advisor.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
+            HourlyRate = advisor.HourlyRate,
+            Expertise = string.IsNullOrEmpty(advisor.Expertise) ? new List<string>() : advisor.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            DomainTags = string.IsNullOrEmpty(advisor.DomainTags) ? new List<string>() : advisor.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            SuitableFor = string.IsNullOrEmpty(advisor.SuitableFor) ? new List<string>() : advisor.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            SupportedDurations = string.IsNullOrEmpty(advisor.SupportedDurations) ? new List<string>() : advisor.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            Industry = advisor.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
+            {
+                IndustryId = i.IndustryID,
+                Industry = i.Industry.IndustryName
+            }).ToList(),
+
+            MentorshipPhilosophy = advisor.MentorshipPhilosophy,
+            ExperiencesJson = advisor.ExperiencesJson,
+            Skills = string.IsNullOrEmpty(advisor.Skills) ? new List<string>() : advisor.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+        };
+
+        return ApiResponse<AdvisorDetailDto>.SuccessResponse(dto);
+    }
+    
     #region helper method
     private static AdvisorMeDto MapToMeDto(
         Advisor a,

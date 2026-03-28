@@ -134,4 +134,21 @@ public class AdvisorsController : ControllerBase
         var result = await _advisorService.SearchAdvisorsAsync(advisorQueryParams);
         return result.ToPagedEnvelope();
     }
+
+    // ================================================================
+    // 7) GET /api/advisors/{id} — Get advisor detail
+    // ================================================================
+
+    /// <summary>
+    /// Get the detailed public profile of an advisor.
+    /// </summary>
+    [HttpGet("{id:int}")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorDetailDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAdvisorDetail(int id, CancellationToken ct = default)
+    {
+        var result = await _advisorService.GetAdvisorDetailAsync(id);
+        return result.ToActionResult();
+    }
 }

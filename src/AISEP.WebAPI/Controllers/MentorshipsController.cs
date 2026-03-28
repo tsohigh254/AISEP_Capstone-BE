@@ -134,6 +134,25 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // 5.5) PUT /api/mentorships/{id}/cancel — Cancel (Startup)
+    // ================================================================
+
+    /// <summary>
+    /// Cancel a mentorship request. Startup-only. Status must be 'Requested'.
+    /// </summary>
+    [HttpPut("{id:int}/cancel")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Cancel(int id, [FromBody] RejectMentorshipRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.CancelAsync(userId, id, request.Reason);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
     // 6) POST /api/mentorships/{id}/sessions — Create session (Advisor)
     // ================================================================
 

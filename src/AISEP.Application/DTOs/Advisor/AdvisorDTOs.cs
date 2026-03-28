@@ -103,13 +103,35 @@ public class AdvisorSearchItemDto
     public string? ProfilePhotoURL { get; set; }
     public string? Bio { get; set; }
     public float? AverageRating { get; set; }
-    public List<AdvisorIndustryFocusDto> Industries { get; set; } = new();
+    
+    // UI Need Fields
+    public int ReviewCount { get; set; }
+    public int CompletedSessions { get; set; }
+    public int? YearsOfExperience { get; set; }
+    public bool IsVerified { get; set; }
+    public string? AvailabilityHint { get; set; }
+    public decimal? HourlyRate { get; set; }
+    
+    // Arrays
+    public List<string> Expertise { get; set; } = new();
+    public List<string> DomainTags { get; set; } = new();
+    public List<string> SuitableFor { get; set; } = new();
+    public List<string> SupportedDurations { get; set; } = new();
+    public List<AdvisorIndustryFocusDto> Industry { get; set; } = new();
+}
+
+// Added Detail Dto
+public class AdvisorDetailDto : AdvisorSearchItemDto
+{
+    public string? MentorshipPhilosophy { get; set; }
+    public string? ExperiencesJson { get; set; }
+    public List<string> Skills { get; set; } = new();
 }
 
 public class AdvisorIndustryFocusDto
 {
     public int IndustryId { get; set; }
-    public string Industry { get; set; }
+    public string Industry { get; set; } = null!;
 }
 
 public class AdvisorIndustryFocusRequest

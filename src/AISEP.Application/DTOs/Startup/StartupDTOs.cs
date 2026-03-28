@@ -8,7 +8,7 @@ namespace AISEP.Application.DTOs.Startup;
 public class CreateStartupRequest
 {
     public string CompanyName { get; set; } = null!;
-    public string OneLiner { get; set; }
+    public string OneLiner { get; set; } = null!;
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
@@ -20,6 +20,9 @@ public class CreateStartupRequest
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+
+    public decimal? TargetFunding { get => FundingAmountSought; set => FundingAmountSought = value; }
+    public decimal? RaisedAmount { get => CurrentFundingRaised; set => CurrentFundingRaised = value; }
 
     // UI Extra Requirements
     public string? SubIndustry { get; set; }
@@ -40,16 +43,19 @@ public class CreateStartupRequest
 public class UpdateStartupRequest
 {
     public string? CompanyName { get; set; }
-    public string OneLiner { get; set; }
+    public string OneLiner { get; set; } = null!;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
-    public StartupStage Stage { get; set; }
+    public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public IFormFile? LogoUrl { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
+
+    public decimal? TargetFunding { get => FundingAmountSought; set => FundingAmountSought = value; }
+    public decimal? RaisedAmount { get => CurrentFundingRaised; set => CurrentFundingRaised = value; }
 
     // UI Extra Requirements
     public string? SubIndustry { get; set; }
@@ -80,7 +86,7 @@ public class StartupMeDto
     public int StartupID { get; set; }
     public int UserID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string OneLiner { get; set; }    
+    public string OneLiner { get; set; } = null!;    
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
@@ -88,9 +94,18 @@ public class StartupMeDto
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
+    
+    // Original DB Fields 
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
+    
+    // UI Format aliases
+    public decimal? TargetFunding => FundingAmountSought;
+    public decimal? RaisedAmount => CurrentFundingRaised;
+    
     public decimal? Valuation { get; set; }
+
+    
 
     // UI Additions
     public string? SubIndustry { get; set; }
@@ -112,6 +127,7 @@ public class StartupMeDto
 
     public string? ProfileStatus { get; set; }
     public DateTime? ApprovedAt { get; set; }
+    public string? ApprovedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<TeamMemberDto> TeamMembers { get; set; } = new();
@@ -122,7 +138,7 @@ public class StartupPublicDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string OneLiner { get; set; }
+    public string OneLiner { get; set; } = null!;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
@@ -130,8 +146,14 @@ public class StartupPublicDto
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
+    
+    // Original DB Fields 
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
+    
+    // UI Format aliases
+    public decimal? TargetFunding => FundingAmountSought;
+    public decimal? RaisedAmount => CurrentFundingRaised;
 
     // Public UI additions
     public string? SubIndustry { get; set; }
@@ -217,3 +239,7 @@ public class UpdateTeamMemberRequest
     public bool? IsFounder { get; set; }
     public int? YearsOfExperience { get; set; }
 }
+
+
+
+

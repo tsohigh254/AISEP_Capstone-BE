@@ -239,7 +239,85 @@ public class MentorshipService : IMentorshipService
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
 
+    public async Task<ApiResponse<MentorshipDto>> CancelAsync(int userId, int mentorshipId, string? reason)
+    {
+        var startup = await _db.Startups.FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null) return ApiResponse<MentorshipDto>.ErrorResponse("UNAUTHORIZED", "Only startups can cancel mentorships.");
+
+        var mentorship = await _db.StartupAdvisorMentorships
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && m.StartupID == startup.StartupID);
+
+        if (mentorship == null) return ApiResponse<MentorshipDto>.ErrorResponse("NOT_FOUND", "Mentorship not found.");
+
+        if (mentorship.MentorshipStatus == MentorshipStatus.Cancelled)
+            return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION", "Already cancelled.");
+
+        if (mentorship.MentorshipStatus != MentorshipStatus.Requested)
+            return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION", $"Cannot cancel mentorship. Currently {mentorship.MentorshipStatus}.");
+
+        mentorship.MentorshipStatus = MentorshipStatus.Cancelled;
+        mentorship.RejectedReason = string.IsNullOrEmpty(mentorship.RejectedReason)
+            ? "Cancelled by Startup. Reason: " + reason
+            : mentorship.RejectedReason + "\nCancelled Reason: " + reason;
+        mentorship.LastUpdatedByRole = "Startup";
+        mentorship.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("CANCEL_MENTORSHIP", "StartupAdvisorMentorship", mentorship.MentorshipID, reason);
+
+        return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
+    }
+
     // ================================================================
+    public async Task<ApiResponse<PagedResponse<SessionListItemDto>>> GetMySessionsAsync(int userId, string userType, string? status, int page, int pageSize)
+    {
+        var query = _db.MentorshipSessions
+            .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
+            .AsNoTracking();
+
+        if (userType == "Startup")
+        {
+            query = query.Where(s => s.Mentorship.Startup.UserID == userId);
+        } 
+        else if (userType == "Advisor")
+        {
+            query = query.Where(s => s.Mentorship.Advisor.UserID == userId);
+        }
+
+        if (!string.IsNullOrEmpty(status))
+        {
+            query = query.Where(s => s.SessionStatus == status);
+        }
+
+        var totalItems = await query.CountAsync();
+        var items = await query.OrderByDescending(s => s.ScheduledStartAt)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(s => new SessionListItemDto
+            {
+                SessionID = s.SessionID,
+                MentorshipID = s.MentorshipID,
+                ScheduledStartAt = s.ScheduledStartAt,
+                DurationMinutes = s.DurationMinutes,
+                SessionFormat = s.SessionFormat,
+                MeetingURL = s.MeetingURL,
+                SessionStatus = s.SessionStatus,
+                TopicsDiscussed = s.TopicsDiscussed,
+                KeyInsights = s.KeyInsights,
+                ActionItems = s.ActionItems,
+                NextSteps = s.NextSteps,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt,
+                AdvisorID = s.Mentorship.AdvisorID,
+                AdvisorName = s.Mentorship.Advisor.FullName,
+                AdvisorProfilePhotoURL = s.Mentorship.Advisor.ProfilePhotoURL,
+                StartupID = s.Mentorship.StartupID,
+                StartupName = s.Mentorship.Startup.CompanyName
+            }).ToListAsync();
+
+        return ApiResponse<PagedResponse<SessionListItemDto>>.SuccessResponse(new PagedResponse<SessionListItemDto> { Items = items, Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = totalItems } });
+    }
+
     // CREATE SESSION (Advisor)
     // ================================================================
 
@@ -585,3 +663,5 @@ public class MentorshipService : IMentorshipService
         SubmittedAt = f.SubmittedAt
     };
 }
+
+
