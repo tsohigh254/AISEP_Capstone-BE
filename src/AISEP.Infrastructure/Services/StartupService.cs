@@ -109,6 +109,7 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
+            .Include(s => s.ApprovedByUser)
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
@@ -273,8 +274,9 @@ public class StartupService : IStartupService
         // Keyword search on CompanyName
         if (!string.IsNullOrWhiteSpace(startupQuery.Key))
         {
-            query = query.Where(s => s.CompanyName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower())
-            || s.Industry.IndustryName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower()));
+            var key = startupQuery.Key.Trim().ToLower();
+            query = query.Where(s => s.CompanyName.Trim().ToLower().Contains(key)
+            || (s.Industry != null && s.Industry.IndustryName.Trim().ToLower().Contains(key)));
         }
 
 
@@ -405,7 +407,7 @@ public class StartupService : IStartupService
         if (request.PhotoURL != null)
         {
             var photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Logo);
-            if (!string.IsNullOrEmpty(startup.LogoURL))
+            if (!string.IsNullOrEmpty(member.PhotoURL))
                 await _cloudinaryService.DeleteImage(member.PhotoURL);
             member.PhotoURL = photo;
         }
@@ -512,6 +514,7 @@ public class StartupService : IStartupService
 
             ProfileStatus = s.ProfileStatus.ToString(),
             ApprovedAt = s.ApprovedAt,
+            ApprovedBy = s.ApprovedByUser?.Email,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
             TeamMembers = s.TeamMembers?.Select(MapToTeamMemberDto).ToList() ?? new()

@@ -19,6 +19,20 @@ public class Advisor
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
+    // UI Extra requirements
+    public int? YearsOfExperience { get; set; }
+    public bool IsVerified { get; set; } = false;
+    public decimal? HourlyRate { get; set; }
+    public string? Expertise { get; set; }          // comma-separated
+    public string? DomainTags { get; set; }         // comma-separated
+    public string? SuitableFor { get; set; }        // comma-separated
+    public string? SupportedDurations { get; set; } // comma-separated
+    public int ReviewCount { get; set; } = 0;
+    public int CompletedSessions { get; set; } = 0;
+    
+    public string? ExperiencesJson { get; set; }    // JSON array of experience objects
+    public string? Skills { get; set; }             // comma-separated
+
     // Navigation properties
     public User User { get; set; } = null!;
     public AdvisorAvailability? Availability { get; set; }

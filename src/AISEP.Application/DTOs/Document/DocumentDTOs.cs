@@ -13,12 +13,12 @@ namespace AISEP.Application.DTOs.Document;
 /// </summary>
 public class DocumentCreateRequest
 {   
-    public IFormFile File { get; set; }
+    public IFormFile File { get; set; } = null!;
     /// <summary>PitchDeck | BusinessPlan | Financials | Legal | Other</summary>
     public DocumentType DocumentType { get; set; }
 
     /// <summary>Optional: custom title. If null, the original file name is used.</summary>
-    public string Title { get; set; }
+    public string? Title { get; set; }
 
     /// <summary>Optional: explicit version string. If null, auto-incremented ("1", "2", …).</summary>
     public string? Version { get; set; }
@@ -68,13 +68,13 @@ public class DocumentDto
     public string DocumentType { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string? Version { get; set; }
-    public string FileUrl { get; set; }
+    public string? FileUrl { get; set; }
     public bool IsArchived { get; set; }
     public bool IsAnalyzed { get; set; }
     public string? AnalysisStatus { get; set; }
     public DateTime UploadedAt { get; set; }
-    public string ProofStatus { get; set; } = null!;
-    public string FileHash { get; set; }
-    public string TransactionHash { get; set; }
+    public string? ProofStatus { get; set; }
+    public string? FileHash { get; set; }
+    public string? TransactionHash { get; set; }
 }
 

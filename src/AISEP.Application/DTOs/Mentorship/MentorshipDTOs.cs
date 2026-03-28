@@ -167,6 +167,15 @@ public class SessionDto
     public DateTime? UpdatedAt { get; set; }
 }
 
+public class SessionListItemDto : SessionDto
+{
+    public int AdvisorID { get; set; }
+    public string? AdvisorName { get; set; }
+    public string? AdvisorProfilePhotoURL { get; set; }
+    public int StartupID { get; set; }
+    public string? StartupName { get; set; }
+}
+
 /// <summary>Report DTO.</summary>
 public class ReportDto
 {

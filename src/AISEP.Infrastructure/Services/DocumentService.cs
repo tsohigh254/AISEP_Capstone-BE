@@ -114,14 +114,14 @@ public class DocumentService : IDocumentService
                 Title = d.Title,
                 DocumentType = d.DocumentType.ToString(),
                 Version = d.Version,
-                FileUrl = d.FileURL,
+                FileUrl = d.FileURL ?? string.Empty,
                 IsArchived = d.IsArchived,
                 IsAnalyzed = d.IsAnalyzed,
                 AnalysisStatus = d.AnalysisStatus.ToString(),
                 UploadedAt = d.UploadedAt,
-                ProofStatus = d.BlockchainProof.ProofStatus.ToString(),
-                FileHash = d.BlockchainProof.FileHash,
-                TransactionHash = d.BlockchainProof.TransactionHash
+                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+                FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
+                TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
             })
             .ToListAsync(ct);
 
@@ -224,16 +224,16 @@ public class DocumentService : IDocumentService
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
             Title = d.Title,
-            FileUrl = d.FileURL,
+            FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType.ToString(),
             Version = d.Version,
             IsArchived = d.IsArchived,
             IsAnalyzed = d.IsAnalyzed,
             AnalysisStatus = d.AnalysisStatus.ToString(),
             UploadedAt = d.UploadedAt,
-            ProofStatus = d.BlockchainProof.ProofStatus.ToString(),
-            FileHash = d.BlockchainProof.FileHash,
-            TransactionHash = d.BlockchainProof.TransactionHash
+            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+            FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
+            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
         };
     }
 }

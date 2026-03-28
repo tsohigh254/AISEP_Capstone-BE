@@ -135,7 +135,15 @@ public static class DbSeeder
             new() { IndustryID = 502, IndustryName = "Farm Automation & Robotics", Description = "Automation and agricultural robotics", ParentIndustryID = 5 },
             new() { IndustryID = 503, IndustryName = "Farmer-to-Market Platforms", Description = "Market linkage platforms", ParentIndustryID = 5 },
             new() { IndustryID = 504, IndustryName = "Cold Chain & Logistics", Description = "Cold supply chain and logistics", ParentIndustryID = 5 },
-            new() { IndustryID = 505, IndustryName = "Traceability & Food Safety", Description = "Traceability and food safety tech", ParentIndustryID = 5 }
+            new() { IndustryID = 505, IndustryName = "Traceability & Food Safety", Description = "Traceability and food safety tech", ParentIndustryID = 5 },
+
+            // ===== SaaS & Enterprise Software sub-industries =====
+            new() { IndustryID = 6,   IndustryName = "SaaS & Enterprise Software", Description = "Software-as-a-Service and B2B enterprise tools", ParentIndustryID = null },
+            new() { IndustryID = 601, IndustryName = "CRM & Sales Tools",         Description = "Customer relationship management software",     ParentIndustryID = 6 },
+            new() { IndustryID = 602, IndustryName = "ERP & Operations",          Description = "Enterprise resource planning and ops tools",    ParentIndustryID = 6 },
+            new() { IndustryID = 603, IndustryName = "Marketing Tech",            Description = "Marketing automation and analytics platforms", ParentIndustryID = 6 },
+            new() { IndustryID = 604, IndustryName = "Developer Tools & DevOps",  Description = "Tools for software development and CI/CD",     ParentIndustryID = 6 },
+            new() { IndustryID = 605, IndustryName = "Data Analytics & BI",       Description = "Business intelligence and data visualization", ParentIndustryID = 6 }
         };
 
         context.Industries.AddRange(industries);
