@@ -1,7 +1,9 @@
 using AISEP.Application.Const;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Document;
+using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Interfaces;
 using AISEP.Infrastructure.Data;
@@ -235,5 +237,39 @@ public class DocumentService : IDocumentService
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
             TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
         };
+    }
+
+    public async Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery)
+    {
+        var documents = _context.Documents.AsQueryable();
+
+        var documentsToDto = documents.Select(d => new DocumentDto
+        {
+            DocumentID = d.DocumentID,
+            StartupID = d.StartupID,
+            DocumentType = d.DocumentType.ToString(),
+            Title = d.Title,
+            Version = d.Version,
+            FileUrl = d.FileURL,
+            IsAnalyzed = d.IsAnalyzed,
+            IsArchived = d.IsArchived,
+            AnalysisStatus = d.AnalysisStatus.ToString(),
+            UploadedAt = d.UploadedAt,
+            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+            FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
+            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
+        }).Paging(documentQuery.Page, documentQuery.PageSize);
+
+        return ApiResponse<PagedResponse<DocumentDto>>.SuccessResponse(
+            new PagedResponse<DocumentDto>
+            {
+                Items = await documentsToDto.ToListAsync(),
+                Paging = new PagingInfo
+                {
+                    Page = documentQuery.Page,
+                    PageSize = documentQuery.PageSize,
+                    TotalItems = await documents.CountAsync()
+                }
+            });
     }
 }

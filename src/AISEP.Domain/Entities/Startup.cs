@@ -1,4 +1,5 @@
 using AISEP.Domain.Enums;
+using System.Xml.Linq;
 
 namespace AISEP.Domain.Entities;
 
@@ -6,39 +7,49 @@ public class Startup
 {
     public int StartupID { get; set; }
     public int UserID { get; set; }
+
+    // Company Information
     public string CompanyName { get; set; } = string.Empty;
-    public string OneLiner { get; set; }
+    public string OneLiner { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
+
+    // Funding Information
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
-    
-    // UI Profile View requirements
-    public string? SubIndustry { get; set; }
+
+    // Applicant Information (Required for staff review)
+    public string FullNameOfApplicant { get; set; } = string.Empty;
+    public string RoleOfApplicant { get; set; } = string.Empty;
+    public string ContactEmail { get; set; } = string.Empty;
+    public string? ContactPhone { get; set; }
+    public string BussinessCode { get; set; }
+
+    // Registration Documents (Required for staff review)
+    public string? FileCertificateBusiness { get; set; }
+    public string? LinkedInURL { get; set; }
+
+    // Business Details
     public string? MarketScope { get; set; }
-    public string? ProductStatus { get; set; }
-    public string? Location { get; set; }
-    public string? Country { get; set; }
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
-    public string? CurrentNeeds { get; set; } // Stored as comma-separated or JSON string
-    public string? MetricSummary { get; set; }
-    public string? LinkedInURL { get; set; }
-    public string? ContactEmail { get; set; }
-    public string? ContactPhone { get; set; }
-    public int TeamSize { get; set; }
-    public bool IsVisible { get; set; } = true;
-    
+
+    public bool IsVisible { get; set; }              
+
+    // Approval Workflow
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public DateTime? ApprovedAt { get; set; }
     public int? ApprovedBy { get; set; }
-    public DateTime CreatedAt { get; set; } 
+    public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    
+    // Assign tag to startup
+    public StartupTag StartupTag { get; set; }
 
     // Navigation properties
     public User User { get; set; } = null!;

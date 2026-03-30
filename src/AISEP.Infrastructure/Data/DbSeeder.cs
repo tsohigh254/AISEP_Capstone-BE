@@ -10,6 +10,7 @@ public static class DbSeeder
         await SeedRolesAsync(context);
         await SeedPermissionsAsync(context);
         await SeedIndustriesAsync(context);
+        await SeedUsersAsync(context);
     }
 
     private static async Task SeedRolesAsync(ApplicationDbContext context)
@@ -28,6 +29,7 @@ public static class DbSeeder
         context.Roles.AddRange(roles);
         await context.SaveChangesAsync();
     }
+
 
     private static async Task SeedPermissionsAsync(ApplicationDbContext context)
     {
@@ -147,6 +149,41 @@ public static class DbSeeder
         };
 
         context.Industries.AddRange(industries);
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedUsersAsync(ApplicationDbContext context)
+    {
+        // Check if staff user already exists
+        if (await context.Users.AnyAsync(u => u.Email == "staff@aisep.local")) return;
+
+        // Get Staff role
+        var staffRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Staff");
+        if (staffRole == null) return;
+
+        // Create Staff user
+        var staffUser = new User
+        {
+            Email = "staff@aisep.local",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345.nN"),
+            UserType = "Staff",
+            IsActive = true,
+            EmailVerified = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.Users.Add(staffUser);
+        await context.SaveChangesAsync();
+
+        // Assign Staff role to user
+        var userRole = new UserRole
+        {
+            UserID = staffUser.UserID,
+            RoleID = staffRole.RoleID,
+            AssignedAt = DateTime.UtcNow
+        };
+
+        context.UserRoles.Add(userRole);
         await context.SaveChangesAsync();
     }
 }
