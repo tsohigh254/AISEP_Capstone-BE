@@ -1,5 +1,6 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Document;
+using AISEP.Application.QueryParams;
 using Microsoft.AspNetCore.Http;
 
 namespace AISEP.Application.Interfaces;
@@ -20,4 +21,6 @@ public interface IDocumentService
 
     /// <summary>Soft-delete (archive) a document (owner only).</summary>
     Task<ApiResponse<string>> ArchiveAsync(int documentId, int userId, CancellationToken ct = default);
+
+    Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery);
 }

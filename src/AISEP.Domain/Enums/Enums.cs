@@ -206,3 +206,11 @@ public enum AnalysisStatus : short
     COMPLETED = 1,
     FAILED = 2
 }
+
+public enum StartupTag : short
+{
+    VerifiedCompany = 0,
+    BasicVerified = 1,
+    PendingMoreInfo = 2,
+    VerificationFailed = 3
+}

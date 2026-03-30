@@ -1,5 +1,6 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
+using AISEP.Application.QueryParams;
 
 namespace AISEP.Application.Interfaces;
 
@@ -27,4 +28,5 @@ public interface IMentorshipService
 
     // Feedback
     Task<ApiResponse<FeedbackDto>> CreateFeedbackAsync(int userId, int mentorshipId, CreateFeedbackRequest request);
+
 }

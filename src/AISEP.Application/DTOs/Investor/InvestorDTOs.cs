@@ -62,6 +62,7 @@ public class InvestorDto
     public string? Country { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
+    public string ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
