@@ -96,13 +96,13 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
-    // 4) POST /api/mentorships/{id}/accept — Accept (Advisor)
+    // 4) PUT /api/mentorships/{id}/accept — Accept (Advisor)
     // ================================================================
 
     /// <summary>
     /// Accept a mentorship request. Advisor-only. Mentorship must have status 'Requested'.
     /// </summary>
-    [HttpPost("{id:int}/accept")]
+    [HttpPut("{id:int}/accept")]
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status400BadRequest)]
@@ -115,13 +115,13 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
-    // 5) POST /api/mentorships/{id}/reject — Reject (Advisor)
+    // 5) PUT /api/mentorships/{id}/reject — Reject (Advisor)
     // ================================================================
 
     /// <summary>
     /// Reject a mentorship request with optional reason. Advisor-only. Status must be 'Requested'.
     /// </summary>
-    [HttpPost("{id:int}/reject")]
+    [HttpPut("{id:int}/reject")]
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status400BadRequest)]
@@ -153,12 +153,53 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // 5.5.B) PUT /api/mentorships/{id}/schedule — Schedule (Advisor)
+    // ================================================================
+
+    /// <summary>
+    /// Schedule a mentorship session. Advisor-only. Status must be 'Accepted' or 'Scheduled'.
+    /// Creates a session and moves mentorship status to 'Scheduled'.
+    /// </summary>
+    [HttpPut("{id:int}/schedule")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Schedule(int id, [FromBody] ScheduleMentorshipRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.ScheduleAsync(userId, id, request);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 5.6) GET /api/mentorships/sessions — List sessions
+    // ================================================================
+
+    /// <summary>
+    /// Fetch paginated list of sessions for current Startup/Advisor.
+    /// Can optionally query by 'status' (Pending, Completed, etc.).
+    /// </summary>
+    [HttpGet("sessions")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<SessionListItemDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySessions(
+        [FromQuery] string? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetMySessionsAsync(userId, userType, status, page, pageSize);
+        return result.ToPagedEnvelope();
+    }
+
+    // ================================================================
     // 6) POST /api/mentorships/{id}/sessions — Create session (Advisor)
     // ================================================================
 
     /// <summary>
     /// Create a session within an accepted/in-progress mentorship. Advisor-only.
-    /// Automatically moves mentorship to 'InProgress' if currently 'Accepted'.
+    /// Automatically moves mentorship to 'Scheduled' if currently 'Accepted'.
     /// </summary>
     [HttpPost("{id:int}/sessions")]
     [Authorize(Policy = "AdvisorOnly")]
@@ -218,14 +259,29 @@ public class MentorshipsController : ControllerBase
     /// <summary>
     /// Get a single mentorship report. Accessible by participants or Staff/Admin.
     /// </summary>
-    [HttpGet("reports/{reportId:int}")]
-    [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetReport(int reportId)
+    [HttpGet("{id:int}/report")]
+    [ProducesResponseType(typeof(ApiResponse<FinalReportResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<FinalReportResponseDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReport(int id)
     {
         var userId = GetCurrentUserId();
         var userType = GetCurrentUserType();
-        var result = await _mentorshipService.GetReportAsync(userId, userType, reportId);
+        var result = await _mentorshipService.GetReportByMentorshipIdAsync(userId, userType, id);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Propose alternative time slots (Advisor only)
+    /// </summary>
+    [HttpPut("{id:int}/propose-slots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ProposeSlots(int id, [FromBody] ProposeSlotsRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.ProposeSlotsAsync(userId, id, request);
         return result.ToActionResult();
     }
 

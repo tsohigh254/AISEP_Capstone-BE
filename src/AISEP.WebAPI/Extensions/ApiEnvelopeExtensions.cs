@@ -64,7 +64,7 @@ public static class ApiEnvelopeExtensions
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  Paged  –  ApiResponse<PagedResponse<T>>  →  ApiEnvelope<PagedData<T>>
+    //  Paged  –  ApiResponse<PagedResponse<T>>  →  ApiEnvelope<PagedResponse<T>>
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>Convert a paged service result to the standard paged envelope.</summary>
@@ -73,22 +73,15 @@ public static class ApiEnvelopeExtensions
     {
         if (result.Success && result.Data is not null)
         {
-            var pagedData = new PagedData<T>
-            {
-                Page = result.Data.Paging.Page,
-                PageSize = result.Data.Paging.PageSize,
-                Total = result.Data.Paging.TotalItems,
-                Data = result.Data.Items
-            };
-            var envelope = ApiEnvelope<PagedData<T>>.Success(
-                pagedData,
+            var envelope = ApiEnvelope<PagedResponse<T>>.Success(
+                result.Data,
                 message ?? result.Message ?? "Success");
             return new OkObjectResult(envelope);
         }
 
         var statusCode = MapErrorCodeToStatus(result.Error?.Code);
         var msg = result.Error?.Message ?? result.Message ?? "An error occurred";
-        var err = ApiEnvelope<PagedData<T>>.Error(msg, statusCode);
+        var err = ApiEnvelope<PagedResponse<T>>.Error(msg, statusCode);
         return new ObjectResult(err) { StatusCode = statusCode };
     }
 

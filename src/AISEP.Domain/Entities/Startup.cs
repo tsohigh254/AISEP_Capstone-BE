@@ -7,7 +7,7 @@ public class Startup
     public int StartupID { get; set; }
     public int UserID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string OneLiner { get; set; }
+    public string OneLiner { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public StartupStage? Stage { get; set; }

@@ -5,17 +5,35 @@ namespace AISEP.Application.DTOs.Mentorship;
 /// <summary>
 /// Create a new mentorship request (Startup → Advisor).
 /// Example: { "advisorId": 1, "challengeDescription": "Go-to-market strategy for B2B SaaS",
-///            "specificQuestions": "How to price our product?", "preferredFormat": "Video",
-///            "expectedDuration": "3 months", "expectedScope": "Weekly 1h sessions" }
+///            "additionalNotes": "How to price our product?", "preferredFormat": "Video",
+///            "durationMinutes": "3 months", "scopeTags": "Weekly 1h sessions" }
 /// </summary>
 public class CreateMentorshipRequest
 {
     public int AdvisorId { get; set; }
-    public string ChallengeDescription { get; set; } = null!;
-    public string? SpecificQuestions { get; set; }
+    public string ProblemContext { get; set; } = null!;
+    public string? AdditionalNotes { get; set; }
     public string? PreferredFormat { get; set; }
-    public string? ExpectedDuration { get; set; }
-    public string? ExpectedScope { get; set; }
+    public int? DurationMinutes { get; set; }
+    public List<string>? ScopeTags { get; set; }
+    public string? Objective { get; set; }
+    public List<RequestedSlotDto> RequestedSlots { get; set; } = new();
+}
+
+public class RequestedSlotDto
+{
+    public int? SlotID { get; set; }
+    public DateTime StartAt { get; set; }
+    public DateTime EndAt { get; set; }
+    public string? Timezone { get; set; }
+    public string? Note { get; set; }
+    public string ProposedBy { get; set; } = "Startup";
+    public bool IsActive { get; set; } = true;
+}
+
+public class ProposeSlotsRequest
+{
+    public List<RequestedSlotDto> RequestedSlots { get; set; } = new();
 }
 
 /// <summary>
@@ -25,6 +43,17 @@ public class CreateMentorshipRequest
 public class RejectMentorshipRequest
 {
     public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Schedule an accepted mentorship (Advisor only).
+/// Automatically calculates duration and creates the first session.
+/// Example: { "startAt": "2026-03-31T10:00:00Z", "endAt": "2026-03-31T11:00:00Z", "meetingLink": "https://meet.google.com/abc" }
+/// </summary>
+public class ScheduleMentorshipRequest
+{
+    public int SelectedSlotId { get; set; }
+    public string? MeetingLink { get; set; }
 }
 
 /// <summary>
@@ -85,18 +114,26 @@ public class CreateFeedbackRequest
 
 // ============================= RESPONSE DTOs =============================
 
+public class AdvisorSummaryDto
+{
+    public int Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? Title { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+}
+
 /// <summary>Basic mentorship DTO returned after create/update.</summary>
 public class MentorshipDto
 {
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public int AdvisorID { get; set; }
-    public string MentorshipStatus { get; set; } = string.Empty;
-    public string? ChallengeDescription { get; set; }
-    public string? SpecificQuestions { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? ProblemContext { get; set; }
+    public string? AdditionalNotes { get; set; }
     public string? PreferredFormat { get; set; }
-    public string? ExpectedDuration { get; set; }
-    public string? ExpectedScope { get; set; }
+    public int? DurationMinutes { get; set; }
+    public List<string>? ScopeTags { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
@@ -111,13 +148,17 @@ public class MentorshipListItemDto
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public string StartupName { get; set; } = string.Empty;
-    public int AdvisorID { get; set; }
-    public string AdvisorName { get; set; } = string.Empty;
-    public string MentorshipStatus { get; set; } = string.Empty;
-    public string? ChallengeDescription { get; set; }
+    public string? StartupLogoUrl { get; set; }
+    public string? StartupIndustry { get; set; }
+    public string? StartupStage { get; set; }
+    public AdvisorSummaryDto Advisor { get; set; } = new();
+    public string Status { get; set; } = string.Empty;
+    public string? ProblemContext { get; set; }
+    public string? Objective { get; set; }
     public string? PreferredFormat { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<RequestedSlotDto> RequestedSlots { get; set; } = new();
 }
 
 /// <summary>Detail DTO with sessions, reports, feedbacks.</summary>
@@ -126,15 +167,17 @@ public class MentorshipDetailDto
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public string StartupName { get; set; } = string.Empty;
-    public int AdvisorID { get; set; }
-    public string AdvisorName { get; set; } = string.Empty;
-    public string MentorshipStatus { get; set; } = string.Empty;
-    public string? ChallengeDescription { get; set; }
-    public string? SpecificQuestions { get; set; }
+    public string? StartupLogoUrl { get; set; }
+    public string? StartupIndustry { get; set; }
+    public string? StartupStage { get; set; }
+    public AdvisorSummaryDto Advisor { get; set; } = new();
+    public string Status { get; set; } = string.Empty;
+    public string? ProblemContext { get; set; }
+    public string? AdditionalNotes { get; set; }
     public string? PreferredFormat { get; set; }
-    public string? ExpectedDuration { get; set; }
-    public string? ExpectedScope { get; set; }
-    public string? ObligationSummary { get; set; }
+    public int? DurationMinutes { get; set; }
+    public List<string>? ScopeTags { get; set; }
+    public string? Objective { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
@@ -144,6 +187,7 @@ public class MentorshipDetailDto
     public bool CompletionConfirmedByAdvisor { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<RequestedSlotDto> RequestedSlots { get; set; } = new();
     public List<SessionDto> Sessions { get; set; } = new();
     public List<ReportDto> Reports { get; set; } = new();
     public List<FeedbackDto> Feedbacks { get; set; } = new();
@@ -174,6 +218,22 @@ public class SessionListItemDto : SessionDto
     public string? AdvisorProfilePhotoURL { get; set; }
     public int StartupID { get; set; }
     public string? StartupName { get; set; }
+}
+
+public class FinalReportResponseDto
+{
+    public string ReportId { get; set; } = string.Empty;
+    public string MentorshipId { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    
+    public FinalReportAdvisorDto Advisor { get; set; } = new();
+}
+
+public class FinalReportAdvisorDto
+{
+    public string FullName { get; set; } = string.Empty;
+    public string AvatarUrl { get; set; } = string.Empty;
 }
 
 /// <summary>Report DTO.</summary>

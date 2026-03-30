@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328092459_AddMoreAdvisorFields")]
+    partial class AddMoreAdvisorFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -903,43 +906,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("MentorshipReports");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.MentorshipRequestedSlot", b =>
-                {
-                    b.Property<int>("SlotID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SlotID"));
-
-                    b.Property<DateTime>("EndAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MentorshipID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProposedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("StartAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Timezone")
-                        .HasColumnType("text");
-
-                    b.HasKey("SlotID");
-
-                    b.HasIndex("MentorshipID");
-
-                    b.ToTable("MentorshipRequestedSlots");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipSession", b =>
                 {
                     b.Property<int>("SessionID")
@@ -1694,8 +1660,8 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("ExpectedDuration")
-                        .HasColumnType("integer");
+                    b.Property<string>("ExpectedDuration")
+                        .HasColumnType("text");
 
                     b.Property<string>("ExpectedScope")
                         .HasColumnType("text");
@@ -2279,17 +2245,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.MentorshipRequestedSlot", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.StartupAdvisorMentorship", "Mentorship")
-                        .WithMany("RequestedSlots")
-                        .HasForeignKey("MentorshipID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Mentorship");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipSession", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.StartupAdvisorMentorship", "Mentorship")
@@ -2676,8 +2631,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Feedbacks");
 
                     b.Navigation("Reports");
-
-                    b.Navigation("RequestedSlots");
 
                     b.Navigation("Sessions");
 

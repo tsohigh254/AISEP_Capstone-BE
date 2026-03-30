@@ -11,7 +11,7 @@ public class StartupAdvisorMentorship
     public string? ChallengeDescription { get; set; }
     public string? SpecificQuestions { get; set; }
     public string? ExpectedScope { get; set; }
-    public string? ExpectedDuration { get; set; }
+    public int? ExpectedDuration { get; set; }
     public string? PreferredFormat { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
@@ -28,6 +28,7 @@ public class StartupAdvisorMentorship
     // Navigation properties
     public Startup Startup { get; set; } = null!;
     public Advisor Advisor { get; set; } = null!;
+    public ICollection<MentorshipRequestedSlot> RequestedSlots { get; set; } = new List<MentorshipRequestedSlot>();
     public ICollection<MentorshipSession> Sessions { get; set; } = new List<MentorshipSession>();
     public ICollection<MentorshipReport> Reports { get; set; } = new List<MentorshipReport>();
     public ICollection<MentorshipFeedback> Feedbacks { get; set; } = new List<MentorshipFeedback>();

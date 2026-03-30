@@ -65,6 +65,7 @@ public class AdvisorsController : ControllerBase
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status404NotFound)]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> GetMyProfile(CancellationToken ct = default)
     {
         var userId = GetCurrentUserId();

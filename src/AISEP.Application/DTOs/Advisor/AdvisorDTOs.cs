@@ -16,9 +16,16 @@ public class CreateAdvisorRequest
     public string FullName { get; set; } = null!;
     public string? Title { get; set; }
     public string? Bio { get; set; }
+    public string? Company { get; set; }
+    public int? ExperienceYears { get; set; }
+    public string? Website { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public ServicePricingRequest? ServicePricing { get; set; }
+    public List<AdvisorItemRequest>? Items { get; set; }
     public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
 }
 
@@ -30,10 +37,55 @@ public class UpdateAdvisorRequest
     public string? FullName { get; set; }
     public string? Title { get; set; }
     public string? Bio { get; set; }
+    public string? Company { get; set; }
+    public int? ExperienceYears { get; set; }
+    public string? Website { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public ServicePricingRequest? ServicePricing { get; set; }
+    public List<AdvisorItemRequest>? Items { get; set; }
     public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
+}
+
+public class ServicePricingRequest 
+{
+    public bool? IsBookable { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Currency { get; set; }
+    public List<string>? SupportedDurations { get; set; }
+}
+
+public class AdvisorItemRequest 
+{
+    public string? Category { get; set; }
+}
+
+public class ServicePricingDto
+{
+    public bool IsBookable { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Currency { get; set; }
+    public List<string> SupportedDurations { get; set; } = new();
+}
+
+public class AdvisorItemDto 
+{
+    public string Category { get; set; } = string.Empty;
+}
+
+public class AvailabilityDto
+{
+    public string? SessionFormats { get; set; }
+    public int? TypicalSessionDuration { get; set; }
+    public int? WeeklyAvailableHours { get; set; }
+    public int? MaxConcurrentMentees { get; set; }
+    public string? ResponseTimeCommitment { get; set; }
+    public bool CalendarConnected { get; set; }
+    public bool IsAcceptingNewMentees { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>
@@ -64,6 +116,11 @@ public class AdvisorMeDto
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
     public string? Bio { get; set; }
+    public string? Company { get; set; }
+    public int? ExperienceYears { get; set; }
+    public string? Website { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
     public string? ProfilePhotoURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
@@ -74,13 +131,8 @@ public class AdvisorMeDto
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public AvailabilityDto? Availability { get; set; }
-    public List<AdvisorIndustryFocusDto> IndustryFocus { get; set; } = new();
-}
-
-
-/// <summary>Advisor availability configuration.</summary>
-public class AvailabilityDto
-{
+    public ServicePricingDto? ServicePricing { get; set; }
+    public List<AdvisorItemDto> Items { get; set; } = new();
     public string? SessionFormats { get; set; }
     public int? TypicalSessionDuration { get; set; }
     public int? WeeklyAvailableHours { get; set; }
@@ -88,7 +140,7 @@ public class AvailabilityDto
     public string? ResponseTimeCommitment { get; set; }
     public bool CalendarConnected { get; set; }
     public bool IsAcceptingNewMentees { get; set; }
-    public DateTime? UpdatedAt { get; set; }
+    public List<AdvisorIndustryFocusDto> IndustryFocus { get; set; } = new();
 }
 
 /// <summary>
@@ -126,6 +178,8 @@ public class AdvisorDetailDto : AdvisorSearchItemDto
     public string? MentorshipPhilosophy { get; set; }
     public string? ExperiencesJson { get; set; }
     public List<string> Skills { get; set; } = new();
+    public string? Company { get; set; }
+    public string? LinkedInURL { get; set; }
 }
 
 public class AdvisorIndustryFocusDto

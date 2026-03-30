@@ -12,6 +12,8 @@ public interface IMentorshipService
     Task<ApiResponse<MentorshipDetailDto>> GetDetailAsync(int userId, string userType, int mentorshipId);
     Task<ApiResponse<MentorshipDto>> AcceptAsync(int userId, int mentorshipId);
     Task<ApiResponse<MentorshipDto>> RejectAsync(int userId, int mentorshipId, string? reason);
+    Task<ApiResponse<MentorshipDetailDto>> ScheduleAsync(int userId, int mentorshipId, ScheduleMentorshipRequest request);
+    Task<ApiResponse<MentorshipDetailDto>> ProposeSlotsAsync(int userId, int mentorshipId, ProposeSlotsRequest request);
     Task<ApiResponse<MentorshipDto>> CancelAsync(int userId, int mentorshipId, string? reason);
     
     // Sessions
@@ -21,7 +23,7 @@ public interface IMentorshipService
 
     // Reports
     Task<ApiResponse<ReportDto>> CreateReportAsync(int userId, int mentorshipId, CreateReportRequest request);
-    Task<ApiResponse<ReportDto>> GetReportAsync(int userId, string userType, int reportId);
+    Task<ApiResponse<FinalReportResponseDto>> GetReportByMentorshipIdAsync(int userId, string userType, int mentorshipId);
 
     // Feedback
     Task<ApiResponse<FeedbackDto>> CreateFeedbackAsync(int userId, int mentorshipId, CreateFeedbackRequest request);

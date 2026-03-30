@@ -52,6 +52,7 @@ public class ApplicationDbContext : DbContext
 
     // Collaboration
     public DbSet<StartupAdvisorMentorship> StartupAdvisorMentorships => Set<StartupAdvisorMentorship>();
+    public DbSet<MentorshipRequestedSlot> MentorshipRequestedSlots => Set<MentorshipRequestedSlot>();
     public DbSet<MentorshipSession> MentorshipSessions => Set<MentorshipSession>();
     public DbSet<MentorshipReport> MentorshipReports => Set<MentorshipReport>();
     public DbSet<MentorshipFeedback> MentorshipFeedbacks => Set<MentorshipFeedback>();
@@ -170,6 +171,14 @@ public class ApplicationDbContext : DbContext
 
         // Collaboration
         modelBuilder.Entity<StartupAdvisorMentorship>().HasKey(sam => sam.MentorshipID);
+        modelBuilder.Entity<MentorshipRequestedSlot>().HasKey(mrs => mrs.SlotID);
+        
+        modelBuilder.Entity<MentorshipRequestedSlot>()
+            .HasOne(mrs => mrs.Mentorship)
+            .WithMany(m => m.RequestedSlots)
+            .HasForeignKey(mrs => mrs.MentorshipID)
+            .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<MentorshipSession>().HasKey(ms => ms.SessionID);
         modelBuilder.Entity<MentorshipReport>().HasKey(mr => mr.ReportID);
         modelBuilder.Entity<MentorshipFeedback>().HasKey(mf => mf.FeedbackID);

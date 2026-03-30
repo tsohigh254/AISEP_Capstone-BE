@@ -10,25 +10,30 @@ public class CreateMentorshipRequestValidator : AbstractValidator<CreateMentorsh
         RuleFor(x => x.AdvisorId)
             .GreaterThan(0).WithMessage("AdvisorId must be a positive integer.");
 
-        RuleFor(x => x.ChallengeDescription)
-            .NotEmpty().WithMessage("Challenge description is required.")
-            .MaximumLength(2000).WithMessage("Challenge description must not exceed 2000 characters.");
+        RuleFor(x => x.ProblemContext)
+            .NotEmpty().WithMessage("Problem context is required.")
+            .MaximumLength(2000).WithMessage("Problem context must not exceed 2000 characters.");
 
-        RuleFor(x => x.SpecificQuestions)
-            .MaximumLength(2000).WithMessage("Specific questions must not exceed 2000 characters.")
-            .When(x => x.SpecificQuestions != null);
+        RuleFor(x => x.AdditionalNotes)
+            .MaximumLength(2000).WithMessage("Additional notes must not exceed 2000 characters.")
+            .When(x => x.AdditionalNotes != null);
 
         RuleFor(x => x.PreferredFormat)
             .MaximumLength(100).WithMessage("Preferred format must not exceed 100 characters.")
             .When(x => x.PreferredFormat != null);
 
-        RuleFor(x => x.ExpectedDuration)
-            .MaximumLength(200).WithMessage("Expected duration must not exceed 200 characters.")
-            .When(x => x.ExpectedDuration != null);
+        RuleFor(x => x.DurationMinutes)
+            .InclusiveBetween(15, 480).WithMessage("Duration must be between 15 and 480 minutes.")
+            .When(x => x.DurationMinutes.HasValue);
 
-        RuleFor(x => x.ExpectedScope)
-            .MaximumLength(500).WithMessage("Expected scope must not exceed 500 characters.")
-            .When(x => x.ExpectedScope != null);
+        RuleFor(x => x.ScopeTags)
+            .Must(tags => tags == null || tags.Count <= 20)
+            .WithMessage("Scope tags must not exceed 20 items.")
+            .When(x => x.ScopeTags != null);
+
+        RuleForEach(x => x.ScopeTags)
+            .MaximumLength(100).WithMessage("Each scope tag must not exceed 100 characters.")
+            .When(x => x.ScopeTags != null && x.ScopeTags.Any());
     }
 }
 
