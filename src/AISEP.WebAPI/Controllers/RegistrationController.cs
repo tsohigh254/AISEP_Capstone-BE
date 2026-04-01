@@ -1,4 +1,4 @@
-﻿using AISEP.Application.DTOs.Advisor;
+using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Staff;
@@ -105,8 +105,8 @@ namespace AISEP.WebAPI.Controllers
         /// <summary>
         /// Approve startup registration
         /// </summary>
-        [HttpPost("approve/startups/{startupId}")]
-        [Authorize(Roles = "Staff,Admin")]
+        [HttpPost("approve/startups/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
         [ProducesResponseType(typeof(ApiResponse<Startup>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -115,6 +115,51 @@ namespace AISEP.WebAPI.Controllers
         public async Task<IActionResult> ApproveStartupRegistration(int staffId, [FromBody]ApproveStartupRegistrationRequest startupRegistrationRequest)
         {
             var response = await _registrationService.ApproveStartupRegistrationAsync(staffId, startupRegistrationRequest);
+            return Ok(response);
+        }
+
+        [HttpPost("approve/advisors/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> ApproveAdvisorRegistration(int staffId, [FromBody]ApproveAdvisorRegistrationRequest request)
+        {
+            var response = await _registrationService.ApproveAdvisorRegistrationAsync(staffId, request);
+            return Ok(response);
+        }
+
+        [HttpPost("approve/investors/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> ApproveInvestorRegistration(int staffId, [FromBody]ApproveInvestorRegistrationRequest request)
+        {
+            var response = await _registrationService.ApproveInvestorRegistrationAsync(staffId, request);
+            return Ok(response);
+        }
+
+        [HttpPost("reject/startups/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> RejectStartupRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
+        {
+            var response = await _registrationService.RejectStartupRegistrationAsync(staffId, request);
+            return Ok(response);
+        }
+
+        [HttpPost("reject/advisors/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> RejectAdvisorRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
+        {
+            var response = await _registrationService.RejectAdvisorRegistrationAsync(staffId, request);
+            return Ok(response);
+        }
+
+        [HttpPost("reject/investors/{staffId}")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<IActionResult> RejectInvestorRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
+        {
+            var response = await _registrationService.RejectInvestorRegistrationAsync(staffId, request);
             return Ok(response);
         }
     }

@@ -69,7 +69,7 @@ public class StartupService : IStartupService
             FundingAmountSought = request.FundingAmountSought,
             CurrentFundingRaised = request.CurrentFundingRaised,
             Valuation = request.Valuation,
-            BussinessCode = request.BussinessCode,
+            BusinessCode = request.BusinessCode,
             FullNameOfApplicant = request.FullNameOfApplicant,
             RoleOfApplicant = request.RoleOfApplicant,            
             MarketScope = request.MarketScope,
@@ -163,7 +163,7 @@ public class StartupService : IStartupService
         if (request.ProblemStatement != null) startup.ProblemStatement = request.ProblemStatement;
         if (request.SolutionSummary != null) startup.SolutionSummary = request.SolutionSummary;
         if (request.LinkedInURL != null) startup.LinkedInURL = request.LinkedInURL;
-        if (request.BussinessCode != null) startup.BussinessCode = request.BussinessCode;
+        if (request.BusinessCode != null) startup.BusinessCode = request.BusinessCode;
         if (request.FullNameOfApplicant != null) startup.FullNameOfApplicant = request.FullNameOfApplicant;
         if (request.RoleOfApplicant != null) startup.RoleOfApplicant = request.RoleOfApplicant;
         if (request.ContactEmail != null) startup.ContactEmail = request.ContactEmail;
@@ -481,7 +481,7 @@ public class StartupService : IStartupService
             RoleOfApplicant = s.RoleOfApplicant,
             ContactEmail = s.ContactEmail,
             ContactPhone = s.ContactPhone,
-            BussinessCode = s.BussinessCode,
+            BusinessCode = s.BusinessCode,
 
             ProfileStatus = s.ProfileStatus.ToString(),
             ApprovedAt = s.ApprovedAt,

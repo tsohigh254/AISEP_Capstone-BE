@@ -28,7 +28,7 @@ public class Startup
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BussinessCode { get; set; }
+    public string BusinessCode { get; set; }
 
     // Registration Documents (Required for staff review)
     public string? FileCertificateBusiness { get; set; }

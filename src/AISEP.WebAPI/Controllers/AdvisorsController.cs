@@ -92,13 +92,16 @@ public class AdvisorsController : ControllerBase
         return result.ToActionResult();
     }
 
-    // ================================================================
-    // 5) PUT /api/advisors/me/availability — Update availability settings
-    // ================================================================
-
-    /// <summary>
-    /// Update availability settings for the current advisor (upsert).
-    /// </summary>
+        [HttpPost("me/kyc/submit")]
+        [Authorize(Policy = "AdvisorOnly")]
+        [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> SubmitForApproval()
+        {
+            var userId = GetCurrentUserId();
+            var result = await _advisorService.SubmitForApprovalAsync(userId);
+            return result.ToActionResult();
+        }
     [HttpPut("me/availability")]
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<AvailabilityDto>), StatusCodes.Status200OK)]

@@ -1,4 +1,4 @@
-﻿using AISEP.Application.DTOs.Advisor;
+using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Staff;
@@ -42,11 +42,12 @@ namespace AISEP.Infrastructure.Services
                 "Startup profile does not exist");
             }
 
+            startup.ProfileStatus = ProfileStatus.Approved;
             startup.ApprovedAt = DateTime.UtcNow;
             startup.ApprovedBy = staffId;
 
             if (startupRegistrationRequest.Score >= 10)
-            {   
+            {
                 startup.StartupTag = StartupTag.VerifiedCompany;
             }else if (startupRegistrationRequest.Score >= 6 && startupRegistrationRequest.Score <= 9)
             {
@@ -54,12 +55,83 @@ namespace AISEP.Infrastructure.Services
             }else if (startupRegistrationRequest.Score >= 2 && startupRegistrationRequest.Score <= 5)
             {
                 startup.StartupTag = StartupTag.VerificationFailed;
+                startup.ProfileStatus = ProfileStatus.Rejected; // Overwrite if failed
             }
 
             _context.Startups.Update(startup);
             await _context.SaveChangesAsync();
 
-            return ApiResponse<Startup>.SuccessResponse(startup, "Startup approved successfully");
+            return ApiResponse<Startup>.SuccessResponse(startup, "Startup reviewed successfully");
+        }
+
+        public async Task<ApiResponse<Advisor>> ApproveAdvisorRegistrationAsync(int staffId, ApproveAdvisorRegistrationRequest request)
+        {
+            var advisor = await _context.Advisors.FirstOrDefaultAsync(a => a.AdvisorID == request.AdvisorId);
+            if (advisor == null)
+            {
+                return ApiResponse<Advisor>.ErrorResponse("ADVISOR_PROFILE_DOES_NOT_EXISTS", "Advisor profile does not exist");
+            }
+
+            advisor.ProfileStatus = ProfileStatus.Approved;
+            advisor.IsVerified = true;
+
+            _context.Advisors.Update(advisor);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<Advisor>.SuccessResponse(advisor, "Advisor approved successfully");
+        }
+
+        public async Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveInvestorRegistrationRequest request)
+        {
+            var investor = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
+            if (investor == null)
+            {
+                return ApiResponse<Investor>.ErrorResponse("INVESTOR_PROFILE_DOES_NOT_EXISTS", "Investor profile does not exist");
+            }
+
+            investor.ProfileStatus = ProfileStatus.Approved;
+
+            _context.Investors.Update(investor);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<Investor>.SuccessResponse(investor, "Investor approved successfully");
+        }
+
+        public async Task<ApiResponse<Startup>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request)
+        {
+            var startup = await _context.Startups.FirstOrDefaultAsync(s => s.StartupID == request.Id);
+            if (startup == null)
+                return ApiResponse<Startup>.ErrorResponse("NOT_FOUND", "Profile not found");
+
+            startup.ProfileStatus = ProfileStatus.Rejected;
+            // Optionally store the reject reason somewhere (maybe a notification or comment field)
+            _context.Startups.Update(startup);
+            await _context.SaveChangesAsync();
+            return ApiResponse<Startup>.SuccessResponse(startup, "Rejected successfully");
+        }
+
+        public async Task<ApiResponse<Advisor>> RejectAdvisorRegistrationAsync(int staffId, RejectRegistrationRequest request)
+        {
+            var advisor = await _context.Advisors.FirstOrDefaultAsync(a => a.AdvisorID == request.Id);
+            if (advisor == null)
+                return ApiResponse<Advisor>.ErrorResponse("NOT_FOUND", "Profile not found");
+
+            advisor.ProfileStatus = ProfileStatus.Rejected;
+            _context.Advisors.Update(advisor);
+            await _context.SaveChangesAsync();
+            return ApiResponse<Advisor>.SuccessResponse(advisor, "Rejected successfully");
+        }
+
+        public async Task<ApiResponse<Investor>> RejectInvestorRegistrationAsync(int staffId, RejectRegistrationRequest request)
+        {
+            var investor = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == request.Id);
+            if (investor == null)
+                return ApiResponse<Investor>.ErrorResponse("NOT_FOUND", "Profile not found");
+
+            investor.ProfileStatus = ProfileStatus.Rejected;
+            _context.Investors.Update(investor);
+            await _context.SaveChangesAsync();
+            return ApiResponse<Investor>.SuccessResponse(investor, "Rejected successfully");
         }
 
         public async Task<ApiResponse<PagedResponse<AdvisorDto>>> GetPendingRegistrationsAdvisorAsync(RegistrationQueryParams registrationQuery)
@@ -269,7 +341,7 @@ namespace AISEP.Infrastructure.Services
                 RoleOfApplicant = startup.RoleOfApplicant,
                 ContactEmail = startup.ContactEmail,
                 ContactPhone = startup.ContactPhone,
-                BussinessCode = startup.BussinessCode,
+                BusinessCode = startup.BusinessCode,
                 MarketScope = startup.MarketScope,
                 ProblemStatement = startup.ProblemStatement,
                 SolutionSummary = startup.SolutionSummary,

@@ -21,7 +21,7 @@ public class CreateStartupRequest
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
 
-    public string BussinessCode { get; set; }
+    public string BusinessCode { get; set; }
     public string FullNameOfApplicant { get; set; } 
     public string RoleOfApplicant { get; set; } 
     public string ContactEmail { get; set; } 
@@ -51,7 +51,7 @@ public class UpdateStartupRequest
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
 
-    public string BussinessCode { get; set; }
+    public string BusinessCode { get; set; }
     public string FullNameOfApplicant { get; set; }
     public string RoleOfApplicant { get; set; }
     public string ContactEmail { get; set; }
@@ -96,7 +96,7 @@ public class StartupMeDto
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BussinessCode { get; set; }
+    public string BusinessCode { get; set; }
     // UI Additions
     public string? MarketScope { get; set; }
     public string? ProblemStatement { get; set; }
@@ -242,7 +242,7 @@ public class StartupDto
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BussinessCode { get; set; }
+    public string BusinessCode { get; set; }
 
     // Public UI additions
     public string? MarketScope { get; set; }

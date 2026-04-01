@@ -9,6 +9,7 @@ public interface IInvestorService
     Task<ApiResponse<InvestorDto>> CreateProfileAsync(int userId, CreateInvestorRequest request);
     Task<ApiResponse<InvestorDto>> GetMyProfileAsync(int userId);
     Task<ApiResponse<InvestorDto>> UpdateProfileAsync(int userId, UpdateInvestorRequest request);
+    Task<ApiResponse<InvestorDto>> SubmitForApprovalAsync(int userId);
 
     // Preferences
     Task<ApiResponse<PreferencesDto>> GetPreferencesAsync(int userId);

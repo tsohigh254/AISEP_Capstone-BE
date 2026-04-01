@@ -1,4 +1,4 @@
-﻿using AISEP.Application.Configuration;
+using AISEP.Application.Configuration;
 using AISEP.Application.Interfaces;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
@@ -38,7 +38,7 @@ namespace AISEP.Infrastructure.Services
         {
             var publicId = ExtractPublicIdFromUrl(url);
 
-            if (publicId == null) throw new InvalidOperationException($"Lỗi khi trích xuất publicId từ URL: {url}");
+            if (publicId == null) throw new InvalidOperationException($"L?i khi tr�ch xu?t publicId t? URL: {url}");
 
             if (!string.IsNullOrEmpty(publicId))
             {
@@ -49,13 +49,13 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<string> UploadImage(IFormFile file, string folder)
         {
-            if (file == null || file.Length == 0) throw new FileNotFoundException("File ảnh không được để trống");
+            if (file == null || file.Length == 0) throw new FileNotFoundException("File ?nh kh�ng du?c d? tr?ng");
 
-            if (file.Length > MaxFileSizeImage) throw new InvalidOperationException($"Ảnh không vượt quá {MaxFileSizeImage / (1024 * 1024)} MB");
+            if (file.Length > MaxFileSizeImage) throw new InvalidOperationException($"?nh kh�ng vu?t qu� {MaxFileSizeImage / (1024 * 1024)} MB");
 
             var fileExtension = Path.GetExtension(file.FileName);
 
-            if (!allowedExtensionsImage.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensionsImage)}");
+            if (!allowedExtensionsImage.Contains(fileExtension)) throw new ArgumentException($"H�y upload c�c file c� du�i {string.Join(",", allowedExtensionsImage)}");
 
             using var stream = file.OpenReadStream();
 
@@ -74,13 +74,13 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<string> UploadDocument(IFormFile file, string folder)
         {
-            if (file == null || file.Length == 0) throw new FileNotFoundException("File không được để trống");
+            if (file == null || file.Length == 0) throw new FileNotFoundException("File kh�ng du?c d? tr?ng");
 
-            if (file.Length > MaxFileSizeDocument) throw new InvalidOperationException($"Tài liệu không vượt quá {MaxFileSizeDocument / (1024 * 1024)} MB");
+            if (file.Length > MaxFileSizeDocument) throw new InvalidOperationException($"T�i li?u kh�ng vu?t qu� {MaxFileSizeDocument / (1024 * 1024)} MB");
 
             var fileExtension = Path.GetExtension(file.FileName);
 
-            if (!allowedExtensionsDocument.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensionsDocument)}");
+            if (!allowedExtensionsDocument.Contains(fileExtension)) throw new ArgumentException($"H�y upload c�c file c� du�i {string.Join(",", allowedExtensionsDocument)}");
 
             using var stream = file.OpenReadStream();
 
@@ -94,7 +94,7 @@ namespace AISEP.Infrastructure.Services
             var result = await _cloudinary.UploadAsync(uploadParams);
 
             if (result == null || result.SecureUrl == null)
-                throw new InvalidOperationException("Upload tài liệu thất bại: không nhận được response từ Cloudinary");
+                throw new InvalidOperationException("Upload t�i li?u th?t b?i: kh�ng nh?n du?c response t? Cloudinary");
 
             //Console.WriteLine(result);
             return result.SecureUrl.ToString();
@@ -106,22 +106,22 @@ namespace AISEP.Infrastructure.Services
             var uri = new Uri(imageUrl);
             var path = uri.AbsolutePath; // /dvdv4id16/image/upload/v1749660746/pho_hk86qj.jpg
 
-            // Tách phần sau "upload/"
+            // T�ch ph?n sau "upload/"
             var parts = path.Split("/upload/");
 
             if (parts.Length < 2)
-                throw new ArgumentException("File không hợp lệ");
+                throw new ArgumentException("File kh�ng h?p l?");
 
-            // Lấy phần sau upload/, loại bỏ version
+            // L?y ph?n sau upload/, lo?i b? version
             var pathAfterUpload = parts[1]; // v1749660746/pho_hk86qj.jpg
             var segments = pathAfterUpload.Split('/').ToList();
 
             if (segments[0].StartsWith("v") && segments[0].Length > 1)
             {
-                segments.RemoveAt(0); // bỏ "v1749660746"
+                segments.RemoveAt(0); // b? "v1749660746"
             }
 
-            var fullPath = string.Join("/", segments); // "pho_hk86qj.jpg" hoặc "folder/abc.jpg"
+            var fullPath = string.Join("/", segments); // "pho_hk86qj.jpg" ho?c "folder/abc.jpg"
             var publicId = Path.ChangeExtension(fullPath, null); // remove .jpg
 
             return publicId;

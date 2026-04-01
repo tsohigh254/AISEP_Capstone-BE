@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,16 +10,16 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // ══════════════════════════════════════════════════════════
-            //  1) Startups — IndustryID FK (populate from old Industry string)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
+            //  1) Startups � IndustryID FK (populate from old Industry string)
+            // ----------------------------------------------------------
             migrationBuilder.AddColumn<int>(
                 name: "IndustryID",
                 table: "Startups",
                 type: "integer",
                 nullable: true);
 
-            // Map existing Industry text → IndustryID via Industries lookup
+            // Map existing Industry text ? IndustryID via Industries lookup
             migrationBuilder.Sql("""
                 UPDATE "Startups" s
                 SET    "IndustryID" = i."IndustryID"
@@ -44,9 +44,9 @@ namespace AISEP.Infrastructure.Migrations
                 principalColumn: "IndustryID",
                 onDelete: ReferentialAction.Restrict);
 
-            // ══════════════════════════════════════════════════════════
-            //  2) Startups.Stage  (text → smallint)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
+            //  2) Startups.Stage  (text ? smallint)
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "Startups"
                 ALTER COLUMN "Stage" TYPE smallint
@@ -63,9 +63,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
-            //  3) Startups.ProfileStatus  (text? → smallint NOT NULL default 0)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
+            //  3) Startups.ProfileStatus  (text? ? smallint NOT NULL default 0)
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "Startups"
                 ALTER COLUMN "ProfileStatus" TYPE smallint
@@ -80,9 +80,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "Startups" ALTER COLUMN "ProfileStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  4) StartupInvestorConnections.ConnectionStatus
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "StartupInvestorConnections"
                 ALTER COLUMN "ConnectionStatus" TYPE smallint
@@ -98,9 +98,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "StartupInvestorConnections" ALTER COLUMN "ConnectionStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  5) StartupAdvisorMentorships.MentorshipStatus
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "StartupAdvisorMentorships"
                 ALTER COLUMN "MentorshipStatus" TYPE smallint
@@ -119,9 +119,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "StartupAdvisorMentorships" ALTER COLUMN "MentorshipStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  6) ScoreImprovementRecommendations.Priority
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "ScoreImprovementRecommendations"
                 ALTER COLUMN "Priority" TYPE smallint
@@ -134,9 +134,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  7) SavedReports.ReportType
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "SavedReports"
                 ALTER COLUMN "ReportType" TYPE smallint
@@ -150,9 +150,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  8) PortfolioCompanies.InvestmentStage  (nullable)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "PortfolioCompanies"
                 ALTER COLUMN "InvestmentStage" TYPE smallint
@@ -168,9 +168,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  9) PortfolioCompanies.CurrentStatus  (nullable)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "PortfolioCompanies"
                 ALTER COLUMN "CurrentStatus" TYPE smallint
@@ -184,9 +184,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  10) PortfolioCompanies.ExitType  (nullable)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "PortfolioCompanies"
                 ALTER COLUMN "ExitType" TYPE smallint
@@ -200,9 +200,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  11) InvestorWatchlists.Priority
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "InvestorWatchlists"
                 ALTER COLUMN "Priority" TYPE smallint
@@ -215,9 +215,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "InvestorWatchlists" ALTER COLUMN "Priority" SET DEFAULT 1;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  12) InvestorStageFocuses.Stage
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "InvestorStageFocuses"
                 ALTER COLUMN "Stage" TYPE smallint
@@ -233,9 +233,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  13) Investors.ProfileStatus  (NEW column)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.AddColumn<short>(
                 name: "ProfileStatus",
                 table: "Investors",
@@ -243,9 +243,9 @@ namespace AISEP.Infrastructure.Migrations
                 nullable: false,
                 defaultValue: (short)0);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  14) InformationRequests.RequestStatus
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "InformationRequests"
                 ALTER COLUMN "RequestStatus" TYPE smallint
@@ -260,9 +260,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "InformationRequests" ALTER COLUMN "RequestStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  15) FlaggedContents.ModerationStatus + drop ModerationAction
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "FlaggedContents"
                 ALTER COLUMN "ModerationStatus" TYPE smallint
@@ -283,9 +283,9 @@ namespace AISEP.Infrastructure.Migrations
 
             migrationBuilder.DropColumn(name: "ModerationAction", table: "FlaggedContents");
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  16) DocumentBlockchainProofs.ProofStatus
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "DocumentBlockchainProofs"
                 ALTER COLUMN "ProofStatus" TYPE smallint
@@ -299,9 +299,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "DocumentBlockchainProofs" ALTER COLUMN "ProofStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  17) Conversations.ConversationStatus
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "Conversations"
                 ALTER COLUMN "ConversationStatus" TYPE smallint
@@ -315,9 +315,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "Conversations" ALTER COLUMN "ConversationStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
-            //  18) Advisors.ProfileStatus  (text? → smallint NOT NULL default 0)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
+            //  18) Advisors.ProfileStatus  (text? ? smallint NOT NULL default 0)
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 UPDATE "Advisors" SET "ProfileStatus" = 'Draft' WHERE "ProfileStatus" IS NULL;
                 ALTER TABLE "Advisors"
@@ -333,9 +333,9 @@ namespace AISEP.Infrastructure.Migrations
                 ALTER TABLE "Advisors" ALTER COLUMN "ProfileStatus" SET DEFAULT 0;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  19) AdvisorExpertises.ProficiencyLevel  (nullable)
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "AdvisorExpertises"
                 ALTER COLUMN "ProficiencyLevel" TYPE smallint
@@ -349,9 +349,9 @@ namespace AISEP.Infrastructure.Migrations
                 END;
             """);
 
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             //  20) AdvisorAchievements.AchievementType
-            // ══════════════════════════════════════════════════════════
+            // ----------------------------------------------------------
             migrationBuilder.Sql("""
                 ALTER TABLE "AdvisorAchievements"
                 ALTER COLUMN "AchievementType" TYPE smallint
@@ -369,7 +369,7 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // ── Reverse all smallint → text conversions ──────────────
+            // -- Reverse all smallint ? text conversions --------------
             migrationBuilder.Sql("""
                 ALTER TABLE "AdvisorAchievements"
                 ALTER COLUMN "AchievementType" TYPE text
