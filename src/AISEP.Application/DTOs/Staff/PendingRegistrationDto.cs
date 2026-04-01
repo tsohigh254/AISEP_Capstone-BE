@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -36,5 +36,21 @@ namespace AISEP.Application.DTOs.Staff
     {
         public int StartupId { get; set; }
         public int Score { get; set; }
+    }
+
+    public class ApproveAdvisorRegistrationRequest
+    {
+        public int AdvisorId { get; set; }
+    }
+
+    public class ApproveInvestorRegistrationRequest
+    {
+        public int InvestorId { get; set; }
+    }
+
+    public class RejectRegistrationRequest
+    {
+        public int Id { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 }

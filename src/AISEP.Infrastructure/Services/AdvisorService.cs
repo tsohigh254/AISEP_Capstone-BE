@@ -339,5 +339,33 @@ public class AdvisorService : IAdvisorService
         if (bio.Length <= maxLength) return bio;
         return bio[..maxLength] + "…";
     }
+    public async Task<ApiResponse<AdvisorMeDto>> SubmitForApprovalAsync(int userId)
+    {
+        var advisor = await _db.Advisors
+            .Include(a => a.Availability)
+            .Include(a => a.IndustryFocus)
+            .ThenInclude(i => i.Industry)
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        if (advisor.ProfileStatus == ProfileStatus.Pending)
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
+
+        if (advisor.ProfileStatus == ProfileStatus.Approved)
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
+
+        // Optionally add validation checks here to ensure profile is complete enough to submit
+        
+        advisor.ProfileStatus = ProfileStatus.Pending;
+        advisor.UpdatedAt = DateTime.UtcNow;
+
+        _db.Advisors.Update(advisor);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<AdvisorMeDto>.SuccessResponse(MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
+    }
+
     #endregion
 }

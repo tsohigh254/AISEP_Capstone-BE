@@ -101,14 +101,23 @@ public class InvestorsController : ControllerBase
     }
 
     // ================================================================
-    // PREFERENCES
-    // ================================================================
+        // KYC / APPROVAL
+        // ================================================================     
 
-    /// <summary>
-    /// Get investor's investment preferences
-    /// </summary>
-    [HttpGet("me/preferences")]
-    [ProducesResponseType(typeof(ApiResponse<PreferencesDto>), StatusCodes.Status200OK)]
+        /// <summary>
+        /// Submit investor profile for KYC approval
+        /// </summary>
+        [HttpPost("me/kyc/submit")]
+        [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> SubmitForApproval()
+        {
+            var userId = GetCurrentUserId();
+            var result = await _investorService.SubmitForApprovalAsync(userId);
+            return result.ToActionResult();
+        }
+
+        // ================================================================     
     [ProducesResponseType(typeof(ApiResponse<PreferencesDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPreferences()
     {

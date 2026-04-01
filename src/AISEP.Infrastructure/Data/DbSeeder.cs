@@ -11,6 +11,38 @@ public static class DbSeeder
         await SeedPermissionsAsync(context);
         await SeedIndustriesAsync(context);
         await SeedUsersAsync(context);
+        await FixMissingStartupDataAsync(context);
+    }
+
+    private static async Task FixMissingStartupDataAsync(ApplicationDbContext context)
+    {
+        var malformedStartups = await context.Startups
+            .Where(s => string.IsNullOrEmpty(s.BusinessCode) || string.IsNullOrEmpty(s.Website) || string.IsNullOrEmpty(s.Description))
+            .ToListAsync();
+
+        foreach (var s in malformedStartups)
+        {
+            if (string.IsNullOrEmpty(s.BusinessCode))
+                s.BusinessCode = "TAX-" + Guid.NewGuid().ToString().Substring(0, 6).ToUpper();
+                
+            if (string.IsNullOrEmpty(s.Description))
+                s.Description = "Công ty khởi nghiệp cung cấp giải pháp công nghệ tự động hóa cho các doanh nghiệp, tối ưu hóa quy trình quản lý.";
+                
+            if (string.IsNullOrEmpty(s.Website))
+                s.Website = "https://example-startup.com";
+                
+            if (string.IsNullOrEmpty(s.ProblemStatement))
+                s.ProblemStatement = "Các doanh nghiệp vừa và nhỏ thiếu đi công cụ hiệu quả.";
+
+            if (string.IsNullOrEmpty(s.SolutionSummary))
+                s.SolutionSummary = "Xây dựng hệ sinh thái SaaS all-in-one linh hoạt.";
+
+            if (string.IsNullOrEmpty(s.MarketScope))
+                s.MarketScope = "Khách hàng B2B nội địa và khu vực Đông Nam Á.";
+        }
+        
+        if (malformedStartups.Any()) 
+            await context.SaveChangesAsync();
     }
 
     private static async Task SeedRolesAsync(ApplicationDbContext context)
@@ -154,32 +186,38 @@ public static class DbSeeder
 
     private static async Task SeedUsersAsync(ApplicationDbContext context)
     {
-        // Check if staff user already exists
-        if (await context.Users.AnyAsync(u => u.Email == "staff@aisep.local")) return;
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword("12345.nN");
 
-        // Get Staff role
-        var staffRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Staff");
-        if (staffRole == null) return;
+        await SeedSingleUserAsync(context, "staff@aisep.local", passwordHash, "Staff");
+        // await SeedSingleUserAsync(context, "startup@aisep.local", passwordHash, "Startup"); // Đã đóng theo yêu cầu để tự test tạo mới
+        await SeedSingleUserAsync(context, "advisor@aisep.local", passwordHash, "Advisor");
+        await SeedSingleUserAsync(context, "investor@aisep.local", passwordHash, "Investor");
+    }
 
-        // Create Staff user
-        var staffUser = new User
+    private static async Task SeedSingleUserAsync(ApplicationDbContext context, string email, string passHash, string roleName)
+    {
+        if (await context.Users.AnyAsync(u => u.Email == email)) return;
+
+        var role = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName);
+        if (role == null) return;
+
+        var user = new User
         {
-            Email = "staff@aisep.local",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("12345.nN"),
-            UserType = "Staff",
+            Email = email,
+            PasswordHash = passHash,
+            UserType = roleName,
             IsActive = true,
             EmailVerified = true,
             CreatedAt = DateTime.UtcNow
         };
 
-        context.Users.Add(staffUser);
+        context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        // Assign Staff role to user
         var userRole = new UserRole
         {
-            UserID = staffUser.UserID,
-            RoleID = staffRole.RoleID,
+            UserID = user.UserID,
+            RoleID = role.RoleID,
             AssignedAt = DateTime.UtcNow
         };
 

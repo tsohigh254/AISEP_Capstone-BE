@@ -1,4 +1,4 @@
-﻿using AISEP.Application.DTOs.Advisor;
+using AISEP.Application.DTOs.Advisor;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Staff;
@@ -22,5 +22,11 @@ namespace AISEP.Application.Interfaces
         Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId);
         Task<ApiResponse<AdvisorDto>> GetPendingRegistrationAdvisorByIdAsync(int advisorId);
         Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest);
+        Task<ApiResponse<Advisor>> ApproveAdvisorRegistrationAsync(int staffId, ApproveAdvisorRegistrationRequest advisorRegistrationRequest);
+        Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveInvestorRegistrationRequest investorRegistrationRequest);
+        
+        Task<ApiResponse<Startup>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request);
+        Task<ApiResponse<Advisor>> RejectAdvisorRegistrationAsync(int staffId, RejectRegistrationRequest request);
+        Task<ApiResponse<Investor>> RejectInvestorRegistrationAsync(int staffId, RejectRegistrationRequest request);
     }
 }

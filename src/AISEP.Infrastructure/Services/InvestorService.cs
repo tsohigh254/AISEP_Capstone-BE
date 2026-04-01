@@ -416,6 +416,29 @@ public class InvestorService : IInvestorService
         });
     }
 
+    public async Task<ApiResponse<InvestorDto>> SubmitForApprovalAsync(int userId)
+    {
+        var investor = await _db.Investors
+            .FirstOrDefaultAsync(i => i.UserID == userId);
+
+        if (investor == null)
+            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+
+        if (investor.ProfileStatus == ProfileStatus.Pending)
+            return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
+
+        if (investor.ProfileStatus == ProfileStatus.Approved)
+            return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
+
+        investor.ProfileStatus = ProfileStatus.Pending;
+        investor.UpdatedAt = DateTime.UtcNow;
+
+        _db.Investors.Update(investor);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+    }
+
     // ================================================================
     // MAPPING
     // ================================================================

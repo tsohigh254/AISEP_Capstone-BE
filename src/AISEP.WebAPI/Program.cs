@@ -109,6 +109,7 @@ builder.Services.AddScoped<IConnectionsService, ConnectionsService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IModerationService, ModerationService>();
+builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 
@@ -248,6 +249,14 @@ var app = builder.Build();
     using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        try
+        {
+            await context.Database.MigrateAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "An error occurred while migrating the database.");
+        }
         await DbSeeder.SeedAsync(context);
     }
 

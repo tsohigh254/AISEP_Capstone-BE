@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -50,7 +50,7 @@ namespace AISEP.Infrastructure.Migrations
                 oldNullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "BussinessCode",
+                name: "BusinessCode",
                 table: "Startups",
                 type: "text",
                 nullable: false,
@@ -151,7 +151,7 @@ namespace AISEP.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "BussinessCode",
+                name: "BusinessCode",
                 table: "Startups");
 
             migrationBuilder.DropColumn(
