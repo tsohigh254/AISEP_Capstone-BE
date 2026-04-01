@@ -1,4 +1,5 @@
-﻿using System;
+﻿using AISEP.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,5 +9,6 @@ namespace AISEP.Application.QueryParams
 {
     public class DocumentQueryParams : BaseQueryParams
     {
+        public DocumentType? DocumentType { get; set; }
     }
 }

@@ -251,6 +251,7 @@ public class StartupDto
     public string? LinkedInURL { get; set; }
     public int TeamSize { get; set; }
 
+    public string? FileCertificateBusiness { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

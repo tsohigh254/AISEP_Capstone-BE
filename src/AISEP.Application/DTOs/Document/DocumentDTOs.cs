@@ -65,15 +65,15 @@ public class DocumentDto
 {
     public int DocumentID { get; set; }
     public int StartupID { get; set; }
-    public string DocumentType { get; set; } = null!;
+    public DocumentType DocumentType { get; set; }
     public string Title { get; set; } = null!;
     public string? Version { get; set; }
     public string? FileUrl { get; set; }
     public bool IsArchived { get; set; }
     public bool IsAnalyzed { get; set; }
-    public string? AnalysisStatus { get; set; }
+    public AnalysisStatus AnalysisStatus { get; set; }
     public DateTime UploadedAt { get; set; }
-    public string? ProofStatus { get; set; }
+    public ProofStatus? ProofStatus { get; set; }
     public string? FileHash { get; set; }
     public string? TransactionHash { get; set; }
 }

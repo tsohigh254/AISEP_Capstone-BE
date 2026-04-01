@@ -260,6 +260,7 @@ public class BlockchainProofService : IBlockchainProofService
     // Private helpers
     // ================================================================
 
+    #region helper method
     private async Task<string> ComputeFileHashAsync(string fileUrl, CancellationToken ct)
     {
         using var httpClient = new HttpClient();
@@ -386,4 +387,5 @@ public class BlockchainProofService : IBlockchainProofService
             return null;
         }
     }
+    #endregion
 }
