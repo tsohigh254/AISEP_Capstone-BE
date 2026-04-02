@@ -5,6 +5,7 @@ using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
 using AISEP.Domain.Interfaces;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -36,7 +37,7 @@ public class DocumentService : IDocumentService
     // ================================================================
     public async Task<ApiResponse<DocumentDto>> UploadAsync(DocumentCreateRequest request, int userId, CancellationToken ct = default)
     {
-        // 2. Lookup startup for current user
+        // 1. Lookup startup for current user
         var startup = await _context.Startups
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserID == userId, ct);
@@ -45,7 +46,11 @@ public class DocumentService : IDocumentService
             return ApiResponse<DocumentDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You must create a startup profile before uploading documents.");
 
-        var fileUrl = await _cloudinaryService.UploadDocument(request.File, CloudinaryFolderSaving.DocumentStorage);
+        // 2. Upload document với hash tính sẵn
+        var uploadResult = await _cloudinaryService.UploadDocumentWithHashAsync(
+            request.File, 
+            CloudinaryFolderSaving.DocumentStorage);
+
         // 3. Auto-version if not provided
         var version = request.Version;
         if (string.IsNullOrWhiteSpace(version))
@@ -65,15 +70,12 @@ public class DocumentService : IDocumentService
             version = (maxNum + 1).ToString();
         }
 
-        // 4. Save file to storage
-        var folder = $"startups/{startup.StartupID}/documents";
-        await using var stream = request.File.OpenReadStream();
-
+        // 4. Create document entity
         var document = new Document
         {
             StartupID = startup.StartupID,
             DocumentType = request.DocumentType,
-            FileURL = fileUrl,
+            FileURL = uploadResult.FileUrl,
             Version = version,
             IsAnalyzed = false,
             IsArchived = false,
@@ -83,12 +85,28 @@ public class DocumentService : IDocumentService
         _context.Documents.Add(document);
         await _context.SaveChangesAsync(ct);
 
+        // 5. Tự động tạo blockchain proof với hash đã tính
+        var proof = new DocumentBlockchainProof
+        {
+            DocumentID = document.DocumentID,
+            FileHash = uploadResult.FileHash,
+            HashAlgorithm = uploadResult.HashAlgorithm,
+            ProofStatus = ProofStatus.HashComputed
+        };
+
+        _context.DocumentBlockchainProofs.Add(proof);
+        await _context.SaveChangesAsync(ct);
+
         await _audit.LogAsync("UPLOAD_DOCUMENT", "Document", document.DocumentID,
-            $"Uploaded ({request.DocumentType} v{version}) for startup {startup.StartupID}");
+            $"Uploaded ({request.DocumentType} v{version}) with hash {uploadResult.FileHash.Substring(0, 8)}... for startup {startup.StartupID}");
 
-        _logger.LogInformation("Document {DocumentID} uploaded for startup {StartupID}", document.DocumentID, startup.StartupID);
+        _logger.LogInformation(
+            "Document {DocumentID} uploaded for startup {StartupID} with hash computed: {Hash}", 
+            document.DocumentID, 
+            startup.StartupID, 
+            uploadResult.FileHash);
 
-        return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(document), "Document uploaded successfully");
+        return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(document), "Document uploaded successfully with hash computed");
     }
 
     // ================================================================
