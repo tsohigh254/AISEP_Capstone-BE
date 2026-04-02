@@ -52,6 +52,8 @@ public class WatchlistAddRequest
 public class InvestorDto
 {
     public int InvestorID { get; set; }
+    public int UserID { get; set; }
+    public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? FirmName { get; set; }
     public string? Title { get; set; }

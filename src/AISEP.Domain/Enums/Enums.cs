@@ -8,7 +8,8 @@ public enum ProfileStatus : short
     Draft = 0,
     Pending = 1,
     Approved = 2,
-    Rejected = 3
+    Rejected = 3,
+    PendingKYC = 4
 }
 
 // ───────────────────────── Advisor ────────────────────────
@@ -213,4 +214,21 @@ public enum StartupTag : short
     BasicVerified = 1,
     PendingMoreInfo = 2,
     VerificationFailed = 3
+}
+
+public enum AdvisorTag : short
+{
+    VerifiedAdvisor = 0,
+    BasicVerified = 1,
+    PendingMoreInfo = 2,
+    VerificationFailed = 3
+}
+
+public enum InvestorTag : short
+{
+    VerifiedInvestorEntity = 0,
+    VerifiedAngelInvestor = 1,
+    BasicVerified = 2,
+    PendingMoreInfo = 3,
+    VerificationFailed = 4
 }

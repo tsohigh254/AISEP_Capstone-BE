@@ -20,6 +20,12 @@ public class Investor
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
+    // Approval Workflow
+    public InvestorTag InvestorTag { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedBy { get; set; }
+    public User? ApprovedByUser { get; set; }
+
     // Navigation properties
     public User User { get; set; } = null!;
     public InvestorPreferences? Preferences { get; set; }

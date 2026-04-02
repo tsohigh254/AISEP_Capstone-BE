@@ -41,11 +41,14 @@ namespace AISEP.Application.DTOs.Staff
     public class ApproveAdvisorRegistrationRequest
     {
         public int AdvisorId { get; set; }
+        public int Score { get; set; }
     }
 
     public class ApproveInvestorRegistrationRequest
     {
         public int InvestorId { get; set; }
+        public int Score { get; set; }
+        public bool IsInstitutional { get; set; }
     }
 
     public class RejectRegistrationRequest

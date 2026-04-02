@@ -46,6 +46,7 @@ public class InvestorService : IInvestorService
             Country = request.Country,
             LinkedInURL = request.LinkedInURL,
             Website = request.Website,
+            ProfileStatus = ProfileStatus.Approved,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -355,7 +356,9 @@ public class InvestorService : IInvestorService
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
 
-        var query = _db.Startups.AsNoTracking().AsQueryable();
+        var query = _db.Startups.AsNoTracking()
+            .Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC)
+            .AsQueryable();
 
         // Keyword filter (company name)
         if (!string.IsNullOrWhiteSpace(q))
@@ -427,10 +430,12 @@ public class InvestorService : IInvestorService
         if (investor.ProfileStatus == ProfileStatus.Pending)
             return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
 
-        if (investor.ProfileStatus == ProfileStatus.Approved)
-            return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
+        // Removed the check that blocked Approved profiles from submitting for KYC.
+        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
+        // if (investor.ProfileStatus == ProfileStatus.Approved)
+        //    return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
 
-        investor.ProfileStatus = ProfileStatus.Pending;
+        investor.ProfileStatus = ProfileStatus.PendingKYC;
         investor.UpdatedAt = DateTime.UtcNow;
 
         _db.Investors.Update(investor);
