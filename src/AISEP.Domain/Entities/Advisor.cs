@@ -19,6 +19,11 @@ public class Advisor
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
+    // Approval Workflow
+    public AdvisorTag AdvisorTag { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedBy { get; set; }
+
     // UI Extra requirements
     public int? YearsOfExperience { get; set; }
     public bool IsVerified { get; set; } = false;
@@ -35,6 +40,7 @@ public class Advisor
 
     // Navigation properties
     public User User { get; set; } = null!;
+    public User? ApprovedByUser { get; set; }
     public AdvisorAvailability? Availability { get; set; }
     public ICollection<AdvisorIndustryFocus> IndustryFocus { get; set; } = new List<AdvisorIndustryFocus>();
     public ICollection<AdvisorTestimonial> Testimonials { get; set; } = new List<AdvisorTestimonial>();

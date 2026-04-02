@@ -79,7 +79,7 @@ public class StartupService : IStartupService
             ContactEmail = request.ContactEmail,
             ContactPhone = request.ContactPhone,
 
-            ProfileStatus = ProfileStatus.Draft,
+            ProfileStatus = ProfileStatus.Approved,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -211,13 +211,10 @@ public class StartupService : IStartupService
                 "Your startup profile is already pending approval.");
         }
 
-        if (startup.ProfileStatus == ProfileStatus.Approved)
-        {
-            return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_APPROVED",
-                "Your startup profile is already approved.");
-        }
+        // Removed the check that blocked Approved profiles from submitting for KYC.
+        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
 
-        startup.ProfileStatus = ProfileStatus.Pending;
+        startup.ProfileStatus = ProfileStatus.PendingKYC;
         startup.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -257,7 +254,7 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
-            .FirstOrDefaultAsync(s => s.StartupID == startupId);
+            .FirstOrDefaultAsync(s => s.StartupID == startupId && (s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC));
 
         if (startup == null)
         {
@@ -271,7 +268,7 @@ public class StartupService : IStartupService
     public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery)
     {
 
-        var query = _context.Startups.AsNoTracking().AsQueryable();
+        var query = _context.Startups.AsNoTracking().Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC).AsQueryable();
 
         // Keyword search on CompanyName
         if (!string.IsNullOrWhiteSpace(startupQuery.Key))
@@ -552,6 +549,7 @@ public class StartupService : IStartupService
     {
         var query = _context.Investors
             .AsNoTracking()
+            .Where(i => i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
             .Include(i => i.Preferences)
             .Include(i => i.StageFocus)
             .Include(i => i.IndustryFocus)

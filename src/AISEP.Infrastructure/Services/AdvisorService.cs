@@ -50,7 +50,8 @@ public class AdvisorService : IAdvisorService
             ProfilePhotoURL = profilePhotoUrl,
             LinkedInURL = request.LinkedInURL,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
-            ProfileStatus = ProfileStatus.Draft,
+            ProfileStatus = ProfileStatus.Approved,
+            IsVerified = false,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -197,6 +198,7 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.IndustryFocus)
             .Include(a => a.Availability)
+            .Where(a => a.ProfileStatus == ProfileStatus.Approved || a.ProfileStatus == ProfileStatus.PendingKYC)
             .AsQueryable();
 
         // Keyword search on FullName
@@ -256,7 +258,7 @@ public class AdvisorService : IAdvisorService
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
 
-        if (advisor == null || advisor.ProfileStatus != AISEP.Domain.Enums.ProfileStatus.Approved)
+        if (advisor == null || (advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
         {
             return ApiResponse<AdvisorDetailDto>.ErrorResponse("NOT_FOUND", "Advisor not found or profile is not active.");
         }
@@ -353,18 +355,78 @@ public class AdvisorService : IAdvisorService
         if (advisor.ProfileStatus == ProfileStatus.Pending)
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
 
-        if (advisor.ProfileStatus == ProfileStatus.Approved)
-            return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
+        // Removed the check that blocked Approved profiles from submitting for KYC.
+        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
 
         // Optionally add validation checks here to ensure profile is complete enough to submit
         
-        advisor.ProfileStatus = ProfileStatus.Pending;
+        advisor.ProfileStatus = ProfileStatus.PendingKYC;
         advisor.UpdatedAt = DateTime.UtcNow;
 
         _db.Advisors.Update(advisor);
         await _db.SaveChangesAsync();
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> GetKYCStatusAsync(int userId)
+    {
+        var advisor = await _db.Advisors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        var dto = new AdvisorKYCStatusDto
+        {
+            LastUpdated = advisor.UpdatedAt ?? advisor.CreatedAt
+        };
+
+        if (advisor.IsVerified)
+        {
+            dto.WorkflowStatus = "VERIFIED";
+            dto.VerificationLabel = "VERIFIED_ADVISOR";
+            dto.Explanation = "Chúc mừng! Hồ sơ của bạn đã được xác thực đầy đủ. Huy hiệu VERIFIED ADVISOR đã được kích hoạt trên profile.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.WorkflowStatus = "PENDING_REVIEW";
+            dto.Explanation = "Hồ sơ của bạn đang được đội ngũ AISEP xem xét. Thường mất 1–3 ngày làm việc.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.Rejected)
+        {
+            dto.WorkflowStatus = "VERIFICATION_FAILED";
+            dto.Explanation = "Hồ sơ không đáp ứng tiêu chuẩn xác thực. Vui lòng xem lại ghi chú và gửi lại.";
+        }
+        else
+        {
+            dto.WorkflowStatus = "NOT_STARTED";
+            dto.Explanation = "Chào mừng! Hãy xác thực tài khoản để tăng uy tín của bạn trong hệ sinh thái AISEP.";
+        }
+
+        // Add history entry if applicable
+        dto.History = new List<AdvisorKYCHistoryDto>();
+        if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.History.Add(new AdvisorKYCHistoryDto 
+            { 
+                Action = "Gửi hồ sơ xác thực", 
+                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"), 
+                Status = "PENDING_REVIEW" 
+            });
+        }
+        else if (advisor.IsVerified)
+        {
+            dto.History.Add(new AdvisorKYCHistoryDto 
+            { 
+                Action = "Xác thực thành công", 
+                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"), 
+                Status = "VERIFIED" 
+            });
+        }
+
+        return ApiResponse<AdvisorKYCStatusDto>.SuccessResponse(dto);
     }
 
     #endregion

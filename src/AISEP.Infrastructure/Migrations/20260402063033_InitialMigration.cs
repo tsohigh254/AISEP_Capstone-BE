@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -137,7 +137,8 @@ namespace AISEP.Infrastructure.Migrations
                     RolePermissionID = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     RoleID = table.Column<int>(type: "integer", nullable: false),
-                    PermissionID = table.Column<int>(type: "integer", nullable: false)
+                    PermissionID = table.Column<int>(type: "integer", nullable: false),
+                    AssignedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -165,24 +166,40 @@ namespace AISEP.Infrastructure.Migrations
                     UserID = table.Column<int>(type: "integer", nullable: false),
                     FullName = table.Column<string>(type: "text", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: true),
-                    Company = table.Column<string>(type: "text", nullable: true),
                     Bio = table.Column<string>(type: "text", nullable: true),
                     ProfilePhotoURL = table.Column<string>(type: "text", nullable: true),
-                    YearsOfExperience = table.Column<int>(type: "integer", nullable: true),
                     MentorshipPhilosophy = table.Column<string>(type: "text", nullable: true),
                     LinkedInURL = table.Column<string>(type: "text", nullable: true),
-                    Website = table.Column<string>(type: "text", nullable: true),
-                    ProfileStatus = table.Column<string>(type: "text", nullable: true),
-                    ProfileCompleteness = table.Column<int>(type: "integer", nullable: true),
+                    ProfileStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     TotalMentees = table.Column<int>(type: "integer", nullable: false),
                     TotalSessionHours = table.Column<float>(type: "real", nullable: false),
                     AverageRating = table.Column<float>(type: "real", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AdvisorTag = table.Column<short>(type: "smallint", nullable: false),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedBy = table.Column<int>(type: "integer", nullable: true),
+                    YearsOfExperience = table.Column<int>(type: "integer", nullable: true),
+                    IsVerified = table.Column<bool>(type: "boolean", nullable: false),
+                    HourlyRate = table.Column<decimal>(type: "numeric", nullable: true),
+                    Expertise = table.Column<string>(type: "text", nullable: true),
+                    DomainTags = table.Column<string>(type: "text", nullable: true),
+                    SuitableFor = table.Column<string>(type: "text", nullable: true),
+                    SupportedDurations = table.Column<string>(type: "text", nullable: true),
+                    ReviewCount = table.Column<int>(type: "integer", nullable: false),
+                    CompletedSessions = table.Column<int>(type: "integer", nullable: false),
+                    ExperiencesJson = table.Column<string>(type: "text", nullable: true),
+                    Skills = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Advisors", x => x.AdvisorID);
+                    table.ForeignKey(
+                        name: "FK_Advisors_Users_ApprovedBy",
+                        column: x => x.ApprovedBy,
+                        principalTable: "Users",
+                        principalColumn: "UserID",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Advisors_Users_UserID",
                         column: x => x.UserID,
@@ -217,6 +234,28 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "EmailOtps",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<int>(type: "integer", nullable: false),
+                    Otp = table.Column<string>(type: "text", nullable: false),
+                    IsUsed = table.Column<bool>(type: "boolean", nullable: false),
+                    ExpiredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EmailOtps", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EmailOtps_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserID",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "FlaggedContents",
                 columns: table => new
                 {
@@ -229,11 +268,10 @@ namespace AISEP.Infrastructure.Migrations
                     FlagSource = table.Column<string>(type: "text", nullable: true),
                     Severity = table.Column<string>(type: "text", nullable: true),
                     FlagDetails = table.Column<string>(type: "text", nullable: true),
-                    ModerationStatus = table.Column<string>(type: "text", nullable: false),
+                    ModerationStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     FlaggedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ReviewedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ReviewedBy = table.Column<int>(type: "integer", nullable: true),
-                    ModerationAction = table.Column<string>(type: "text", nullable: true),
                     ModeratorNotes = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
@@ -270,12 +308,22 @@ namespace AISEP.Infrastructure.Migrations
                     Country = table.Column<string>(type: "text", nullable: true),
                     LinkedInURL = table.Column<string>(type: "text", nullable: true),
                     Website = table.Column<string>(type: "text", nullable: true),
+                    ProfileStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    InvestorTag = table.Column<short>(type: "smallint", nullable: false),
+                    ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ApprovedBy = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Investors", x => x.InvestorID);
+                    table.ForeignKey(
+                        name: "FK_Investors_Users_ApprovedBy",
+                        column: x => x.ApprovedBy,
+                        principalTable: "Users",
+                        principalColumn: "UserID",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Investors_Users_UserID",
                         column: x => x.UserID,
@@ -314,13 +362,62 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PasswordResetTokens",
+                columns: table => new
+                {
+                    PasswordResetTokenID = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserID = table.Column<int>(type: "integer", nullable: false),
+                    Token = table.Column<string>(type: "text", nullable: false),
+                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UsedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PasswordResetTokens", x => x.PasswordResetTokenID);
+                    table.ForeignKey(
+                        name: "FK_PasswordResetTokens_Users_UserID",
+                        column: x => x.UserID,
+                        principalTable: "Users",
+                        principalColumn: "UserID",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RefreshTokens",
+                columns: table => new
+                {
+                    RefreshTokenID = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserID = table.Column<int>(type: "integer", nullable: false),
+                    Token = table.Column<string>(type: "text", nullable: false),
+                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    RevokedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ReplacedByToken = table.Column<string>(type: "text", nullable: true),
+                    IPAddress = table.Column<string>(type: "text", nullable: true),
+                    UserAgent = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RefreshTokens", x => x.RefreshTokenID);
+                    table.ForeignKey(
+                        name: "FK_RefreshTokens_Users_UserID",
+                        column: x => x.UserID,
+                        principalTable: "Users",
+                        principalColumn: "UserID",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "SavedReports",
                 columns: table => new
                 {
                     ReportID = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ReportName = table.Column<string>(type: "text", nullable: false),
-                    ReportType = table.Column<string>(type: "text", nullable: false),
+                    ReportType = table.Column<short>(type: "smallint", nullable: false),
                     Parameters = table.Column<string>(type: "text", nullable: true),
                     CreatedBy = table.Column<int>(type: "integer", nullable: false),
                     IsScheduled = table.Column<bool>(type: "boolean", nullable: false),
@@ -378,32 +475,43 @@ namespace AISEP.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     UserID = table.Column<int>(type: "integer", nullable: false),
                     CompanyName = table.Column<string>(type: "text", nullable: false),
-                    OneLiner = table.Column<string>(type: "text", nullable: true),
+                    OneLiner = table.Column<string>(type: "text", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
-                    Industry = table.Column<string>(type: "text", nullable: true),
-                    SubIndustry = table.Column<string>(type: "text", nullable: true),
-                    Stage = table.Column<string>(type: "text", nullable: true),
+                    IndustryID = table.Column<int>(type: "integer", nullable: true),
+                    Stage = table.Column<short>(type: "smallint", nullable: true),
                     FoundedDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    TeamSize = table.Column<int>(type: "integer", nullable: true),
-                    Location = table.Column<string>(type: "text", nullable: true),
-                    Country = table.Column<string>(type: "text", nullable: true),
                     Website = table.Column<string>(type: "text", nullable: true),
                     LogoURL = table.Column<string>(type: "text", nullable: true),
-                    CoverImageURL = table.Column<string>(type: "text", nullable: true),
-                    FundingStage = table.Column<string>(type: "text", nullable: true),
                     FundingAmountSought = table.Column<decimal>(type: "numeric", nullable: true),
                     CurrentFundingRaised = table.Column<decimal>(type: "numeric", nullable: true),
                     Valuation = table.Column<decimal>(type: "numeric", nullable: true),
-                    ProfileStatus = table.Column<string>(type: "text", nullable: true),
-                    ProfileCompleteness = table.Column<int>(type: "integer", nullable: true),
+                    FullNameOfApplicant = table.Column<string>(type: "text", nullable: false),
+                    RoleOfApplicant = table.Column<string>(type: "text", nullable: false),
+                    ContactEmail = table.Column<string>(type: "text", nullable: false),
+                    ContactPhone = table.Column<string>(type: "text", nullable: true),
+                    BusinessCode = table.Column<string>(type: "text", nullable: false),
+                    FileCertificateBusiness = table.Column<string>(type: "text", nullable: true),
+                    LinkedInURL = table.Column<string>(type: "text", nullable: true),
+                    MarketScope = table.Column<string>(type: "text", nullable: true),
+                    ProblemStatement = table.Column<string>(type: "text", nullable: true),
+                    SolutionSummary = table.Column<string>(type: "text", nullable: true),
+                    IsVisible = table.Column<bool>(type: "boolean", nullable: false),
+                    ProfileStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     ApprovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ApprovedBy = table.Column<int>(type: "integer", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    StartupTag = table.Column<short>(type: "smallint", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Startups", x => x.StartupID);
+                    table.ForeignKey(
+                        name: "FK_Startups_Industries_IndustryID",
+                        column: x => x.IndustryID,
+                        principalTable: "Industries",
+                        principalColumn: "IndustryID",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Startups_Users_ApprovedBy",
                         column: x => x.ApprovedBy,
@@ -478,31 +586,6 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AdvisorAchievements",
-                columns: table => new
-                {
-                    AchievementID = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    AdvisorID = table.Column<int>(type: "integer", nullable: false),
-                    AchievementType = table.Column<string>(type: "text", nullable: false),
-                    Title = table.Column<string>(type: "text", nullable: false),
-                    Description = table.Column<string>(type: "text", nullable: true),
-                    Date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    URL = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AdvisorAchievements", x => x.AchievementID);
-                    table.ForeignKey(
-                        name: "FK_AdvisorAchievements_Advisors_AdvisorID",
-                        column: x => x.AdvisorID,
-                        principalTable: "Advisors",
-                        principalColumn: "AdvisorID",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AdvisorAvailabilities",
                 columns: table => new
                 {
@@ -530,35 +613,13 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AdvisorExpertises",
-                columns: table => new
-                {
-                    ExpertiseID = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    AdvisorID = table.Column<int>(type: "integer", nullable: false),
-                    Category = table.Column<string>(type: "text", nullable: false),
-                    SubTopic = table.Column<string>(type: "text", nullable: true),
-                    ProficiencyLevel = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AdvisorExpertises", x => x.ExpertiseID);
-                    table.ForeignKey(
-                        name: "FK_AdvisorExpertises_Advisors_AdvisorID",
-                        column: x => x.AdvisorID,
-                        principalTable: "Advisors",
-                        principalColumn: "AdvisorID",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "AdvisorIndustryFocuses",
                 columns: table => new
                 {
                     IndustryFocusID = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     AdvisorID = table.Column<int>(type: "integer", nullable: false),
-                    Industry = table.Column<string>(type: "text", nullable: false)
+                    IndustryID = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -568,6 +629,12 @@ namespace AISEP.Infrastructure.Migrations
                         column: x => x.AdvisorID,
                         principalTable: "Advisors",
                         principalColumn: "AdvisorID",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AdvisorIndustryFocuses_Industries_IndustryID",
+                        column: x => x.IndustryID,
+                        principalTable: "Industries",
+                        principalColumn: "IndustryID",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -663,7 +730,7 @@ namespace AISEP.Infrastructure.Migrations
                     StageFocusID = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     InvestorID = table.Column<int>(type: "integer", nullable: false),
-                    Stage = table.Column<string>(type: "text", nullable: false)
+                    Stage = table.Column<short>(type: "smallint", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -685,11 +752,11 @@ namespace AISEP.Infrastructure.Migrations
                     InvestorID = table.Column<int>(type: "integer", nullable: false),
                     CompanyName = table.Column<string>(type: "text", nullable: false),
                     Industry = table.Column<string>(type: "text", nullable: true),
-                    InvestmentStage = table.Column<string>(type: "text", nullable: true),
+                    InvestmentStage = table.Column<short>(type: "smallint", nullable: true),
                     InvestmentDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     InvestmentAmount = table.Column<decimal>(type: "numeric", nullable: true),
-                    CurrentStatus = table.Column<string>(type: "text", nullable: true),
-                    ExitType = table.Column<string>(type: "text", nullable: true),
+                    CurrentStatus = table.Column<short>(type: "smallint", nullable: true),
+                    ExitType = table.Column<short>(type: "smallint", nullable: true),
                     ExitDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ExitValue = table.Column<decimal>(type: "numeric", nullable: true),
                     Description = table.Column<string>(type: "text", nullable: true),
@@ -713,14 +780,12 @@ namespace AISEP.Infrastructure.Migrations
                     DocumentID = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     StartupID = table.Column<int>(type: "integer", nullable: false),
-                    DocumentType = table.Column<string>(type: "text", nullable: false),
-                    FileName = table.Column<string>(type: "text", nullable: false),
+                    DocumentType = table.Column<short>(type: "smallint", nullable: false),
+                    Title = table.Column<string>(type: "text", nullable: true),
                     FileURL = table.Column<string>(type: "text", nullable: false),
-                    FileSize = table.Column<int>(type: "integer", nullable: false),
-                    FileFormat = table.Column<string>(type: "text", nullable: true),
                     Version = table.Column<string>(type: "text", nullable: true),
                     IsAnalyzed = table.Column<bool>(type: "boolean", nullable: false),
-                    AnalysisStatus = table.Column<string>(type: "text", nullable: true),
+                    AnalysisStatus = table.Column<short>(type: "smallint", nullable: false),
                     UploadedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     AnalyzedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ArchivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -746,7 +811,7 @@ namespace AISEP.Infrastructure.Migrations
                     InvestorID = table.Column<int>(type: "integer", nullable: false),
                     StartupID = table.Column<int>(type: "integer", nullable: false),
                     WatchReason = table.Column<string>(type: "text", nullable: true),
-                    Priority = table.Column<string>(type: "text", nullable: false),
+                    Priority = table.Column<short>(type: "smallint", nullable: true, defaultValueSql: "1"),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     AddedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     RemovedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -771,47 +836,6 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ProfileViews",
-                columns: table => new
-                {
-                    ViewID = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    ViewerUserID = table.Column<int>(type: "integer", nullable: false),
-                    ViewedStartupID = table.Column<int>(type: "integer", nullable: true),
-                    ViewedInvestorID = table.Column<int>(type: "integer", nullable: true),
-                    ViewedAdvisorID = table.Column<int>(type: "integer", nullable: true),
-                    ViewedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProfileViews", x => x.ViewID);
-                    table.ForeignKey(
-                        name: "FK_ProfileViews_Advisors_ViewedAdvisorID",
-                        column: x => x.ViewedAdvisorID,
-                        principalTable: "Advisors",
-                        principalColumn: "AdvisorID",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProfileViews_Investors_ViewedInvestorID",
-                        column: x => x.ViewedInvestorID,
-                        principalTable: "Investors",
-                        principalColumn: "InvestorID",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProfileViews_Startups_ViewedStartupID",
-                        column: x => x.ViewedStartupID,
-                        principalTable: "Startups",
-                        principalColumn: "StartupID",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProfileViews_Users_ViewerUserID",
-                        column: x => x.ViewerUserID,
-                        principalTable: "Users",
-                        principalColumn: "UserID",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "StartupAdvisorMentorships",
                 columns: table => new
                 {
@@ -819,7 +843,7 @@ namespace AISEP.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     StartupID = table.Column<int>(type: "integer", nullable: false),
                     AdvisorID = table.Column<int>(type: "integer", nullable: false),
-                    MentorshipStatus = table.Column<string>(type: "text", nullable: false),
+                    MentorshipStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     ChallengeDescription = table.Column<string>(type: "text", nullable: true),
                     SpecificQuestions = table.Column<string>(type: "text", nullable: true),
                     ExpectedScope = table.Column<string>(type: "text", nullable: true),
@@ -862,7 +886,7 @@ namespace AISEP.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     StartupID = table.Column<int>(type: "integer", nullable: false),
                     InvestorID = table.Column<int>(type: "integer", nullable: false),
-                    ConnectionStatus = table.Column<string>(type: "text", nullable: false),
+                    ConnectionStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     InitiatedBy = table.Column<int>(type: "integer", nullable: true),
                     MatchScore = table.Column<float>(type: "real", nullable: true),
                     PersonalizedMessage = table.Column<string>(type: "text", nullable: true),
@@ -963,7 +987,7 @@ namespace AISEP.Infrastructure.Migrations
                     BlockNumber = table.Column<string>(type: "text", nullable: true),
                     AnchoredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     AnchoredBy = table.Column<int>(type: "integer", nullable: true),
-                    ProofStatus = table.Column<string>(type: "text", nullable: false),
+                    ProofStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     AnchoredByUserUserID = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
@@ -1065,7 +1089,7 @@ namespace AISEP.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ConnectionID = table.Column<int>(type: "integer", nullable: true),
                     MentorshipID = table.Column<int>(type: "integer", nullable: true),
-                    ConversationStatus = table.Column<string>(type: "text", nullable: false),
+                    ConversationStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     LastMessageAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
@@ -1094,7 +1118,7 @@ namespace AISEP.Infrastructure.Migrations
                     InvestorID = table.Column<int>(type: "integer", nullable: false),
                     RequestType = table.Column<string>(type: "text", nullable: false),
                     RequestMessage = table.Column<string>(type: "text", nullable: true),
-                    RequestStatus = table.Column<string>(type: "text", nullable: false),
+                    RequestStatus = table.Column<short>(type: "smallint", nullable: false, defaultValue: (short)0),
                     RequestedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     FulfilledAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ResponseDocumentIDs = table.Column<string>(type: "text", nullable: true),
@@ -1126,7 +1150,7 @@ namespace AISEP.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ScoreID = table.Column<int>(type: "integer", nullable: false),
                     Category = table.Column<string>(type: "text", nullable: false),
-                    Priority = table.Column<string>(type: "text", nullable: false),
+                    Priority = table.Column<short>(type: "smallint", nullable: false),
                     RecommendationText = table.Column<string>(type: "text", nullable: true),
                     ExpectedImpact = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -1264,25 +1288,25 @@ namespace AISEP.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AdvisorAchievements_AdvisorID",
-                table: "AdvisorAchievements",
-                column: "AdvisorID");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AdvisorAvailabilities_AdvisorID",
                 table: "AdvisorAvailabilities",
                 column: "AdvisorID",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_AdvisorExpertises_AdvisorID",
-                table: "AdvisorExpertises",
-                column: "AdvisorID");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AdvisorIndustryFocuses_AdvisorID",
                 table: "AdvisorIndustryFocuses",
                 column: "AdvisorID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AdvisorIndustryFocuses_IndustryID",
+                table: "AdvisorIndustryFocuses",
+                column: "IndustryID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Advisors_ApprovedBy",
+                table: "Advisors",
+                column: "ApprovedBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Advisors_UserID",
@@ -1337,6 +1361,11 @@ namespace AISEP.Infrastructure.Migrations
                 column: "StartupID");
 
             migrationBuilder.CreateIndex(
+                name: "IX_EmailOtps_UserId",
+                table: "EmailOtps",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FlaggedContents_RelatedUserID",
                 table: "FlaggedContents",
                 column: "RelatedUserID");
@@ -1376,6 +1405,11 @@ namespace AISEP.Infrastructure.Migrations
                 table: "InvestorPreferences",
                 column: "InvestorID",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Investors_ApprovedBy",
+                table: "Investors",
+                column: "ApprovedBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Investors_UserID",
@@ -1454,29 +1488,19 @@ namespace AISEP.Infrastructure.Migrations
                 column: "UserID");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PasswordResetTokens_UserID",
+                table: "PasswordResetTokens",
+                column: "UserID");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PortfolioCompanies_InvestorID",
                 table: "PortfolioCompanies",
                 column: "InvestorID");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ProfileViews_ViewedAdvisorID",
-                table: "ProfileViews",
-                column: "ViewedAdvisorID");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProfileViews_ViewedInvestorID",
-                table: "ProfileViews",
-                column: "ViewedInvestorID");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProfileViews_ViewedStartupID",
-                table: "ProfileViews",
-                column: "ViewedStartupID");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProfileViews_ViewerUserID",
-                table: "ProfileViews",
-                column: "ViewerUserID");
+                name: "IX_RefreshTokens_UserID",
+                table: "RefreshTokens",
+                column: "UserID");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RolePermissions_PermissionID",
@@ -1544,6 +1568,11 @@ namespace AISEP.Infrastructure.Migrations
                 column: "ApprovedBy");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Startups_IndustryID",
+                table: "Startups",
+                column: "IndustryID");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Startups_UserID",
                 table: "Startups",
                 column: "UserID",
@@ -1579,13 +1608,7 @@ namespace AISEP.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "AdvisorAchievements");
-
-            migrationBuilder.DropTable(
                 name: "AdvisorAvailabilities");
-
-            migrationBuilder.DropTable(
-                name: "AdvisorExpertises");
 
             migrationBuilder.DropTable(
                 name: "AdvisorIndustryFocuses");
@@ -1598,6 +1621,9 @@ namespace AISEP.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "DocumentBlockchainProofs");
+
+            migrationBuilder.DropTable(
+                name: "EmailOtps");
 
             migrationBuilder.DropTable(
                 name: "IndustryTrends");
@@ -1633,13 +1659,16 @@ namespace AISEP.Infrastructure.Migrations
                 name: "Notifications");
 
             migrationBuilder.DropTable(
+                name: "PasswordResetTokens");
+
+            migrationBuilder.DropTable(
                 name: "PlatformAnalytics");
 
             migrationBuilder.DropTable(
                 name: "PortfolioCompanies");
 
             migrationBuilder.DropTable(
-                name: "ProfileViews");
+                name: "RefreshTokens");
 
             migrationBuilder.DropTable(
                 name: "RolePermissions");
@@ -1664,9 +1693,6 @@ namespace AISEP.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Documents");
-
-            migrationBuilder.DropTable(
-                name: "Industries");
 
             migrationBuilder.DropTable(
                 name: "MentorshipSessions");
@@ -1703,6 +1729,9 @@ namespace AISEP.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Startups");
+
+            migrationBuilder.DropTable(
+                name: "Industries");
 
             migrationBuilder.DropTable(
                 name: "Users");

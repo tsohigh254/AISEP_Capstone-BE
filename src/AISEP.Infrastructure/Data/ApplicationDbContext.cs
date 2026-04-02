@@ -92,6 +92,11 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Investor>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
         modelBuilder.Entity<Startup>().Property(e => e.ProfileStatus).HasConversion<short>().HasDefaultValue(ProfileStatus.Draft);
 
+        // Tags
+        modelBuilder.Entity<Advisor>().Property(e => e.AdvisorTag).HasConversion<short>();
+        modelBuilder.Entity<Investor>().Property(e => e.InvestorTag).HasConversion<short>();
+        modelBuilder.Entity<Startup>().Property(e => e.StartupTag).HasConversion<short>();
+
         // Chat
         modelBuilder.Entity<Conversation>().Property(e => e.ConversationStatus).HasConversion<short>().HasDefaultValue(ConversationStatus.Active);
 
@@ -203,6 +208,18 @@ public class ApplicationDbContext : DbContext
             .HasOne(s => s.ApprovedByUser)
             .WithMany()
             .HasForeignKey(s => s.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Advisor>()
+            .HasOne(a => a.ApprovedByUser)
+            .WithMany()
+            .HasForeignKey(a => a.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Investor>()
+            .HasOne(i => i.ApprovedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.ApprovedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Each user can only have one startup profile
