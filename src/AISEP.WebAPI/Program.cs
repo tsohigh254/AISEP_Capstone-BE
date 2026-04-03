@@ -100,7 +100,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAdvisorService, AdvisorService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddScoped<IStartupService, StartupService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IInvestorService, InvestorService>();
@@ -245,18 +245,11 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-    // Seed database
+    // Migrate & seed database — app must not start with a broken schema
     using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        try
-        {
-            await context.Database.MigrateAsync();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "An error occurred while migrating the database.");
-        }
+        await context.Database.MigrateAsync();
         await DbSeeder.SeedAsync(context);
     }
 
@@ -283,8 +276,11 @@ var app = builder.Build();
         };
     });
     
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+    }
 
     app.UseHttpsRedirection();
     app.UseCors("Frontend");

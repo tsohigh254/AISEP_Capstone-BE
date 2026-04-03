@@ -22,3 +22,16 @@ jobs:
             git reset --hard origin/main
             cd /var/www/aisep/repo
             docker compose up -d --build --no-deps backend
+            echo "Waiting for backend to start..."
+            for i in 1 2 3 4 5 6; do
+              sleep 5
+              STATUS=$(curl -so /dev/null -w '%{http_code}' https://aisep.xyz/api/auth/login 2>/dev/null || echo "000")
+              if [ "$STATUS" != "000" ] && [ "$STATUS" != "502" ] && [ "$STATUS" != "503" ]; then
+                echo "✅ Backend is healthy (HTTP $STATUS)"
+                exit 0
+              fi
+              echo "  attempt $i/6 (HTTP $STATUS)..."
+            done
+            echo "❌ Backend health check failed"
+            docker logs repo-backend-1 --tail 50
+            exit 1
