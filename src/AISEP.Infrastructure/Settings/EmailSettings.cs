@@ -10,4 +10,5 @@ public class EmailSettings
     public string FromName { get; set; } = "AISEP";
     public bool EnableSsl { get; set; } = true;
     public string BaseUrl { get; set; } = "http://localhost:5294";
+    public string ResendApiKey { get; set; } = string.Empty;
 }
