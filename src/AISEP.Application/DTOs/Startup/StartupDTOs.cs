@@ -12,6 +12,7 @@ public class CreateStartupRequest
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
+    public string? SubIndustry { get; set; }
     /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
     public StartupStage Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
@@ -29,8 +30,15 @@ public class CreateStartupRequest
 
     // UI Extra Requirements
     public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
+    public List<string> CurrentNeeds { get; set; } = new();
+    public string? MetricSummary { get; set; }
+    public string? TeamSize { get; set; }
+    public string? PitchDeckUrl { get; set; }
     public string? LinkedInURL { get; set; }
     public IFormFile? FileCertificateBusiness { get; set; }
 }
@@ -42,6 +50,7 @@ public class UpdateStartupRequest
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
+    public string? SubIndustry { get; set; }
     /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
     public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
@@ -59,8 +68,15 @@ public class UpdateStartupRequest
 
     // UI Extra Requirements
     public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
+    public List<string>? CurrentNeeds { get; set; }
+    public string? MetricSummary { get; set; }
+    public string? TeamSize { get; set; }
+    public string? PitchDeckUrl { get; set; }
     public string? LinkedInURL { get; set; }
     public IFormFile? FileCertificateBusiness { get; set; }
 }
@@ -119,11 +135,18 @@ public class StartupMeDto
     public string? ContactPhone { get; set; }
     public string BusinessCode { get; set; }
     // UI Additions
+    public string? SubIndustry { get; set; }
     public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
     public bool IsVisible { get; set; }
-    public int TeamSize { get; set; }
+    public List<string> CurrentNeeds { get; set; } = new();
+    public string? MetricSummary { get; set; }
+    public string? TeamSize { get; set; }
+    public string? PitchDeckUrl { get; set; }
 
     public string? FileCertificateBusiness { get; set; }
     public string? LinkedInURL { get; set; }
@@ -165,10 +188,11 @@ public class StartupPublicDto
     public string? SolutionSummary { get; set; }
     public List<string> CurrentNeeds { get; set; } = new();
     public string? MetricSummary { get; set; }
+    public string? PitchDeckUrl { get; set; }
     public string? LinkedInURL { get; set; }
     public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
-    public int TeamSize { get; set; }
+    public string? TeamSize { get; set; }
 
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -266,11 +290,18 @@ public class StartupDto
     public string BusinessCode { get; set; }
 
     // Public UI additions
+    public string? SubIndustry { get; set; }
     public string? MarketScope { get; set; }
     public string? ProblemStatement { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
     public string? SolutionSummary { get; set; }
+    public List<string> CurrentNeeds { get; set; } = new();
+    public string? MetricSummary { get; set; }
+    public string? PitchDeckUrl { get; set; }
     public string? LinkedInURL { get; set; }
-    public int TeamSize { get; set; }
+    public string? TeamSize { get; set; }
 
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }

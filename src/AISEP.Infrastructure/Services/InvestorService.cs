@@ -66,8 +66,7 @@ public class InvestorService : IInvestorService
             .FirstOrDefaultAsync(i => i.UserID == userId);
 
         if (investor == null)
-            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND",
-                "Investor profile not found. Please create your profile first.");
+            return ApiResponse<InvestorDto>.SuccessResponse(null, "Profile has not been created yet.");
 
         return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
     }

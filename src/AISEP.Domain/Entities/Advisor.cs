@@ -12,6 +12,10 @@ public class Advisor
     public string? ProfilePhotoURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Website { get; set; }
+    public string? Company { get; set; }
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
