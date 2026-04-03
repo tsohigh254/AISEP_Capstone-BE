@@ -115,9 +115,6 @@ public class StartupsController : ControllerBase
         return result.ToActionResult();
     }
 
-    /// <summary>
-    /// Update startup visibility to investors
-    /// </summary>
     [HttpPut("me/visibility")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
@@ -126,6 +123,50 @@ public class StartupsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _startupService.ToggleVisibilityAsync(userId, request.IsVisible);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // KYC / VERIFICATION ENDPOINTS
+    // ================================================================
+
+    /// <summary>
+    /// Get current startup's KYC/Verification status
+    /// </summary>
+    [HttpGet("me/kyc/status")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetKYCStatus()
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.GetKYCStatusAsync(userId);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Submit startup KYC details for verification
+    /// </summary>
+    [HttpPost("me/kyc/submit")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SubmitKYC([FromBody] SubmitStartupKYCRequest request)
+    {
+        var userId = GetCurrentUserId();
+        // certificateUrl can be null if previously uploaded during onboarding
+        var result = await _startupService.SubmitKYCAsync(userId, request, null);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Save startup KYC details as draft
+    /// </summary>
+    [HttpPatch("me/kyc/draft")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveStartupKYCDraftRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.SaveKYCDraftAsync(userId, request);
         return result.ToActionResult();
     }
 

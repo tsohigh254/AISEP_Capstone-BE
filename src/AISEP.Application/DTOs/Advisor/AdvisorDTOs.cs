@@ -33,7 +33,22 @@ public class UpdateAdvisorRequest
     public IFormFile? ProfilePhotoURL { get; set; }
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
-    public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
+    public List<AdvisorIndustryFocusRequest>? AdvisorIndustryFocus { get; set; }
+}
+
+public class SubmitAdvisorKYCRequest
+{
+    public string FullName { get; set; } = null!;
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? MentorshipPhilosophy { get; set; }
+    public string? ContactEmail { get; set; }
+}
+
+public class SaveAdvisorKYCDraftRequest : SubmitAdvisorKYCRequest
+{
+    // All fields are optional on the frontend for drafts
 }
 
 /// <summary>

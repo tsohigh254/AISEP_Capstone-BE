@@ -376,17 +376,17 @@ public class AdvisorService : IAdvisorService
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+            return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
 
         var dto = new AdvisorKYCStatusDto
         {
             LastUpdated = advisor.UpdatedAt ?? advisor.CreatedAt
         };
 
-        if (advisor.IsVerified)
+        if (advisor.AdvisorTag != AdvisorTag.None)
         {
             dto.WorkflowStatus = "VERIFIED";
-            dto.VerificationLabel = "VERIFIED_ADVISOR";
+            dto.VerificationLabel = advisor.AdvisorTag.ToString();
             dto.Explanation = "Chúc mừng! Hồ sơ của bạn đã được xác thực đầy đủ. Huy hiệu VERIFIED ADVISOR đã được kích hoạt trên profile.";
         }
         else if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
@@ -405,7 +405,13 @@ public class AdvisorService : IAdvisorService
             dto.Explanation = "Chào mừng! Hãy xác thực tài khoản để tăng uy tín của bạn trong hệ sinh thái AISEP.";
         }
 
-        // Add history entry if applicable
+        dto.SubmissionSummary = new AdvisorKYCSubmissionSummaryDto
+        {
+            FullName = advisor.FullName,
+            SubmittedAt = advisor.UpdatedAt ?? advisor.CreatedAt,
+            Version = 1
+        };
+
         dto.History = new List<AdvisorKYCHistoryDto>();
         if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
         {
@@ -416,17 +422,51 @@ public class AdvisorService : IAdvisorService
                 Status = "PENDING_REVIEW" 
             });
         }
-        else if (advisor.IsVerified)
-        {
-            dto.History.Add(new AdvisorKYCHistoryDto 
-            { 
-                Action = "Xác thực thành công", 
-                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"), 
-                Status = "VERIFIED" 
-            });
-        }
 
         return ApiResponse<AdvisorKYCStatusDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> SubmitKYCAsync(int userId, SubmitAdvisorKYCRequest request)
+    {
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        advisor.FullName = request.FullName;
+        advisor.Title = request.Title ?? advisor.Title;
+        advisor.Bio = request.Bio ?? advisor.Bio;
+        advisor.LinkedInURL = request.LinkedInURL ?? advisor.LinkedInURL;
+        advisor.MentorshipPhilosophy = request.MentorshipPhilosophy ?? advisor.MentorshipPhilosophy;
+
+        advisor.ProfileStatus = ProfileStatus.PendingKYC;
+        advisor.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("SUBMIT_ADVISOR_KYC", "Advisor", advisor.AdvisorID, "Advisor submitted KYC details");
+
+        return await GetKYCStatusAsync(userId);
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveAdvisorKYCDraftRequest request)
+    {
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        if (!string.IsNullOrEmpty(request.FullName)) advisor.FullName = request.FullName;
+        if (!string.IsNullOrEmpty(request.Title)) advisor.Title = request.Title;
+        if (!string.IsNullOrEmpty(request.Bio)) advisor.Bio = request.Bio;
+        if (!string.IsNullOrEmpty(request.LinkedInURL)) advisor.LinkedInURL = request.LinkedInURL;
+        if (!string.IsNullOrEmpty(request.MentorshipPhilosophy)) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
+
+        // DO NOT demote Approved -> Draft
+        if (advisor.ProfileStatus == ProfileStatus.Draft)
+        {
+            advisor.ProfileStatus = ProfileStatus.Draft;
+        }
+
+        advisor.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return await GetKYCStatusAsync(userId);
     }
 
     #endregion

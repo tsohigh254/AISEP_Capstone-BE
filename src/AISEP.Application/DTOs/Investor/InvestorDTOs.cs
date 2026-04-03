@@ -15,6 +15,25 @@ public class CreateInvestorRequest
     public string? Website { get; set; }
 }
 
+public class SubmitInvestorKYCRequest
+{
+    public string InvestorCategory { get; set; } = null!; // "INSTITUTIONAL" | "INDIVIDUAL_ANGEL"
+    public string FullName { get; set; } = null!;
+    public string ContactEmail { get; set; } = null!;
+    public string? OrganizationName { get; set; }
+    public string? CurrentRoleTitle { get; set; }
+    public string? Location { get; set; }
+    public string? Website { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? SubmitterRole { get; set; }
+    public string? TaxIdOrBusinessCode { get; set; }
+}
+
+public class SaveInvestorKYCDraftRequest : SubmitInvestorKYCRequest
+{
+    // Inherits all fields, but they are optional on the frontend
+}
+
 public class UpdateInvestorRequest
 {
     public string? FullName { get; set; }
@@ -67,6 +86,28 @@ public class InvestorDto
     public string ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    // KYC Information
+    public string? InvestorType { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? CurrentOrganization { get; set; }
+    public string? CurrentRoleTitle { get; set; }
+    public string? BusinessCode { get; set; }
+    public string? SubmitterRole { get; set; }
+    public string? IDProofFileURL { get; set; }
+    public string? InvestmentProofFileURL { get; set; }
+    public string? Remarks { get; set; }
+}
+
+public class InvestorKYCStatusDto
+{
+    public string WorkflowStatus { get; set; } = null!;
+    public string VerificationLabel { get; set; } = null!;
+    public string Explanation { get; set; } = string.Empty;
+    public DateTime? LastUpdated { get; set; }
+    public string? Remarks { get; set; }
+    public List<string>? FlaggedFields { get; set; }
+    public SubmitInvestorKYCRequest? SubmittedData { get; set; }
 }
 
 public class PreferencesDto

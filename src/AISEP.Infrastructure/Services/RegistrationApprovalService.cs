@@ -340,6 +340,17 @@ namespace AISEP.Infrastructure.Services
                 ProfileStatus = investor.ProfileStatus.ToString(),
                 CreatedAt = investor.CreatedAt,
                 UpdatedAt = investor.UpdatedAt,
+
+                // KYC Information
+                InvestorType = investor.InvestorType?.ToString(),
+                ContactEmail = investor.ContactEmail,
+                CurrentOrganization = investor.CurrentOrganization,
+                CurrentRoleTitle = investor.CurrentRoleTitle,
+                BusinessCode = investor.BusinessCode,
+                SubmitterRole = investor.SubmitterRole,
+                IDProofFileURL = investor.IDProofFileURL,
+                InvestmentProofFileURL = investor.InvestmentProofFileURL,
+                Remarks = investor.Remarks
             };
 
             return ApiResponse<InvestorDto>.SuccessResponse(investorToDto);

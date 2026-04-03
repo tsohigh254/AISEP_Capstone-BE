@@ -246,6 +246,133 @@ public class StartupService : IStartupService
         return ApiResponse<string>.SuccessResponse($"Visibility {action}", $"Your profile is now {(isVisible ? "visible" : "hidden")} to investors.");
     }
 
+    public async Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId)
+    {
+        var startup = await _context.Startups
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+        {
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+        }
+
+        var dto = new StartupKYCStatusDto
+        {
+            LastUpdated = startup.UpdatedAt ?? startup.CreatedAt
+        };
+
+        // Workflow Status Mapping (Simplified)
+        if (startup.StartupTag != StartupTag.None)
+        {
+            dto.WorkflowStatus = "VERIFIED";
+            dto.VerificationLabel = startup.StartupTag.ToString();
+            dto.Explanation = "Chúc mừng! Startup của bạn đã được xác minh chính thức trên hệ thống AISEP.";
+        }
+        else if (startup.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.WorkflowStatus = "PENDING_REVIEW";
+            dto.Explanation = "Hồ sơ xác thực của bạn đang được đội ngũ Staff xem xét. Quá trình này thường mất 1-3 ngày làm việc.";
+        }
+        else if (startup.ProfileStatus == ProfileStatus.Rejected)
+        {
+            dto.WorkflowStatus = "VERIFICATION_FAILED";
+            dto.Explanation = "Hồ sơ xác thực bị từ chối hoặc cần bổ sung thông tin. Vui lòng kiểm tra lại.";
+        }
+        else
+        {
+            dto.WorkflowStatus = "NOT_STARTED";
+            dto.Explanation = "Hãy hoàn tất các thông tin định danh chuyên sâu để được xác minh trên nền tảng.";
+        }
+
+        dto.SubmissionSummary = new StartupKYCSubmissionSummaryDto
+        {
+            CompanyName = startup.CompanyName,
+            SubmittedAt = startup.UpdatedAt ?? startup.CreatedAt,
+            Version = 1
+        };
+
+        dto.History = new List<StartupKYCHistoryDto>();
+        if (startup.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.History.Add(new StartupKYCHistoryDto
+            {
+                Action = "Gửi hồ sơ xác thực",
+                Date = (startup.UpdatedAt ?? startup.CreatedAt).ToString("dd/MM/yyyy HH:mm"),
+                Status = "PENDING_REVIEW"
+            });
+        }
+
+        return ApiResponse<StartupKYCStatusDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request, string? certificateUrl)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        // Update fields
+        startup.CompanyName = request.CompanyName;
+        startup.FullNameOfApplicant = request.FullNameOfApplicant;
+        startup.RoleOfApplicant = request.RoleOfApplicant;
+        startup.ContactEmail = request.ContactEmail;
+        startup.ContactPhone = request.ContactPhone;
+        startup.BusinessCode = request.BusinessCode ?? startup.BusinessCode;
+        startup.Website = request.Website ?? startup.Website;
+        startup.LinkedInURL = request.LinkedInURL ?? startup.LinkedInURL;
+        startup.ProblemStatement = request.ProblemStatement ?? startup.ProblemStatement;
+        startup.SolutionSummary = request.SolutionSummary ?? startup.SolutionSummary;
+
+        if (!string.IsNullOrEmpty(certificateUrl))
+        {
+            startup.FileCertificateBusiness = certificateUrl;
+        }
+
+        // Set status to PendingKYC
+        startup.ProfileStatus = ProfileStatus.PendingKYC;
+        startup.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        await _auditService.LogAsync("SUBMIT_STARTUP_KYC", "Startup", startup.StartupID, "Startup submitted KYC details");
+
+        return await GetKYCStatusAsync(userId);
+    }
+
+    public async Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        // Partial update for draft
+        if (!string.IsNullOrEmpty(request.CompanyName)) startup.CompanyName = request.CompanyName;
+        if (!string.IsNullOrEmpty(request.FullNameOfApplicant)) startup.FullNameOfApplicant = request.FullNameOfApplicant;
+        if (!string.IsNullOrEmpty(request.RoleOfApplicant)) startup.RoleOfApplicant = request.RoleOfApplicant;
+        if (!string.IsNullOrEmpty(request.ContactEmail)) startup.ContactEmail = request.ContactEmail;
+        if (!string.IsNullOrEmpty(request.ContactPhone)) startup.ContactPhone = request.ContactPhone;
+        if (!string.IsNullOrEmpty(request.BusinessCode)) startup.BusinessCode = request.BusinessCode;
+        if (!string.IsNullOrEmpty(request.Website)) startup.Website = request.Website;
+        if (!string.IsNullOrEmpty(request.LinkedInURL)) startup.LinkedInURL = request.LinkedInURL;
+        if (!string.IsNullOrEmpty(request.ProblemStatement)) startup.ProblemStatement = request.ProblemStatement;
+        if (!string.IsNullOrEmpty(request.SolutionSummary)) startup.SolutionSummary = request.SolutionSummary;
+
+        // DO NOT demote Approved -> Draft
+        if (startup.ProfileStatus == ProfileStatus.Draft)
+        {
+            startup.ProfileStatus = ProfileStatus.Draft;
+        }
+
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return await GetKYCStatusAsync(userId);
+    }
+
     // ========== PUBLIC ENDPOINTS ==========
 
     public async Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId)

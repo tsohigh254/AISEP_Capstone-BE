@@ -99,6 +99,12 @@ public enum WatchlistPriority : short
     High = 2
 }
 
+public enum InvestorType : short
+{
+    Institutional = 0,
+    IndividualAngel = 1
+}
+
 // ───────────────────────── Startup / Investor Stage ───────
 
 /// <summary>
@@ -210,25 +216,28 @@ public enum AnalysisStatus : short
 
 public enum StartupTag : short
 {
-    VerifiedCompany = 0,
-    BasicVerified = 1,
-    PendingMoreInfo = 2,
-    VerificationFailed = 3
+    None = 0,
+    VerifiedCompany = 1,
+    BasicVerified = 2,
+    PendingMoreInfo = 3,
+    VerificationFailed = 4
 }
 
 public enum AdvisorTag : short
 {
-    VerifiedAdvisor = 0,
-    BasicVerified = 1,
-    PendingMoreInfo = 2,
-    VerificationFailed = 3
+    None = 0,
+    VerifiedAdvisor = 1,
+    BasicVerified = 2,
+    PendingMoreInfo = 3,
+    VerificationFailed = 4
 }
 
 public enum InvestorTag : short
 {
-    VerifiedInvestorEntity = 0,
-    VerifiedAngelInvestor = 1,
-    BasicVerified = 2,
-    PendingMoreInfo = 3,
-    VerificationFailed = 4
+    None = 0,
+    VerifiedInvestorEntity = 1,
+    VerifiedAngelInvestor = 2,
+    BasicVerified = 3,
+    PendingMoreInfo = 4,
+    VerificationFailed = 5
 }
