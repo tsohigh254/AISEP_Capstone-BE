@@ -169,6 +169,8 @@ public class InvestorsController : ControllerBase
     }
 
         // ================================================================     
+        // ================================================================
+    [HttpGet("preferences")]
     [ProducesResponseType(typeof(ApiResponse<PreferencesDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPreferences()
     {
