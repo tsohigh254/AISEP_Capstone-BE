@@ -11,11 +11,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services
 {
@@ -420,11 +416,18 @@ namespace AISEP.Infrastructure.Services
                 ContactEmail = startup.ContactEmail,
                 ContactPhone = startup.ContactPhone,
                 BusinessCode = startup.BusinessCode,
+                SubIndustry = startup.SubIndustry,
                 MarketScope = startup.MarketScope,
+                ProductStatus = startup.ProductStatus,
+                Location = startup.Location,
+                Country = startup.Country,
                 ProblemStatement = startup.ProblemStatement,
                 SolutionSummary = startup.SolutionSummary,
+                CurrentNeeds = DeserializeCurrentNeeds(startup.CurrentNeeds),
+                MetricSummary = startup.MetricSummary,
+                PitchDeckUrl = startup.PitchDeckUrl,
                 LinkedInURL = startup.LinkedInURL,
-                TeamSize = startup.TeamMembers.Count(),
+                TeamSize = startup.TeamSize,
                 ProfileStatus = startup.ProfileStatus.ToString(),
                 CreatedAt = startup.CreatedAt,
                 UpdatedAt = startup.UpdatedAt,
@@ -441,6 +444,27 @@ namespace AISEP.Infrastructure.Services
             };
 
             return ApiResponse<StartupDto>.SuccessResponse(startupToDto);
+        }
+
+        private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
+        {
+            if (string.IsNullOrWhiteSpace(currentNeeds))
+            {
+                return new List<string>();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(currentNeeds) ?? new List<string>();
+            }
+            catch (JsonException)
+            {
+                return currentNeeds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => x.Trim())
+                    .Where(x => x.Length > 0)
+                    .ToList();
+            }
         }
     }
 }

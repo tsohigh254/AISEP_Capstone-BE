@@ -46,12 +46,24 @@ public class AdvisorService : IAdvisorService
             UserID = userId,
             FullName = request.FullName,
             Title = request.Title,
+            Company = request.Company,
             Bio = request.Bio,
             ProfilePhotoURL = profilePhotoUrl,
             LinkedInURL = request.LinkedInURL,
+            GoogleMeetLink = request.GoogleMeetLink,
+            MsTeamsLink = request.MsTeamsLink,
+            Website = request.Website,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
             ProfileStatus = ProfileStatus.Approved,
             IsVerified = false,
+            YearsOfExperience = request.YearsOfExperience,
+            HourlyRate = request.HourlyRate,
+            Expertise = request.Expertise,
+            DomainTags = request.DomainTags,
+            SuitableFor = request.SuitableFor,
+            SupportedDurations = request.SupportedDurations,
+            ExperiencesJson = request.ExperiencesJson,
+            Skills = request.Skills,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -87,8 +99,7 @@ public class AdvisorService : IAdvisorService
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
-                "Advisor profile not found. Please create your profile first.");
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(null, "Profile has not been created yet.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
             MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
@@ -108,9 +119,21 @@ public class AdvisorService : IAdvisorService
 
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
+        if (request.Company != null) advisor.Company = request.Company;
         if (request.Bio != null) advisor.Bio = request.Bio;
         if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
+        if (request.GoogleMeetLink != null) advisor.GoogleMeetLink = request.GoogleMeetLink;
+        if (request.MsTeamsLink != null) advisor.MsTeamsLink = request.MsTeamsLink;
+        if (request.Website != null) advisor.Website = request.Website;
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
+        if (request.YearsOfExperience.HasValue) advisor.YearsOfExperience = request.YearsOfExperience;
+        if (request.HourlyRate.HasValue) advisor.HourlyRate = request.HourlyRate;
+        if (request.Expertise != null) advisor.Expertise = request.Expertise;
+        if (request.DomainTags != null) advisor.DomainTags = request.DomainTags;
+        if (request.SuitableFor != null) advisor.SuitableFor = request.SuitableFor;
+        if (request.SupportedDurations != null) advisor.SupportedDurations = request.SupportedDurations;
+        if (request.ExperiencesJson != null) advisor.ExperiencesJson = request.ExperiencesJson;
+        if (request.Skills != null) advisor.Skills = request.Skills;
         advisor.UpdatedAt = DateTime.UtcNow;
 
         if (request.ProfilePhotoURL != null)
@@ -158,6 +181,10 @@ public class AdvisorService : IAdvisorService
         if (advisor == null)
             return ApiResponse<AvailabilityDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
+
+        if (request.IsAcceptingNewMentees == true && advisor.ProfileStatus != ProfileStatus.Approved)
+            return ApiResponse<AvailabilityDto>.ErrorResponse("VALIDATION_ERROR",
+                "Profile must be Approved before enabling accepting new mentees. Please complete KYC verification first.");
 
         if (advisor.Availability == null)
         {
@@ -296,6 +323,9 @@ public class AdvisorService : IAdvisorService
     }
     
     #region helper method
+    private static List<string> SplitCsv(string? csv)
+        => string.IsNullOrEmpty(csv) ? new() : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+
     private static AdvisorMeDto MapToMeDto(
         Advisor a,
         AdvisorAvailability? availability,
@@ -305,11 +335,23 @@ public class AdvisorService : IAdvisorService
         UserId = a.UserID,
         FullName = a.FullName,
         Title = a.Title,
+        Company = a.Company,
         Bio = a.Bio,
         ProfilePhotoURL = a.ProfilePhotoURL,
         MentorshipPhilosophy = a.MentorshipPhilosophy,
         LinkedInURL = a.LinkedInURL,
+        GoogleMeetLink = a.GoogleMeetLink,
+        MsTeamsLink = a.MsTeamsLink,
+        Website = a.Website,
         ProfileStatus = a.ProfileStatus.ToString(),
+        YearsOfExperience = a.YearsOfExperience,
+        HourlyRate = a.HourlyRate,
+        Expertise = SplitCsv(a.Expertise),
+        DomainTags = SplitCsv(a.DomainTags),
+        SuitableFor = SplitCsv(a.SuitableFor),
+        SupportedDurations = SplitCsv(a.SupportedDurations),
+        ExperiencesJson = a.ExperiencesJson,
+        Skills = SplitCsv(a.Skills),
         TotalMentees = a.TotalMentees,
         TotalSessionHours = a.TotalSessionHours,
         AverageRating = a.AverageRating,

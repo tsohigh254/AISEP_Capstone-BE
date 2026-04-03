@@ -10,6 +10,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -61,6 +62,7 @@ public class StartupService : IStartupService
             OneLiner = request.OneLiner,
             Description = request.Description,
             IndustryID = request.IndustryID,
+            SubIndustry = request.SubIndustry,
             Stage = request.Stage,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
@@ -73,8 +75,15 @@ public class StartupService : IStartupService
             FullNameOfApplicant = request.FullNameOfApplicant,
             RoleOfApplicant = request.RoleOfApplicant,            
             MarketScope = request.MarketScope,
+            ProductStatus = request.ProductStatus,
+            Location = request.Location,
+            Country = request.Country,
             ProblemStatement = request.ProblemStatement,
             SolutionSummary = request.SolutionSummary,
+            CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds),
+            MetricSummary = request.MetricSummary,
+            TeamSize = request.TeamSize,
+            PitchDeckUrl = request.PitchDeckUrl,
             LinkedInURL = request.LinkedInURL,
             ContactEmail = request.ContactEmail,
             ContactPhone = request.ContactPhone,
@@ -89,7 +98,7 @@ public class StartupService : IStartupService
 
         startup.LogoURL = logoUrl;
 
-        var fileUrl = request.LogoUrl != null
+        var fileUrl = request.FileCertificateBusiness != null
             ? await _cloudinaryService.UploadDocument(request.FileCertificateBusiness, CloudinaryFolderSaving.DocumentStorage)
             : null;
 
@@ -115,8 +124,7 @@ public class StartupService : IStartupService
 
         if (startup == null)
         {
-            return ApiResponse<StartupMeDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
-                "You haven't created a startup profile yet.");
+            return ApiResponse<StartupMeDto>.SuccessResponse(null, "Profile has not been created yet.");
         }
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));
@@ -152,6 +160,7 @@ public class StartupService : IStartupService
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
         if (request.Description != null) startup.Description = request.Description;
         if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
+        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
         if (request.Stage != null) startup.Stage = request.Stage;
         if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
@@ -160,8 +169,15 @@ public class StartupService : IStartupService
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;   
         if (request.MarketScope != null) startup.MarketScope = request.MarketScope;
+        if (request.ProductStatus != null) startup.ProductStatus = request.ProductStatus;
+        if (request.Location != null) startup.Location = request.Location;
+        if (request.Country != null) startup.Country = request.Country;
         if (request.ProblemStatement != null) startup.ProblemStatement = request.ProblemStatement;
         if (request.SolutionSummary != null) startup.SolutionSummary = request.SolutionSummary;
+        if (request.CurrentNeeds != null) startup.CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds);
+        if (request.MetricSummary != null) startup.MetricSummary = request.MetricSummary;
+        if (request.TeamSize != null) startup.TeamSize = request.TeamSize;
+        if (request.PitchDeckUrl != null) startup.PitchDeckUrl = request.PitchDeckUrl;
         if (request.LinkedInURL != null) startup.LinkedInURL = request.LinkedInURL;
         if (request.BusinessCode != null) startup.BusinessCode = request.BusinessCode;
         if (request.FullNameOfApplicant != null) startup.FullNameOfApplicant = request.FullNameOfApplicant;
@@ -594,9 +610,17 @@ public class StartupService : IStartupService
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
             
+            SubIndustry = s.SubIndustry,
             MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
             ProblemStatement = s.ProblemStatement,
             SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
+            MetricSummary = s.MetricSummary,
+            TeamSize = s.TeamSize,
+            PitchDeckUrl = s.PitchDeckUrl,
             IsVisible = s.IsVisible,
             LinkedInURL = s.LinkedInURL,
             FileCertificateBusiness = s.FileCertificateBusiness,
@@ -611,7 +635,6 @@ public class StartupService : IStartupService
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
-            TeamSize = s.TeamMembers.Where(m => m.Startup.StartupID == s.StartupID).Count(),
         };
     }
 
@@ -631,9 +654,17 @@ public class StartupService : IStartupService
             LogoURL = s.LogoURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
+            SubIndustry = s.SubIndustry,
             MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
             ProblemStatement = s.ProblemStatement,
             SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
+            MetricSummary = s.MetricSummary,
+            TeamSize = s.TeamSize,
+            PitchDeckUrl = s.PitchDeckUrl,
             LinkedInURL = s.LinkedInURL,
             ContactEmail = s.ContactEmail,
             ContactPhone = s.ContactPhone,
@@ -668,6 +699,43 @@ public class StartupService : IStartupService
             YearsOfExperience = tm.YearsOfExperience,
             CreatedAt = tm.CreatedAt
         };
+    }
+
+    private static string? SerializeCurrentNeeds(IEnumerable<string>? currentNeeds)
+    {
+        if (currentNeeds == null)
+        {
+            return null;
+        }
+
+        var items = currentNeeds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return JsonSerializer.Serialize(items);
+    }
+
+    private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
+    {
+        if (string.IsNullOrWhiteSpace(currentNeeds))
+        {
+            return new List<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(currentNeeds) ?? new List<string>();
+        }
+        catch (JsonException)
+        {
+            return currentNeeds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .ToList();
+        }
     }
 
     // ========== BROWSE INVESTORS (Startup role) ==========
