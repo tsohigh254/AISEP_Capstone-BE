@@ -14,6 +14,11 @@ public interface IStartupService
     Task<ApiResponse<StartupMeDto>> SubmitForApprovalAsync(int userId);
     Task<ApiResponse<string>> ToggleVisibilityAsync(int userId, bool isVisible);
 
+    // KYC
+    Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId);
+    Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request, string? certificateUrl);
+    Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request);
+
     // Public (investors/advisors)
     Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId);
     Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery);

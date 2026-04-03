@@ -94,12 +94,25 @@ public class AdvisorsController : ControllerBase
 
     [HttpPost("me/kyc/submit")]
     [Authorize(Policy = "AdvisorOnly")]
-    [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SubmitForApproval()
+    [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SubmitKYC([FromBody] SubmitAdvisorKYCRequest request)
     {
         var userId = GetCurrentUserId();
-        var result = await _advisorService.SubmitForApprovalAsync(userId);
+        var result = await _advisorService.SubmitKYCAsync(userId, request);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Save advisor KYC details as draft
+    /// </summary>
+    [HttpPatch("me/kyc/draft")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveAdvisorKYCDraftRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.SaveKYCDraftAsync(userId, request);
         return result.ToActionResult();
     }
 
