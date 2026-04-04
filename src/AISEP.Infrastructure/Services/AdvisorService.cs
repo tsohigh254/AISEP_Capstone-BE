@@ -46,11 +46,24 @@ public class AdvisorService : IAdvisorService
             UserID = userId,
             FullName = request.FullName,
             Title = request.Title,
+            Company = request.Company,
             Bio = request.Bio,
             ProfilePhotoURL = profilePhotoUrl,
             LinkedInURL = request.LinkedInURL,
+            GoogleMeetLink = request.GoogleMeetLink,
+            MsTeamsLink = request.MsTeamsLink,
+            Website = request.Website,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
-            ProfileStatus = ProfileStatus.Draft,
+            ProfileStatus = ProfileStatus.Approved,
+            IsVerified = false,
+            YearsOfExperience = request.YearsOfExperience,
+            HourlyRate = request.HourlyRate,
+            Expertise = request.Expertise,
+            DomainTags = request.DomainTags,
+            SuitableFor = request.SuitableFor,
+            SupportedDurations = request.SupportedDurations,
+            ExperiencesJson = request.ExperiencesJson,
+            Skills = request.Skills,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -86,8 +99,7 @@ public class AdvisorService : IAdvisorService
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
-                "Advisor profile not found. Please create your profile first.");
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(null, "Profile has not been created yet.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
             MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
@@ -107,9 +119,21 @@ public class AdvisorService : IAdvisorService
 
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
+        if (request.Company != null) advisor.Company = request.Company;
         if (request.Bio != null) advisor.Bio = request.Bio;
         if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
+        if (request.GoogleMeetLink != null) advisor.GoogleMeetLink = request.GoogleMeetLink;
+        if (request.MsTeamsLink != null) advisor.MsTeamsLink = request.MsTeamsLink;
+        if (request.Website != null) advisor.Website = request.Website;
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
+        if (request.YearsOfExperience.HasValue) advisor.YearsOfExperience = request.YearsOfExperience;
+        if (request.HourlyRate.HasValue) advisor.HourlyRate = request.HourlyRate;
+        if (request.Expertise != null) advisor.Expertise = request.Expertise;
+        if (request.DomainTags != null) advisor.DomainTags = request.DomainTags;
+        if (request.SuitableFor != null) advisor.SuitableFor = request.SuitableFor;
+        if (request.SupportedDurations != null) advisor.SupportedDurations = request.SupportedDurations;
+        if (request.ExperiencesJson != null) advisor.ExperiencesJson = request.ExperiencesJson;
+        if (request.Skills != null) advisor.Skills = request.Skills;
         advisor.UpdatedAt = DateTime.UtcNow;
 
         if (request.ProfilePhotoURL != null)
@@ -158,6 +182,10 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AvailabilityDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
 
+        if (request.IsAcceptingNewMentees == true && advisor.ProfileStatus != ProfileStatus.Approved)
+            return ApiResponse<AvailabilityDto>.ErrorResponse("VALIDATION_ERROR",
+                "Profile must be Approved before enabling accepting new mentees. Please complete KYC verification first.");
+
         if (advisor.Availability == null)
         {
             // Create new availability record
@@ -197,6 +225,7 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.IndustryFocus)
             .Include(a => a.Availability)
+            .Where(a => a.ProfileStatus == ProfileStatus.Approved || a.ProfileStatus == ProfileStatus.PendingKYC)
             .AsQueryable();
 
         // Keyword search on FullName
@@ -256,7 +285,7 @@ public class AdvisorService : IAdvisorService
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
 
-        if (advisor == null || advisor.ProfileStatus != AISEP.Domain.Enums.ProfileStatus.Approved)
+        if (advisor == null || (advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
         {
             return ApiResponse<AdvisorDetailDto>.ErrorResponse("NOT_FOUND", "Advisor not found or profile is not active.");
         }
@@ -294,6 +323,9 @@ public class AdvisorService : IAdvisorService
     }
     
     #region helper method
+    private static List<string> SplitCsv(string? csv)
+        => string.IsNullOrEmpty(csv) ? new() : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+
     private static AdvisorMeDto MapToMeDto(
         Advisor a,
         AdvisorAvailability? availability,
@@ -303,11 +335,23 @@ public class AdvisorService : IAdvisorService
         UserId = a.UserID,
         FullName = a.FullName,
         Title = a.Title,
+        Company = a.Company,
         Bio = a.Bio,
         ProfilePhotoURL = a.ProfilePhotoURL,
         MentorshipPhilosophy = a.MentorshipPhilosophy,
         LinkedInURL = a.LinkedInURL,
+        GoogleMeetLink = a.GoogleMeetLink,
+        MsTeamsLink = a.MsTeamsLink,
+        Website = a.Website,
         ProfileStatus = a.ProfileStatus.ToString(),
+        YearsOfExperience = a.YearsOfExperience,
+        HourlyRate = a.HourlyRate,
+        Expertise = SplitCsv(a.Expertise),
+        DomainTags = SplitCsv(a.DomainTags),
+        SuitableFor = SplitCsv(a.SuitableFor),
+        SupportedDurations = SplitCsv(a.SupportedDurations),
+        ExperiencesJson = a.ExperiencesJson,
+        Skills = SplitCsv(a.Skills),
         TotalMentees = a.TotalMentees,
         TotalSessionHours = a.TotalSessionHours,
         AverageRating = a.AverageRating,
@@ -353,18 +397,118 @@ public class AdvisorService : IAdvisorService
         if (advisor.ProfileStatus == ProfileStatus.Pending)
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
 
-        if (advisor.ProfileStatus == ProfileStatus.Approved)
-            return ApiResponse<AdvisorMeDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
+        // Removed the check that blocked Approved profiles from submitting for KYC.
+        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
 
         // Optionally add validation checks here to ensure profile is complete enough to submit
         
-        advisor.ProfileStatus = ProfileStatus.Pending;
+        advisor.ProfileStatus = ProfileStatus.PendingKYC;
         advisor.UpdatedAt = DateTime.UtcNow;
 
         _db.Advisors.Update(advisor);
         await _db.SaveChangesAsync();
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> GetKYCStatusAsync(int userId)
+    {
+        var advisor = await _db.Advisors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        var dto = new AdvisorKYCStatusDto
+        {
+            LastUpdated = advisor.UpdatedAt ?? advisor.CreatedAt
+        };
+
+        if (advisor.AdvisorTag != AdvisorTag.None)
+        {
+            dto.WorkflowStatus = "VERIFIED";
+            dto.VerificationLabel = advisor.AdvisorTag.ToString();
+            dto.Explanation = "Chúc mừng! Hồ sơ của bạn đã được xác thực đầy đủ. Huy hiệu VERIFIED ADVISOR đã được kích hoạt trên profile.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.WorkflowStatus = "PENDING_REVIEW";
+            dto.Explanation = "Hồ sơ của bạn đang được đội ngũ AISEP xem xét. Thường mất 1–3 ngày làm việc.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.Rejected)
+        {
+            dto.WorkflowStatus = "VERIFICATION_FAILED";
+            dto.Explanation = "Hồ sơ không đáp ứng tiêu chuẩn xác thực. Vui lòng xem lại ghi chú và gửi lại.";
+        }
+        else
+        {
+            dto.WorkflowStatus = "NOT_STARTED";
+            dto.Explanation = "Chào mừng! Hãy xác thực tài khoản để tăng uy tín của bạn trong hệ sinh thái AISEP.";
+        }
+
+        dto.SubmissionSummary = new AdvisorKYCSubmissionSummaryDto
+        {
+            FullName = advisor.FullName,
+            SubmittedAt = advisor.UpdatedAt ?? advisor.CreatedAt,
+            Version = 1
+        };
+
+        dto.History = new List<AdvisorKYCHistoryDto>();
+        if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.History.Add(new AdvisorKYCHistoryDto 
+            { 
+                Action = "Gửi hồ sơ xác thực", 
+                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"), 
+                Status = "PENDING_REVIEW" 
+            });
+        }
+
+        return ApiResponse<AdvisorKYCStatusDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> SubmitKYCAsync(int userId, SubmitAdvisorKYCRequest request)
+    {
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        advisor.FullName = request.FullName;
+        advisor.Title = request.Title ?? advisor.Title;
+        advisor.Bio = request.Bio ?? advisor.Bio;
+        advisor.LinkedInURL = request.LinkedInURL ?? advisor.LinkedInURL;
+        advisor.MentorshipPhilosophy = request.MentorshipPhilosophy ?? advisor.MentorshipPhilosophy;
+
+        advisor.ProfileStatus = ProfileStatus.PendingKYC;
+        advisor.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("SUBMIT_ADVISOR_KYC", "Advisor", advisor.AdvisorID, "Advisor submitted KYC details");
+
+        return await GetKYCStatusAsync(userId);
+    }
+
+    public async Task<ApiResponse<AdvisorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveAdvisorKYCDraftRequest request)
+    {
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        if (!string.IsNullOrEmpty(request.FullName)) advisor.FullName = request.FullName;
+        if (!string.IsNullOrEmpty(request.Title)) advisor.Title = request.Title;
+        if (!string.IsNullOrEmpty(request.Bio)) advisor.Bio = request.Bio;
+        if (!string.IsNullOrEmpty(request.LinkedInURL)) advisor.LinkedInURL = request.LinkedInURL;
+        if (!string.IsNullOrEmpty(request.MentorshipPhilosophy)) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
+
+        // DO NOT demote Approved -> Draft
+        if (advisor.ProfileStatus == ProfileStatus.Draft)
+        {
+            advisor.ProfileStatus = ProfileStatus.Draft;
+        }
+
+        advisor.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return await GetKYCStatusAsync(userId);
     }
 
     #endregion

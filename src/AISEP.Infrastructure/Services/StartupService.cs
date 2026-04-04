@@ -10,6 +10,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -61,6 +62,7 @@ public class StartupService : IStartupService
             OneLiner = request.OneLiner,
             Description = request.Description,
             IndustryID = request.IndustryID,
+            SubIndustry = request.SubIndustry,
             Stage = request.Stage,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
@@ -73,13 +75,20 @@ public class StartupService : IStartupService
             FullNameOfApplicant = request.FullNameOfApplicant,
             RoleOfApplicant = request.RoleOfApplicant,            
             MarketScope = request.MarketScope,
+            ProductStatus = request.ProductStatus,
+            Location = request.Location,
+            Country = request.Country,
             ProblemStatement = request.ProblemStatement,
             SolutionSummary = request.SolutionSummary,
+            CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds),
+            MetricSummary = request.MetricSummary,
+            TeamSize = request.TeamSize,
+            PitchDeckUrl = request.PitchDeckUrl,
             LinkedInURL = request.LinkedInURL,
             ContactEmail = request.ContactEmail,
             ContactPhone = request.ContactPhone,
 
-            ProfileStatus = ProfileStatus.Draft,
+            ProfileStatus = ProfileStatus.Approved,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -89,7 +98,7 @@ public class StartupService : IStartupService
 
         startup.LogoURL = logoUrl;
 
-        var fileUrl = request.LogoUrl != null
+        var fileUrl = request.FileCertificateBusiness != null
             ? await _cloudinaryService.UploadDocument(request.FileCertificateBusiness, CloudinaryFolderSaving.DocumentStorage)
             : null;
 
@@ -115,8 +124,7 @@ public class StartupService : IStartupService
 
         if (startup == null)
         {
-            return ApiResponse<StartupMeDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
-                "You haven't created a startup profile yet.");
+            return ApiResponse<StartupMeDto>.SuccessResponse(null, "Profile has not been created yet.");
         }
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));
@@ -152,6 +160,7 @@ public class StartupService : IStartupService
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
         if (request.Description != null) startup.Description = request.Description;
         if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
+        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
         if (request.Stage != null) startup.Stage = request.Stage;
         if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
@@ -160,8 +169,15 @@ public class StartupService : IStartupService
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
         if (request.Valuation.HasValue) startup.Valuation = request.Valuation;   
         if (request.MarketScope != null) startup.MarketScope = request.MarketScope;
+        if (request.ProductStatus != null) startup.ProductStatus = request.ProductStatus;
+        if (request.Location != null) startup.Location = request.Location;
+        if (request.Country != null) startup.Country = request.Country;
         if (request.ProblemStatement != null) startup.ProblemStatement = request.ProblemStatement;
         if (request.SolutionSummary != null) startup.SolutionSummary = request.SolutionSummary;
+        if (request.CurrentNeeds != null) startup.CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds);
+        if (request.MetricSummary != null) startup.MetricSummary = request.MetricSummary;
+        if (request.TeamSize != null) startup.TeamSize = request.TeamSize;
+        if (request.PitchDeckUrl != null) startup.PitchDeckUrl = request.PitchDeckUrl;
         if (request.LinkedInURL != null) startup.LinkedInURL = request.LinkedInURL;
         if (request.BusinessCode != null) startup.BusinessCode = request.BusinessCode;
         if (request.FullNameOfApplicant != null) startup.FullNameOfApplicant = request.FullNameOfApplicant;
@@ -211,13 +227,10 @@ public class StartupService : IStartupService
                 "Your startup profile is already pending approval.");
         }
 
-        if (startup.ProfileStatus == ProfileStatus.Approved)
-        {
-            return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_APPROVED",
-                "Your startup profile is already approved.");
-        }
+        // Removed the check that blocked Approved profiles from submitting for KYC.
+        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
 
-        startup.ProfileStatus = ProfileStatus.Pending;
+        startup.ProfileStatus = ProfileStatus.PendingKYC;
         startup.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -249,6 +262,133 @@ public class StartupService : IStartupService
         return ApiResponse<string>.SuccessResponse($"Visibility {action}", $"Your profile is now {(isVisible ? "visible" : "hidden")} to investors.");
     }
 
+    public async Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId)
+    {
+        var startup = await _context.Startups
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+        {
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+        }
+
+        var dto = new StartupKYCStatusDto
+        {
+            LastUpdated = startup.UpdatedAt ?? startup.CreatedAt
+        };
+
+        // Workflow Status Mapping (Simplified)
+        if (startup.StartupTag != StartupTag.None)
+        {
+            dto.WorkflowStatus = "VERIFIED";
+            dto.VerificationLabel = startup.StartupTag.ToString();
+            dto.Explanation = "Chúc mừng! Startup của bạn đã được xác minh chính thức trên hệ thống AISEP.";
+        }
+        else if (startup.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.WorkflowStatus = "PENDING_REVIEW";
+            dto.Explanation = "Hồ sơ xác thực của bạn đang được đội ngũ Staff xem xét. Quá trình này thường mất 1-3 ngày làm việc.";
+        }
+        else if (startup.ProfileStatus == ProfileStatus.Rejected)
+        {
+            dto.WorkflowStatus = "VERIFICATION_FAILED";
+            dto.Explanation = "Hồ sơ xác thực bị từ chối hoặc cần bổ sung thông tin. Vui lòng kiểm tra lại.";
+        }
+        else
+        {
+            dto.WorkflowStatus = "NOT_STARTED";
+            dto.Explanation = "Hãy hoàn tất các thông tin định danh chuyên sâu để được xác minh trên nền tảng.";
+        }
+
+        dto.SubmissionSummary = new StartupKYCSubmissionSummaryDto
+        {
+            CompanyName = startup.CompanyName,
+            SubmittedAt = startup.UpdatedAt ?? startup.CreatedAt,
+            Version = 1
+        };
+
+        dto.History = new List<StartupKYCHistoryDto>();
+        if (startup.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            dto.History.Add(new StartupKYCHistoryDto
+            {
+                Action = "Gửi hồ sơ xác thực",
+                Date = (startup.UpdatedAt ?? startup.CreatedAt).ToString("dd/MM/yyyy HH:mm"),
+                Status = "PENDING_REVIEW"
+            });
+        }
+
+        return ApiResponse<StartupKYCStatusDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request, string? certificateUrl)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        // Update fields
+        startup.CompanyName = request.CompanyName;
+        startup.FullNameOfApplicant = request.FullNameOfApplicant;
+        startup.RoleOfApplicant = request.RoleOfApplicant;
+        startup.ContactEmail = request.ContactEmail;
+        startup.ContactPhone = request.ContactPhone;
+        startup.BusinessCode = request.BusinessCode ?? startup.BusinessCode;
+        startup.Website = request.Website ?? startup.Website;
+        startup.LinkedInURL = request.LinkedInURL ?? startup.LinkedInURL;
+        startup.ProblemStatement = request.ProblemStatement ?? startup.ProblemStatement;
+        startup.SolutionSummary = request.SolutionSummary ?? startup.SolutionSummary;
+
+        if (!string.IsNullOrEmpty(certificateUrl))
+        {
+            startup.FileCertificateBusiness = certificateUrl;
+        }
+
+        // Set status to PendingKYC
+        startup.ProfileStatus = ProfileStatus.PendingKYC;
+        startup.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        await _auditService.LogAsync("SUBMIT_STARTUP_KYC", "Startup", startup.StartupID, "Startup submitted KYC details");
+
+        return await GetKYCStatusAsync(userId);
+    }
+
+    public async Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
+
+        // Partial update for draft
+        if (!string.IsNullOrEmpty(request.CompanyName)) startup.CompanyName = request.CompanyName;
+        if (!string.IsNullOrEmpty(request.FullNameOfApplicant)) startup.FullNameOfApplicant = request.FullNameOfApplicant;
+        if (!string.IsNullOrEmpty(request.RoleOfApplicant)) startup.RoleOfApplicant = request.RoleOfApplicant;
+        if (!string.IsNullOrEmpty(request.ContactEmail)) startup.ContactEmail = request.ContactEmail;
+        if (!string.IsNullOrEmpty(request.ContactPhone)) startup.ContactPhone = request.ContactPhone;
+        if (!string.IsNullOrEmpty(request.BusinessCode)) startup.BusinessCode = request.BusinessCode;
+        if (!string.IsNullOrEmpty(request.Website)) startup.Website = request.Website;
+        if (!string.IsNullOrEmpty(request.LinkedInURL)) startup.LinkedInURL = request.LinkedInURL;
+        if (!string.IsNullOrEmpty(request.ProblemStatement)) startup.ProblemStatement = request.ProblemStatement;
+        if (!string.IsNullOrEmpty(request.SolutionSummary)) startup.SolutionSummary = request.SolutionSummary;
+
+        // DO NOT demote Approved -> Draft
+        if (startup.ProfileStatus == ProfileStatus.Draft)
+        {
+            startup.ProfileStatus = ProfileStatus.Draft;
+        }
+
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return await GetKYCStatusAsync(userId);
+    }
+
     // ========== PUBLIC ENDPOINTS ==========
 
     public async Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId)
@@ -257,7 +397,7 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
-            .FirstOrDefaultAsync(s => s.StartupID == startupId);
+            .FirstOrDefaultAsync(s => s.StartupID == startupId && (s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC));
 
         if (startup == null)
         {
@@ -271,7 +411,7 @@ public class StartupService : IStartupService
     public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery)
     {
 
-        var query = _context.Startups.AsNoTracking().AsQueryable();
+        var query = _context.Startups.AsNoTracking().Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC).AsQueryable();
 
         // Keyword search on CompanyName
         if (!string.IsNullOrWhiteSpace(startupQuery.Key))
@@ -470,9 +610,17 @@ public class StartupService : IStartupService
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
             
+            SubIndustry = s.SubIndustry,
             MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
             ProblemStatement = s.ProblemStatement,
             SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
+            MetricSummary = s.MetricSummary,
+            TeamSize = s.TeamSize,
+            PitchDeckUrl = s.PitchDeckUrl,
             IsVisible = s.IsVisible,
             LinkedInURL = s.LinkedInURL,
             FileCertificateBusiness = s.FileCertificateBusiness,
@@ -487,7 +635,6 @@ public class StartupService : IStartupService
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
-            TeamSize = s.TeamMembers.Where(m => m.Startup.StartupID == s.StartupID).Count(),
         };
     }
 
@@ -507,9 +654,17 @@ public class StartupService : IStartupService
             LogoURL = s.LogoURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
+            SubIndustry = s.SubIndustry,
             MarketScope = s.MarketScope,
+            ProductStatus = s.ProductStatus,
+            Location = s.Location,
+            Country = s.Country,
             ProblemStatement = s.ProblemStatement,
             SolutionSummary = s.SolutionSummary,
+            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
+            MetricSummary = s.MetricSummary,
+            TeamSize = s.TeamSize,
+            PitchDeckUrl = s.PitchDeckUrl,
             LinkedInURL = s.LinkedInURL,
             ContactEmail = s.ContactEmail,
             ContactPhone = s.ContactPhone,
@@ -546,12 +701,50 @@ public class StartupService : IStartupService
         };
     }
 
+    private static string? SerializeCurrentNeeds(IEnumerable<string>? currentNeeds)
+    {
+        if (currentNeeds == null)
+        {
+            return null;
+        }
+
+        var items = currentNeeds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return JsonSerializer.Serialize(items);
+    }
+
+    private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
+    {
+        if (string.IsNullOrWhiteSpace(currentNeeds))
+        {
+            return new List<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(currentNeeds) ?? new List<string>();
+        }
+        catch (JsonException)
+        {
+            return currentNeeds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .ToList();
+        }
+    }
+
     // ========== BROWSE INVESTORS (Startup role) ==========
 
     public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery)
     {
         var query = _context.Investors
             .AsNoTracking()
+            .Where(i => i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
             .Include(i => i.Preferences)
             .Include(i => i.StageFocus)
             .Include(i => i.IndustryFocus)

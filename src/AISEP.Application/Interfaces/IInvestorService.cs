@@ -11,6 +11,11 @@ public interface IInvestorService
     Task<ApiResponse<InvestorDto>> UpdateProfileAsync(int userId, UpdateInvestorRequest request);
     Task<ApiResponse<InvestorDto>> SubmitForApprovalAsync(int userId);
 
+    // KYC
+    Task<ApiResponse<InvestorKYCStatusDto>> GetKYCStatusAsync(int userId);
+    Task<ApiResponse<InvestorKYCStatusDto>> SubmitKYCAsync(int userId, SubmitInvestorKYCRequest request, string? idProofUrl, string? investmentProofUrl);
+    Task<ApiResponse<InvestorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveInvestorKYCDraftRequest request);
+
     // Preferences
     Task<ApiResponse<PreferencesDto>> GetPreferencesAsync(int userId);
     Task<ApiResponse<PreferencesDto>> UpdatePreferencesAsync(int userId, UpdatePreferencesRequest request);

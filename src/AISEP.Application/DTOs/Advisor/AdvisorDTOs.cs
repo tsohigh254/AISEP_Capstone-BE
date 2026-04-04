@@ -15,10 +15,22 @@ public class CreateAdvisorRequest
 {
     public string FullName { get; set; } = null!;
     public string? Title { get; set; }
+    public string? Company { get; set; }
     public string? Bio { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
     public string? LinkedInURL { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Website { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public int? YearsOfExperience { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Expertise { get; set; }
+    public string? DomainTags { get; set; }
+    public string? SuitableFor { get; set; }
+    public string? SupportedDurations { get; set; }
+    public string? ExperiencesJson { get; set; }
+    public string? Skills { get; set; }
     public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
 }
 
@@ -29,10 +41,46 @@ public class UpdateAdvisorRequest
 {
     public string? FullName { get; set; }
     public string? Title { get; set; }
+    public string? Company { get; set; }
     public string? Bio { get; set; }
     public IFormFile? ProfilePhotoURL { get; set; }
     public string? LinkedInURL { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Website { get; set; }
     public string? MentorshipPhilosophy { get; set; }
+    public int? YearsOfExperience { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Expertise { get; set; }
+    public string? DomainTags { get; set; }
+    public string? SuitableFor { get; set; }
+    public string? SupportedDurations { get; set; }
+    public string? ExperiencesJson { get; set; }
+    public string? Skills { get; set; }
+    public List<AdvisorIndustryFocusRequest>? AdvisorIndustryFocus { get; set; }
+}
+
+public class SubmitAdvisorKYCRequest
+{
+    public string FullName { get; set; } = null!;
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? MentorshipPhilosophy { get; set; }
+    public string? ContactEmail { get; set; }
+}
+
+public class SaveAdvisorKYCDraftRequest : SubmitAdvisorKYCRequest
+{
+    // All fields are optional on the frontend for drafts
+    public int? YearsOfExperience { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public string? Expertise { get; set; }
+    public string? DomainTags { get; set; }
+    public string? SuitableFor { get; set; }
+    public string? SupportedDurations { get; set; }
+    public string? ExperiencesJson { get; set; }
+    public string? Skills { get; set; }
     public List<AdvisorIndustryFocusRequest> AdvisorIndustryFocus { get; set; } = new List<AdvisorIndustryFocusRequest>();
 }
 
@@ -63,11 +111,23 @@ public class AdvisorMeDto
     public int UserId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
+    public string? Company { get; set; }
     public string? Bio { get; set; }
     public string? ProfilePhotoURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Website { get; set; }
     public string? ProfileStatus { get; set; }
+    public int? YearsOfExperience { get; set; }
+    public decimal? HourlyRate { get; set; }
+    public List<string> Expertise { get; set; } = new();
+    public List<string> DomainTags { get; set; } = new();
+    public List<string> SuitableFor { get; set; } = new();
+    public List<string> SupportedDurations { get; set; } = new();
+    public string? ExperiencesJson { get; set; }
+    public List<string> Skills { get; set; } = new();
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
     public float? AverageRating { get; set; }
@@ -143,6 +203,7 @@ public class AdvisorDto
 {
     public int AdvisorID { get; set; }
     public int UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Title { get; set; }
     public string? Bio { get; set; }
@@ -153,6 +214,8 @@ public class AdvisorDto
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
     public float? AverageRating { get; set; }
+    public string? Expertise { get; set; }
+    public int? YearsOfExperience { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<AdvisorIndustryFocusDto> IndustryFocus { get; set; } = new();

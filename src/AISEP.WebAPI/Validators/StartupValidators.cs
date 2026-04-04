@@ -23,9 +23,31 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
         RuleFor(x => x.Description)
             .MaximumLength(5000).WithMessage("Description must not exceed 5000 characters");
 
+        RuleFor(x => x.SubIndustry)
+            .MaximumLength(200).WithMessage("SubIndustry must not exceed 200 characters");
+
+        RuleFor(x => x.ProductStatus)
+            .MaximumLength(100).WithMessage("ProductStatus must not exceed 100 characters");
+
+        RuleFor(x => x.Location)
+            .MaximumLength(200).WithMessage("Location must not exceed 200 characters");
+
+        RuleFor(x => x.Country)
+            .MaximumLength(100).WithMessage("Country must not exceed 100 characters");
+
         RuleFor(x => x.Website)
             .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL")
             .MaximumLength(500).WithMessage("Website must not exceed 500 characters");
+
+        RuleFor(x => x.PitchDeckUrl)
+            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl must be a valid URL")
+            .MaximumLength(500).WithMessage("PitchDeckUrl must not exceed 500 characters");
+
+        RuleFor(x => x.MetricSummary)
+            .MaximumLength(1000).WithMessage("MetricSummary must not exceed 1000 characters");
+
+        RuleFor(x => x.TeamSize)
+            .MaximumLength(50).WithMessage("TeamSize must not exceed 50 characters");
 
         RuleFor(x => x.FundingAmountSought)
             .GreaterThanOrEqualTo(0).When(x => x.FundingAmountSought.HasValue)
@@ -68,9 +90,31 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
         RuleFor(x => x.Description)
             .MaximumLength(5000).WithMessage("Description must not exceed 5000 characters");
 
+        RuleFor(x => x.SubIndustry)
+            .MaximumLength(200).WithMessage("SubIndustry must not exceed 200 characters");
+
+        RuleFor(x => x.ProductStatus)
+            .MaximumLength(100).WithMessage("ProductStatus must not exceed 100 characters");
+
+        RuleFor(x => x.Location)
+            .MaximumLength(200).WithMessage("Location must not exceed 200 characters");
+
+        RuleFor(x => x.Country)
+            .MaximumLength(100).WithMessage("Country must not exceed 100 characters");
+
         RuleFor(x => x.Website)
             .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL")
             .MaximumLength(500).WithMessage("Website must not exceed 500 characters");
+
+        RuleFor(x => x.PitchDeckUrl)
+            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl must be a valid URL")
+            .MaximumLength(500).WithMessage("PitchDeckUrl must not exceed 500 characters");
+
+        RuleFor(x => x.MetricSummary)
+            .MaximumLength(1000).WithMessage("MetricSummary must not exceed 1000 characters");
+
+        RuleFor(x => x.TeamSize)
+            .MaximumLength(50).WithMessage("TeamSize must not exceed 50 characters");
 
 
         RuleFor(x => x.FundingAmountSought)

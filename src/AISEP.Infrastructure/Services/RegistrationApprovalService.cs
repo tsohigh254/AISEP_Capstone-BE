@@ -11,11 +11,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services
 {
@@ -74,11 +70,32 @@ namespace AISEP.Infrastructure.Services
 
             advisor.ProfileStatus = ProfileStatus.Approved;
             advisor.IsVerified = true;
+            advisor.ApprovedAt = DateTime.UtcNow;
+            advisor.ApprovedBy = staffId;
+
+            if (request.Score >= 11)
+            {
+                advisor.AdvisorTag = AdvisorTag.VerifiedAdvisor;
+            }
+            else if (request.Score >= 7)
+            {
+                advisor.AdvisorTag = AdvisorTag.BasicVerified;
+            }
+            else if (request.Score >= 3)
+            {
+                advisor.AdvisorTag = AdvisorTag.PendingMoreInfo;
+                advisor.ProfileStatus = ProfileStatus.Pending; // Stay pending for more info
+            }
+            else
+            {
+                advisor.AdvisorTag = AdvisorTag.VerificationFailed;
+                advisor.ProfileStatus = ProfileStatus.Rejected;
+            }
 
             _context.Advisors.Update(advisor);
             await _context.SaveChangesAsync();
 
-            return ApiResponse<Advisor>.SuccessResponse(advisor, "Advisor approved successfully");
+            return ApiResponse<Advisor>.SuccessResponse(advisor, "Advisor reviewed successfully");
         }
 
         public async Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveInvestorRegistrationRequest request)
@@ -90,11 +107,44 @@ namespace AISEP.Infrastructure.Services
             }
 
             investor.ProfileStatus = ProfileStatus.Approved;
+            investor.ApprovedAt = DateTime.UtcNow;
+            investor.ApprovedBy = staffId;
+
+            if (request.IsInstitutional)
+            {
+                if (request.Score >= 10) investor.InvestorTag = InvestorTag.VerifiedInvestorEntity;
+                else if (request.Score >= 6) investor.InvestorTag = InvestorTag.BasicVerified;
+                else if (request.Score >= 2) 
+                {
+                    investor.InvestorTag = InvestorTag.PendingMoreInfo;
+                    investor.ProfileStatus = ProfileStatus.Pending;
+                }
+                else
+                {
+                    investor.InvestorTag = InvestorTag.VerificationFailed;
+                    investor.ProfileStatus = ProfileStatus.Rejected;
+                }
+            }
+            else
+            {
+                if (request.Score >= 8) investor.InvestorTag = InvestorTag.VerifiedAngelInvestor;
+                else if (request.Score >= 5) investor.InvestorTag = InvestorTag.BasicVerified;
+                else if (request.Score >= 2)
+                {
+                    investor.InvestorTag = InvestorTag.PendingMoreInfo;
+                    investor.ProfileStatus = ProfileStatus.Pending;
+                }
+                else
+                {
+                    investor.InvestorTag = InvestorTag.VerificationFailed;
+                    investor.ProfileStatus = ProfileStatus.Rejected;
+                }
+            }
 
             _context.Investors.Update(investor);
             await _context.SaveChangesAsync();
 
-            return ApiResponse<Investor>.SuccessResponse(investor, "Investor approved successfully");
+            return ApiResponse<Investor>.SuccessResponse(investor, "Investor reviewed successfully");
         }
 
         public async Task<ApiResponse<Startup>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request)
@@ -137,7 +187,7 @@ namespace AISEP.Infrastructure.Services
         public async Task<ApiResponse<PagedResponse<AdvisorDto>>> GetPendingRegistrationsAdvisorAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Advisors
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending)
+                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -145,6 +195,7 @@ namespace AISEP.Infrastructure.Services
             {
                 AdvisorID = r.AdvisorID,
                 UserId = r.UserID,
+                Email = r.User.Email,
                 FullName = r.FullName,
                 Title = r.Title,
                 Bio = r.Bio,
@@ -155,6 +206,8 @@ namespace AISEP.Infrastructure.Services
                 TotalMentees = r.TotalMentees,
                 TotalSessionHours = r.TotalSessionHours,
                 AverageRating = r.AverageRating,
+                Expertise = r.Expertise,
+                YearsOfExperience = r.YearsOfExperience,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
                 IndustryFocus = r.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
@@ -182,13 +235,15 @@ namespace AISEP.Infrastructure.Services
         public async Task<ApiResponse<PagedResponse<InvestorDto>>> GetPendingRegistrationsInvestorAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Investors
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending)
+                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
                 .AsNoTracking()
                 .AsQueryable();
 
             var registrationsToDto = registrations.Select(r => new InvestorDto
             {
                 InvestorID = r.InvestorID,
+                UserID = r.UserID,
+                Email = r.User.Email,
                 FullName = r.FullName,
                 FirmName = r.FirmName,
                 Title = r.Title,
@@ -222,7 +277,7 @@ namespace AISEP.Infrastructure.Services
         public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> GetPendingRegistrationsStartupAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Startups
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending)
+                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -259,11 +314,15 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId)
         {
-            var investor = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == investorId);
+            var investor = await _context.Investors
+                .Include(i => i.User)
+                .FirstOrDefaultAsync(i => i.InvestorID == investorId);
 
             var investorToDto = new InvestorDto
             {
                 InvestorID = investor.InvestorID,
+                UserID = investor.UserID,
+                Email = investor.User.Email,
                 FullName = investor.FullName,
                 FirmName = investor.FirmName,
                 Title = investor.Title,
@@ -277,6 +336,17 @@ namespace AISEP.Infrastructure.Services
                 ProfileStatus = investor.ProfileStatus.ToString(),
                 CreatedAt = investor.CreatedAt,
                 UpdatedAt = investor.UpdatedAt,
+
+                // KYC Information
+                InvestorType = investor.InvestorType?.ToString(),
+                ContactEmail = investor.ContactEmail,
+                CurrentOrganization = investor.CurrentOrganization,
+                CurrentRoleTitle = investor.CurrentRoleTitle,
+                BusinessCode = investor.BusinessCode,
+                SubmitterRole = investor.SubmitterRole,
+                IDProofFileURL = investor.IDProofFileURL,
+                InvestmentProofFileURL = investor.InvestmentProofFileURL,
+                Remarks = investor.Remarks
             };
 
             return ApiResponse<InvestorDto>.SuccessResponse(investorToDto);
@@ -286,12 +356,14 @@ namespace AISEP.Infrastructure.Services
         {
             var advisor = await _context.Advisors
                 .Include(a => a.IndustryFocus)
+                .Include(a => a.User)
                 .FirstOrDefaultAsync(i => i.AdvisorID == advisorId);
 
             var advisorToDto = new AdvisorDto
             {
                 AdvisorID = advisorId,
                 UserId = advisor.UserID,
+                Email = advisor.User.Email,
                 FullName = advisor.FullName,
                 Title = advisor.Title,
                 Bio = advisor.Bio,
@@ -302,6 +374,8 @@ namespace AISEP.Infrastructure.Services
                 TotalMentees = advisor.TotalMentees,
                 TotalSessionHours = advisor.TotalSessionHours,
                 AverageRating = advisor.AverageRating,
+                Expertise = advisor.Expertise,
+                YearsOfExperience = advisor.YearsOfExperience,
                 CreatedAt = advisor.CreatedAt,
                 UpdatedAt = advisor.UpdatedAt,
                 IndustryFocus = advisor.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
@@ -342,11 +416,18 @@ namespace AISEP.Infrastructure.Services
                 ContactEmail = startup.ContactEmail,
                 ContactPhone = startup.ContactPhone,
                 BusinessCode = startup.BusinessCode,
+                SubIndustry = startup.SubIndustry,
                 MarketScope = startup.MarketScope,
+                ProductStatus = startup.ProductStatus,
+                Location = startup.Location,
+                Country = startup.Country,
                 ProblemStatement = startup.ProblemStatement,
                 SolutionSummary = startup.SolutionSummary,
+                CurrentNeeds = DeserializeCurrentNeeds(startup.CurrentNeeds),
+                MetricSummary = startup.MetricSummary,
+                PitchDeckUrl = startup.PitchDeckUrl,
                 LinkedInURL = startup.LinkedInURL,
-                TeamSize = startup.TeamMembers.Count(),
+                TeamSize = startup.TeamSize,
                 ProfileStatus = startup.ProfileStatus.ToString(),
                 CreatedAt = startup.CreatedAt,
                 UpdatedAt = startup.UpdatedAt,
@@ -363,6 +444,27 @@ namespace AISEP.Infrastructure.Services
             };
 
             return ApiResponse<StartupDto>.SuccessResponse(startupToDto);
+        }
+
+        private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
+        {
+            if (string.IsNullOrWhiteSpace(currentNeeds))
+            {
+                return new List<string>();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(currentNeeds) ?? new List<string>();
+            }
+            catch (JsonException)
+            {
+                return currentNeeds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => x.Trim())
+                    .Where(x => x.Length > 0)
+                    .ToList();
+            }
         }
     }
 }

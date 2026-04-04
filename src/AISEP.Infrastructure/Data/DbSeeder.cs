@@ -189,9 +189,15 @@ public static class DbSeeder
         var passwordHash = BCrypt.Net.BCrypt.HashPassword("12345.nN");
 
         await SeedSingleUserAsync(context, "staff@aisep.local", passwordHash, "Staff");
+        await SeedSingleUserAsync(context, "admin@aisep.local", passwordHash, "Admin");
         // await SeedSingleUserAsync(context, "startup@aisep.local", passwordHash, "Startup"); // Đã đóng theo yêu cầu để tự test tạo mới
         await SeedSingleUserAsync(context, "advisor@aisep.local", passwordHash, "Advisor");
         await SeedSingleUserAsync(context, "investor@aisep.local", passwordHash, "Investor");
+
+        // Additional fresh accounts for testing Onboarding/KYC
+        await SeedSingleUserAsync(context, "investor2@aisep.local", passwordHash, "Investor");
+        await SeedSingleUserAsync(context, "startup2@aisep.local", passwordHash, "Startup");
+        await SeedSingleUserAsync(context, "advisor2@aisep.local", passwordHash, "Advisor");
     }
 
     private static async Task SeedSingleUserAsync(ApplicationDbContext context, string email, string passHash, string roleName)

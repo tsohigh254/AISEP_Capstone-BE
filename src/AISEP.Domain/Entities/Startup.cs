@@ -13,6 +13,7 @@ public class Startup
     public string OneLiner { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
+    public string? SubIndustry { get; set; }
     public StartupStage? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
@@ -36,8 +37,15 @@ public class Startup
 
     // Business Details
     public string? MarketScope { get; set; }
+    public string? ProductStatus { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
+    public string? CurrentNeeds { get; set; }
+    public string? MetricSummary { get; set; }
+    public string? TeamSize { get; set; }
+    public string? PitchDeckUrl { get; set; }
 
     public bool IsVisible { get; set; }              
 

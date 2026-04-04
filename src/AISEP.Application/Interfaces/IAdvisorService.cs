@@ -11,6 +11,9 @@ public interface IAdvisorService
     Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId);
     Task<ApiResponse<AdvisorMeDto>> UpdateProfileAsync(int userId, UpdateAdvisorRequest request);
     Task<ApiResponse<AdvisorMeDto>> SubmitForApprovalAsync(int userId);
+    Task<ApiResponse<AdvisorKYCStatusDto>> GetKYCStatusAsync(int userId);
+    Task<ApiResponse<AdvisorKYCStatusDto>> SubmitKYCAsync(int userId, SubmitAdvisorKYCRequest request);
+    Task<ApiResponse<AdvisorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveAdvisorKYCDraftRequest request);
 
     //// Expertise
     //Task<ApiResponse<List<ExpertiseItemDto>>> UpdateExpertiseAsync(int userId, UpdateExpertiseRequest request);

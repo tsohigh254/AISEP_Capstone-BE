@@ -8,7 +8,8 @@ public enum ProfileStatus : short
     Draft = 0,
     Pending = 1,
     Approved = 2,
-    Rejected = 3
+    Rejected = 3,
+    PendingKYC = 4
 }
 
 // ───────────────────────── Advisor ────────────────────────
@@ -96,6 +97,12 @@ public enum WatchlistPriority : short
     Low = 0,
     Medium = 1,
     High = 2
+}
+
+public enum InvestorType : short
+{
+    Institutional = 0,
+    IndividualAngel = 1
 }
 
 // ───────────────────────── Startup / Investor Stage ───────
@@ -209,8 +216,28 @@ public enum AnalysisStatus : short
 
 public enum StartupTag : short
 {
-    VerifiedCompany = 0,
-    BasicVerified = 1,
-    PendingMoreInfo = 2,
-    VerificationFailed = 3
+    None = 0,
+    VerifiedCompany = 1,
+    BasicVerified = 2,
+    PendingMoreInfo = 3,
+    VerificationFailed = 4
+}
+
+public enum AdvisorTag : short
+{
+    None = 0,
+    VerifiedAdvisor = 1,
+    BasicVerified = 2,
+    PendingMoreInfo = 3,
+    VerificationFailed = 4
+}
+
+public enum InvestorTag : short
+{
+    None = 0,
+    VerifiedInvestorEntity = 1,
+    VerifiedAngelInvestor = 2,
+    BasicVerified = 3,
+    PendingMoreInfo = 4,
+    VerificationFailed = 5
 }

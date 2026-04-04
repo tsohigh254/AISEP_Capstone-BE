@@ -12,12 +12,21 @@ public class Advisor
     public string? ProfilePhotoURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? LinkedInURL { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Website { get; set; }
+    public string? Company { get; set; }
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
     public float? AverageRating { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    // Approval Workflow
+    public AdvisorTag AdvisorTag { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedBy { get; set; }
 
     // UI Extra requirements
     public int? YearsOfExperience { get; set; }
@@ -35,6 +44,7 @@ public class Advisor
 
     // Navigation properties
     public User User { get; set; } = null!;
+    public User? ApprovedByUser { get; set; }
     public AdvisorAvailability? Availability { get; set; }
     public ICollection<AdvisorIndustryFocus> IndustryFocus { get; set; } = new List<AdvisorIndustryFocus>();
     public ICollection<AdvisorTestimonial> Testimonials { get; set; } = new List<AdvisorTestimonial>();

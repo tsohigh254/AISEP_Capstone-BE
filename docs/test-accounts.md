@@ -14,6 +14,12 @@ Dùng để test các luồng xét duyệt hồ sơ (Approve / Reject KYC) và q
 - **Mật khẩu:** `12345.nN`
 - **Role:** `Staff`
 
+### 🛡️ Quản trị viên (Admin)
+Dùng để test các luồng quản trị hệ thống, phân quyền và cấu hình nền tảng.
+- **Email:** `admin@aisep.local`
+- **Mật khẩu:** `12345.nN`
+- **Role:** `Admin`
+
 ### 🚀 Khởi nghiệp (Startup)
 Dùng để tạo profile doanh nghiệp và gửi yêu cầu KYC.
 - **Email:** `startup@aisep.local` (Tài khoản này đã được gỡ khỏi bộ seed tự động để bạn có thể tự đăng ký test từ đầu qua luồng Frontend)

@@ -46,6 +46,7 @@ public class InvestorService : IInvestorService
             Country = request.Country,
             LinkedInURL = request.LinkedInURL,
             Website = request.Website,
+            ProfileStatus = ProfileStatus.Approved,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -65,8 +66,7 @@ public class InvestorService : IInvestorService
             .FirstOrDefaultAsync(i => i.UserID == userId);
 
         if (investor == null)
-            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND",
-                "Investor profile not found. Please create your profile first.");
+            return ApiResponse<InvestorDto>.SuccessResponse(null, "Profile has not been created yet.");
 
         return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
     }
@@ -355,7 +355,9 @@ public class InvestorService : IInvestorService
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
 
-        var query = _db.Startups.AsNoTracking().AsQueryable();
+        var query = _db.Startups.AsNoTracking()
+            .Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC)
+            .AsQueryable();
 
         // Keyword filter (company name)
         if (!string.IsNullOrWhiteSpace(q))
@@ -427,16 +429,136 @@ public class InvestorService : IInvestorService
         if (investor.ProfileStatus == ProfileStatus.Pending)
             return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_PENDING", "Profile is already pending approval.");
 
-        if (investor.ProfileStatus == ProfileStatus.Approved)
-            return ApiResponse<InvestorDto>.ErrorResponse("ALREADY_APPROVED", "Profile is already approved.");
-
-        investor.ProfileStatus = ProfileStatus.Pending;
+        investor.ProfileStatus = ProfileStatus.PendingKYC;
         investor.UpdatedAt = DateTime.UtcNow;
 
         _db.Investors.Update(investor);
         await _db.SaveChangesAsync();
 
         return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+    }
+
+    public async Task<ApiResponse<InvestorKYCStatusDto>> GetKYCStatusAsync(int userId)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<InvestorKYCStatusDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor not found");
+
+        var status = new InvestorKYCStatusDto
+        {
+            WorkflowStatus = GetWorkflowStatus(investor),
+            VerificationLabel = investor.InvestorTag.ToString().ToUpper(),
+            Explanation = GetKYCExplanation(investor),
+            LastUpdated = investor.UpdatedAt ?? investor.CreatedAt,
+            Remarks = investor.Remarks,
+            SubmittedData = new SubmitInvestorKYCRequest
+            {
+                InvestorCategory = investor.InvestorType == InvestorType.Institutional ? "INSTITUTIONAL" : "INDIVIDUAL_ANGEL",
+                FullName = investor.FullName,
+                ContactEmail = investor.ContactEmail ?? string.Empty,
+                OrganizationName = investor.CurrentOrganization,
+                CurrentRoleTitle = investor.CurrentRoleTitle,
+                Location = investor.Location,
+                Website = investor.Website,
+                LinkedInURL = investor.LinkedInURL,
+                SubmitterRole = investor.SubmitterRole,
+                TaxIdOrBusinessCode = investor.BusinessCode
+            }
+        };
+
+        return ApiResponse<InvestorKYCStatusDto>.SuccessResponse(status);
+    }
+
+    private string GetWorkflowStatus(Investor investor)
+    {
+        if (investor.InvestorTag == InvestorTag.VerifiedInvestorEntity || 
+            investor.InvestorTag == InvestorTag.VerifiedAngelInvestor || 
+            investor.InvestorTag == InvestorTag.BasicVerified)
+        {
+            return "VERIFIED";
+        }
+
+        return investor.ProfileStatus switch
+        {
+            ProfileStatus.PendingKYC => "PENDING_REVIEW",
+            ProfileStatus.Rejected => "VERIFICATION_FAILED",
+            ProfileStatus.Draft => "DRAFT",
+            _ => "NOT_STARTED"
+        };
+    }
+
+    private string GetKYCExplanation(Investor investor)
+    {
+        if (investor.InvestorTag == InvestorTag.VerifiedInvestorEntity || 
+            investor.InvestorTag == InvestorTag.VerifiedAngelInvestor || 
+            investor.InvestorTag == InvestorTag.BasicVerified)
+        {
+            return "Chúc mừng! Hồ sơ của bạn đã được xác thực đầy đủ.";
+        }
+
+        return investor.ProfileStatus switch
+        {
+            ProfileStatus.PendingKYC => "Hồ sơ xác thực của bạn đang được duyệt. Quá trình này thường mất 1-3 ngày làm việc.",
+            ProfileStatus.Rejected => "Hồ sơ của bạn đã bị từ chối xác thực. Vui lòng kiểm tra nhận xét và cập nhật lại.",
+            ProfileStatus.Draft => "Bạn đang có bản nháp Onboarding chưa hoàn tất. Tiếp tục để hoàn thiện hồ sơ cơ bản.",
+            ProfileStatus.Approved => "Hồ sơ cơ bản của bạn đã hoàn tất. Hãy xác thực KYC để tăng độ uy tín.",
+            _ => "Chào mừng! Hãy bắt đầu thiết lập hồ sơ Investor của bạn."
+        };
+    }
+
+    public async Task<ApiResponse<InvestorKYCStatusDto>> SubmitKYCAsync(int userId, SubmitInvestorKYCRequest request, string? idProofUrl, string? investmentProofUrl)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<InvestorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Investor not found");
+
+        investor.InvestorType = request.InvestorCategory == "INSTITUTIONAL" ? InvestorType.Institutional : InvestorType.IndividualAngel;
+        investor.FullName = request.FullName;
+        investor.ContactEmail = request.ContactEmail;
+        investor.CurrentOrganization = request.OrganizationName;
+        investor.CurrentRoleTitle = request.CurrentRoleTitle;
+        investor.Location = request.Location;
+        investor.Website = request.Website;
+        investor.LinkedInURL = request.LinkedInURL;
+        investor.SubmitterRole = request.SubmitterRole;
+        investor.BusinessCode = request.TaxIdOrBusinessCode;
+        
+        if (!string.IsNullOrEmpty(idProofUrl)) investor.IDProofFileURL = idProofUrl;
+        if (!string.IsNullOrEmpty(investmentProofUrl)) investor.InvestmentProofFileURL = investmentProofUrl;
+
+        investor.ProfileStatus = ProfileStatus.PendingKYC;
+        investor.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return await GetKYCStatusAsync(userId);
+    }
+
+    public async Task<ApiResponse<InvestorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveInvestorKYCDraftRequest request)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<InvestorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Investor not found");
+
+        investor.InvestorType = request.InvestorCategory == "INSTITUTIONAL" ? InvestorType.Institutional : InvestorType.IndividualAngel;
+        investor.FullName = request.FullName;
+        investor.ContactEmail = request.ContactEmail;
+        investor.CurrentOrganization = request.OrganizationName;
+        investor.CurrentRoleTitle = request.CurrentRoleTitle;
+        investor.Location = request.Location;
+        investor.Website = request.Website;
+        investor.LinkedInURL = request.LinkedInURL;
+        investor.SubmitterRole = request.SubmitterRole;
+        investor.BusinessCode = request.TaxIdOrBusinessCode;
+
+        // Only set to Draft if it's currently None or unknown (for initial onboarding)
+        if (investor.ProfileStatus != ProfileStatus.Approved && investor.ProfileStatus != ProfileStatus.PendingKYC)
+        {
+            investor.ProfileStatus = ProfileStatus.Draft;
+        }
+        investor.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return await GetKYCStatusAsync(userId);
     }
 
     // ================================================================
@@ -456,8 +578,20 @@ public class InvestorService : IInvestorService
         Country = i.Country,
         LinkedInURL = i.LinkedInURL,
         Website = i.Website,
+        ProfileStatus = i.ProfileStatus.ToString(),
         CreatedAt = i.CreatedAt,
-        UpdatedAt = i.UpdatedAt
+        UpdatedAt = i.UpdatedAt,
+
+        // KYC Information
+        InvestorType = i.InvestorType?.ToString(),
+        ContactEmail = i.ContactEmail,
+        CurrentOrganization = i.CurrentOrganization,
+        CurrentRoleTitle = i.CurrentRoleTitle,
+        BusinessCode = i.BusinessCode,
+        SubmitterRole = i.SubmitterRole,
+        IDProofFileURL = i.IDProofFileURL,
+        InvestmentProofFileURL = i.InvestmentProofFileURL,
+        Remarks = i.Remarks
     };
 
     private static PreferencesDto MapPreferencesDto(Investor investor)

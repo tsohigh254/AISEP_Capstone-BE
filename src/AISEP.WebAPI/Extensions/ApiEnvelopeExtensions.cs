@@ -206,6 +206,8 @@ public static class ApiEnvelopeExtensions
                 return StatusCodes.Status409Conflict;
             case "ACCESS_DENIED":
                 return StatusCodes.Status403Forbidden;
+            case "NOT_FOUND":
+                return StatusCodes.Status404NotFound;
             case "VALIDATION_ERROR":
                 return StatusCodes.Status400BadRequest;
         }

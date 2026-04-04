@@ -1,10 +1,10 @@
 using AISEP.Application.Interfaces;
 using AISEP.Infrastructure.Settings;
-using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MimeKit;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -12,40 +12,41 @@ public class EmailService : IEmailService
 {
     private readonly EmailSettings _emailSettings;
     private readonly ILogger<EmailService> _logger;
+    private readonly HttpClient _httpClient;
 
-    public EmailService(IOptions<EmailSettings> emailSettings, ILogger<EmailService> logger)
+    public EmailService(IOptions<EmailSettings> emailSettings, ILogger<EmailService> logger, HttpClient httpClient)
     {
         _emailSettings = emailSettings.Value;
         _logger = logger;
+        _httpClient = httpClient;
     }
 
     public async Task SendEmailAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken = default)
     {
         try
         {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromEmail));
-            message.To.Add(MailboxAddress.Parse(toEmail));
-            message.Subject = subject;
-
-            var bodyBuilder = new BodyBuilder { HtmlBody = htmlBody };
-            message.Body = bodyBuilder.ToMessageBody();
-
-            using var client = new SmtpClient();
-            
-            var secureOption = _emailSettings.EnableSsl 
-                ? SecureSocketOptions.StartTls 
-                : SecureSocketOptions.None;
-
-            await client.ConnectAsync(_emailSettings.SmtpHost, _emailSettings.SmtpPort, secureOption, cancellationToken);
-
-            if (!string.IsNullOrEmpty(_emailSettings.SmtpUser))
+            var payload = new
             {
-                await client.AuthenticateAsync(_emailSettings.SmtpUser, _emailSettings.SmtpPassword, cancellationToken);
-            }
+                from = $"{_emailSettings.FromName} <{_emailSettings.FromEmail}>",
+                to = new[] { toEmail },
+                subject,
+                html = htmlBody
+            };
 
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _emailSettings.ResendApiKey);
+
+            var response = await _httpClient.PostAsync("https://api.resend.com/emails", content, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Resend API error: {StatusCode} {Body}", response.StatusCode, responseBody);
+                throw new Exception($"Resend API error: {response.StatusCode} - {responseBody}");
+            }
 
             _logger.LogInformation("Email sent to {Email} with subject: {Subject}", toEmail, subject);
         }
@@ -59,7 +60,7 @@ public class EmailService : IEmailService
     public async Task SendPasswordResetEmailAsync(string toEmail, string resetToken, string resetUrl, CancellationToken cancellationToken = default)
     {
         var fullResetUrl = $"{resetUrl}?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(toEmail)}";
-        
+
         var htmlBody = $@"
 <!DOCTYPE html>
 <html>
@@ -73,7 +74,7 @@ public class EmailService : IEmailService
         <p>You have requested to reset your password for your AISEP account.</p>
         <p>Click the button below to reset your password:</p>
         <div style='text-align: center; margin: 30px 0;'>
-            <a href='{fullResetUrl}' 
+            <a href='{fullResetUrl}'
                style='background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;'>
                 Reset Password
             </a>
@@ -96,7 +97,7 @@ public class EmailService : IEmailService
     public async Task SendVerificationEmailAsync(string toEmail, string verificationToken, string verificationUrl, CancellationToken cancellationToken = default)
     {
         var fullVerificationUrl = $"{verificationUrl}?token={Uri.EscapeDataString(verificationToken)}&email={Uri.EscapeDataString(toEmail)}";
-        
+
         var htmlBody = $@"
 <!DOCTYPE html>
 <html>
@@ -109,7 +110,7 @@ public class EmailService : IEmailService
         <h2 style='color: #2563eb;'>Welcome to AISEP!</h2>
         <p>Thank you for registering. Please verify your email address to complete your registration.</p>
         <div style='text-align: center; margin: 30px 0;'>
-            <a href='{fullVerificationUrl}' 
+            <a href='{fullVerificationUrl}'
                style='background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;'>
                 Verify Email
             </a>
