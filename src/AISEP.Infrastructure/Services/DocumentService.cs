@@ -131,8 +131,8 @@ public class DocumentService : IDocumentService
             {
                 DocumentID = d.DocumentID,
                 StartupID = d.StartupID,
-                Title = d.Title,
-                DocumentType = d.DocumentType,
+                Title = d.Title ?? string.Empty,
+                DocumentType = d.DocumentType.ToString(),
                 Version = d.Version,
                 FileUrl = d.FileURL ?? string.Empty,
                 IsArchived = d.IsArchived,
@@ -243,7 +243,7 @@ public class DocumentService : IDocumentService
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
-            Title = d.Title,
+            Title = d.Title ?? string.Empty,
             FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType,
             Version = d.Version,

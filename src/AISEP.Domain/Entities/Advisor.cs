@@ -30,6 +30,11 @@ public class Advisor
 
     // UI Extra requirements
     public int? YearsOfExperience { get; set; }
+    public string? Company { get; set; }
+    public string? Website { get; set; }
+    public string? GoogleMeetLink { get; set; }
+    public string? MsTeamsLink { get; set; }
+    public string? Currency { get; set; }
     public bool IsVerified { get; set; } = false;
     public decimal? HourlyRate { get; set; }
     public string? Expertise { get; set; }          // comma-separated

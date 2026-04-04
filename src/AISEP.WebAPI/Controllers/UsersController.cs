@@ -124,12 +124,15 @@ public class UsersController : ControllerBase
             u.UserID, u.Email, u.UserType, u.IsActive, u.EmailVerified,
             u.CreatedAt, u.LastLoginAt, u.UserRoles.Select(ur => ur.Role.RoleName))).ToList();
 
-        var paged = new PagedData<UserListResponse>
+        var paged = new PagedResponse<UserListResponse>
         {
-            Page = page,
-            PageSize = pageSize,
-            Total = total,
-            Data = items
+            Paging = new PagingInfo
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalItems = total
+            },
+            Items = items
         };
         return OkEnvelope(paged);
     }

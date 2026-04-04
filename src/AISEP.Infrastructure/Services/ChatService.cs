@@ -172,10 +172,10 @@ public class ChatService : IChatService
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "ACCESS_DENIED", "You are not a participant of this mentorship.");
 
-            if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
+            if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.Scheduled)
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "INVALID_STATUS_TRANSITION",
-                    $"Cannot create conversation: mentorship status is '{mentorship.MentorshipStatus}', must be 'Accepted' or 'InProgress'.");
+                    $"Cannot create conversation: mentorship status is '{mentorship.MentorshipStatus}', must be 'Accepted' or 'Scheduled'.");
 
             var existing = await _db.Conversations
                 .AnyAsync(c => c.MentorshipID == request.MentorshipId.Value

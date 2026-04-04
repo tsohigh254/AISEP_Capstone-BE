@@ -192,7 +192,7 @@ public enum MentorshipStatus : short
     Requested = 0,
     Rejected = 1,
     Accepted = 2,
-    InProgress = 3,
+    Scheduled = 3,
     Completed = 4,
     InDispute = 5,
     Resolved = 6,
