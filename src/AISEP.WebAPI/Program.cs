@@ -1,22 +1,23 @@
-using System.Text;
 using AISEP.Application.Configuration;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Interfaces;
-using AISEP.Infrastructure.Services;
 using AISEP.Infrastructure.Data;
+using AISEP.Infrastructure.Services;
 using AISEP.Infrastructure.Settings;
 using AISEP.WebAPI.Hubs;
 using AISEP.WebAPI.Middlewares;
+using CloudinaryDotNet;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PayOS;
 using Serilog;
 using Serilog.Events;
-using CloudinaryDotNet;
-using Microsoft.Extensions.Options;
+using System.Text;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -81,7 +82,10 @@ builder.Services.AddCors(options =>
 
 // Cloudinary Configuration
 builder.Services.Configure<CloudinaryOptions>(
-builder.Configuration.GetSection("CloudinaryOptions"));
+  builder.Configuration.GetSection("CloudinaryOptions"));
+// Payment Configuration
+builder.Services.Configure<PaymentOptions>(
+  builder.Configuration.GetSection("PaymentOptions"));
 
 
 // JWT Settings
@@ -113,6 +117,20 @@ builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+builder.Services.AddSingleton<PayOSClient>(p =>
+    {
+        var options = p.GetRequiredService<IOptions<PaymentOptions>>().Value;
+
+        var account = new PayOSClient(
+             options.ClientId,
+             options.ApiKey,
+             options.ChecksumKey
+            );
+
+        return account;
+    });
 
 // Blockchain — toggle between Stub and Ethereum via config
 builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
