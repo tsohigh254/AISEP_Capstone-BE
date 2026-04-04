@@ -662,6 +662,88 @@ public class MentorshipService : IMentorshipService
         Comment = f.Comment,
         SubmittedAt = f.SubmittedAt
     };
+
+    // ================================================================
+    // COMPLETE MENTORSHIP (Advisor)
+    // ================================================================
+
+    public async Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId)
+    {
+        var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
+        if (mentorship == null) return error!;
+
+        if (mentorship.MentorshipStatus != MentorshipStatus.InProgress
+            && mentorship.MentorshipStatus != MentorshipStatus.Accepted)
+            return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
+                $"Cannot complete mentorship with status '{mentorship.MentorshipStatus}'. Must be 'InProgress' or 'Accepted'.");
+
+        mentorship.MentorshipStatus = MentorshipStatus.Completed;
+        mentorship.CompletedAt = DateTime.UtcNow;
+        mentorship.CompletionConfirmedByAdvisor = true;
+        mentorship.LastUpdatedByRole = "Advisor";
+        mentorship.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("COMPLETE_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId, null);
+
+        return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship), "Mentorship completed");
+    }
+
+    // ================================================================
+    // GET SESSIONS FOR A MENTORSHIP
+    // ================================================================
+
+    public async Task<ApiResponse<List<SessionDto>>> GetMentorshipSessionsAsync(int userId, string userType, int mentorshipId)
+    {
+        var mentorship = await _db.StartupAdvisorMentorships
+            .Include(m => m.Startup)
+            .Include(m => m.Advisor)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+
+        if (mentorship == null)
+            return ApiResponse<List<SessionDto>>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
+
+        if (!await IsParticipantOrStaff(userId, userType, mentorship))
+            return ApiResponse<List<SessionDto>>.ErrorResponse("MENTORSHIP_NOT_OWNED", "Access denied.");
+
+        var sessions = await _db.MentorshipSessions
+            .Where(s => s.MentorshipID == mentorshipId)
+            .AsNoTracking()
+            .OrderByDescending(s => s.ScheduledStartAt)
+            .Select(s => MapSessionDto(s))
+            .ToListAsync();
+
+        return ApiResponse<List<SessionDto>>.SuccessResponse(sessions);
+    }
+
+    // ================================================================
+    // GET FEEDBACKS FOR A MENTORSHIP
+    // ================================================================
+
+    public async Task<ApiResponse<List<FeedbackDto>>> GetMentorshipFeedbacksAsync(int userId, string userType, int mentorshipId)
+    {
+        var mentorship = await _db.StartupAdvisorMentorships
+            .Include(m => m.Startup)
+            .Include(m => m.Advisor)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+
+        if (mentorship == null)
+            return ApiResponse<List<FeedbackDto>>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
+
+        if (!await IsParticipantOrStaff(userId, userType, mentorship))
+            return ApiResponse<List<FeedbackDto>>.ErrorResponse("MENTORSHIP_NOT_OWNED", "Access denied.");
+
+        var feedbacks = await _db.MentorshipFeedbacks
+            .Where(f => f.MentorshipID == mentorshipId)
+            .AsNoTracking()
+            .OrderByDescending(f => f.SubmittedAt)
+            .Select(f => MapFeedbackDto(f))
+            .ToListAsync();
+
+        return ApiResponse<List<FeedbackDto>>.SuccessResponse(feedbacks);
+    }
 }
 
 

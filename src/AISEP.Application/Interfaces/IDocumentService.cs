@@ -23,4 +23,9 @@ public interface IDocumentService
     Task<ApiResponse<string>> ArchiveAsync(int documentId, int userId, CancellationToken ct = default);
 
     Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery);
+
+    // Staff review
+    Task<ApiResponse<DocumentDto>> StaffVerifyAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
+    Task<ApiResponse<DocumentDto>> StaffApproveAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
+    Task<ApiResponse<DocumentDto>> StaffRejectAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
 }

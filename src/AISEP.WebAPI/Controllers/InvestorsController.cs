@@ -308,4 +308,76 @@ public class InvestorsController : ControllerBase
             "AI recommendation engine is not yet enabled. This feature is coming soon.",
             StatusCodes.Status501NotImplemented);
     }
+
+    // ================================================================
+    // INDUSTRY FOCUS
+    // ================================================================
+
+    /// <summary>Get investor's industry focus list.</summary>
+    [HttpGet("me/industry-focus")]
+    public async Task<IActionResult> GetIndustryFocus()
+    {
+        var result = await _investorService.GetIndustryFocusAsync(GetCurrentUserId());
+        return result.ToActionResult();
+    }
+
+    /// <summary>Add an industry focus.</summary>
+    [HttpPost("me/industry-focus")]
+    public async Task<IActionResult> AddIndustryFocus([FromBody] AddIndustryFocusRequest request)
+    {
+        var result = await _investorService.AddIndustryFocusAsync(GetCurrentUserId(), request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Remove an industry focus.</summary>
+    [HttpDelete("me/industry-focus/{focusId:int}")]
+    public async Task<IActionResult> RemoveIndustryFocus(int focusId)
+    {
+        var result = await _investorService.RemoveIndustryFocusAsync(GetCurrentUserId(), focusId);
+        if (!result.Success) return result.ToErrorResult();
+        return ApiEnvelopeExtensions.DeletedEnvelope("Industry focus removed");
+    }
+
+    // ================================================================
+    // STAGE FOCUS
+    // ================================================================
+
+    /// <summary>Get investor's stage focus list.</summary>
+    [HttpGet("me/stage-focus")]
+    public async Task<IActionResult> GetStageFocus()
+    {
+        var result = await _investorService.GetStageFocusAsync(GetCurrentUserId());
+        return result.ToActionResult();
+    }
+
+    /// <summary>Add a stage focus.</summary>
+    [HttpPost("me/stage-focus")]
+    public async Task<IActionResult> AddStageFocus([FromBody] AddStageFocusRequest request)
+    {
+        var result = await _investorService.AddStageFocusAsync(GetCurrentUserId(), request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Remove a stage focus.</summary>
+    [HttpDelete("me/stage-focus/{stageFocusId:int}")]
+    public async Task<IActionResult> RemoveStageFocus(int stageFocusId)
+    {
+        var result = await _investorService.RemoveStageFocusAsync(GetCurrentUserId(), stageFocusId);
+        if (!result.Success) return result.ToErrorResult();
+        return ApiEnvelopeExtensions.DeletedEnvelope("Stage focus removed");
+    }
+
+    // ================================================================
+    // COMPARE STARTUPS
+    // ================================================================
+
+    /// <summary>Compare 2-5 startups side by side.</summary>
+    [HttpGet("compare")]
+    public async Task<IActionResult> CompareStartups([FromQuery] List<int> startupIds)
+    {
+        var result = await _investorService.CompareStartupsAsync(startupIds);
+        return result.ToActionResult();
+    }
 }

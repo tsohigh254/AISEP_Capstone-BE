@@ -290,4 +290,62 @@ public class DocumentService : IDocumentService
                 }
             });
     }
+
+    // ================================================================
+    // STAFF REVIEW ENDPOINTS
+    // ================================================================
+
+    public async Task<ApiResponse<DocumentDto>> StaffVerifyAsync(int documentId, int staffId, string? notes, CancellationToken ct = default)
+    {
+        return await SetReviewStatus(documentId, staffId, DocumentReviewStatus.Verified, notes, ct);
+    }
+
+    public async Task<ApiResponse<DocumentDto>> StaffApproveAsync(int documentId, int staffId, string? notes, CancellationToken ct = default)
+    {
+        return await SetReviewStatus(documentId, staffId, DocumentReviewStatus.Approved, notes, ct);
+    }
+
+    public async Task<ApiResponse<DocumentDto>> StaffRejectAsync(int documentId, int staffId, string? notes, CancellationToken ct = default)
+    {
+        return await SetReviewStatus(documentId, staffId, DocumentReviewStatus.Rejected, notes, ct);
+    }
+
+    private async Task<ApiResponse<DocumentDto>> SetReviewStatus(
+        int documentId, int staffId, DocumentReviewStatus status, string? notes, CancellationToken ct)
+    {
+        var doc = await _context.Documents
+            .Include(d => d.BlockchainProof)
+            .FirstOrDefaultAsync(d => d.DocumentID == documentId, ct);
+
+        if (doc == null)
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found");
+
+        doc.ReviewStatus = status;
+        doc.ReviewedBy = staffId;
+        doc.ReviewedAt = DateTime.UtcNow;
+        doc.ReviewNotes = notes;
+
+        await _context.SaveChangesAsync(ct);
+
+        return ApiResponse<DocumentDto>.SuccessResponse(new DocumentDto
+        {
+            DocumentID = doc.DocumentID,
+            StartupID = doc.StartupID,
+            DocumentType = doc.DocumentType.ToString(),
+            Title = doc.Title,
+            Version = doc.Version,
+            FileUrl = doc.FileURL,
+            IsAnalyzed = doc.IsAnalyzed,
+            IsArchived = doc.IsArchived,
+            AnalysisStatus = doc.AnalysisStatus.ToString(),
+            UploadedAt = doc.UploadedAt,
+            ProofStatus = doc.BlockchainProof?.ProofStatus.ToString(),
+            FileHash = doc.BlockchainProof?.FileHash,
+            TransactionHash = doc.BlockchainProof?.TransactionHash,
+            ReviewStatus = doc.ReviewStatus.ToString(),
+            ReviewedBy = doc.ReviewedBy,
+            ReviewedAt = doc.ReviewedAt,
+            ReviewNotes = doc.ReviewNotes
+        }, $"Document {status.ToString().ToLower()}");
+    }
 }

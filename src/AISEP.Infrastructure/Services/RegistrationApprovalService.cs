@@ -307,11 +307,6 @@ namespace AISEP.Infrastructure.Services
                 );
         }
 
-        public Task<ApiResponse<RegistrationApprovalResponse>> RejectRegistrationAsync(Guid userId, string reason)
-        {
-            throw new NotImplementedException();
-        }
-
         public async Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId)
         {
             var investor = await _context.Investors
