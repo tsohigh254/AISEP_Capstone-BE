@@ -96,7 +96,9 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> UpdateMyStartup([FromForm] UpdateStartupRequest request)
     {
         var userId = GetCurrentUserId();
-        var result = await _startupService.UpdateStartupAsync(userId, request);
+        // FE sends logoUrl = "null" (string) to remove logo
+        bool removeLogo = Request.Form.ContainsKey("logoUrl") && Request.Form["logoUrl"].ToString() == "null";
+        var result = await _startupService.UpdateStartupAsync(userId, request, removeLogo);
         return result.ToActionResult();
     }
 
@@ -115,58 +117,17 @@ public class StartupsController : ControllerBase
         return result.ToActionResult();
     }
 
+    /// <summary>
+    /// Update startup profile visibility (Visible / Hidden)
+    /// </summary>
     [HttpPut("me/visibility")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ToggleVisibility([FromBody] ToggleVisibilityRequest request)
+    public async Task<IActionResult> UpdateVisibility([FromBody] UpdateVisibilityRequest request)
     {
         var userId = GetCurrentUserId();
-        var result = await _startupService.ToggleVisibilityAsync(userId, request.IsVisible);
-        return result.ToActionResult();
-    }
-
-    // ================================================================
-    // KYC / VERIFICATION ENDPOINTS
-    // ================================================================
-
-    /// <summary>
-    /// Get current startup's KYC/Verification status
-    /// </summary>
-    [HttpGet("me/kyc/status")]
-    [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetKYCStatus()
-    {
-        var userId = GetCurrentUserId();
-        var result = await _startupService.GetKYCStatusAsync(userId);
-        return result.ToActionResult();
-    }
-
-    /// <summary>
-    /// Submit startup KYC details for verification
-    /// </summary>
-    [HttpPost("me/kyc/submit")]
-    [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubmitKYC([FromBody] SubmitStartupKYCRequest request)
-    {
-        var userId = GetCurrentUserId();
-        // certificateUrl can be null if previously uploaded during onboarding
-        var result = await _startupService.SubmitKYCAsync(userId, request, null);
-        return result.ToActionResult();
-    }
-
-    /// <summary>
-    /// Save startup KYC details as draft
-    /// </summary>
-    [HttpPatch("me/kyc/draft")]
-    [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveStartupKYCDraftRequest request)
-    {
-        var userId = GetCurrentUserId();
-        var result = await _startupService.SaveKYCDraftAsync(userId, request);
+        var result = await _startupService.UpdateVisibilityAsync(userId, request.Visibility);
         return result.ToActionResult();
     }
 

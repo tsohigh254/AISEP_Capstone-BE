@@ -47,11 +47,6 @@ public class AdvisorService : IAdvisorService
             FullName = request.FullName,
             Title = request.Title,
             Bio = request.Bio,
-            Company = request.Company,
-            YearsOfExperience = request.ExperienceYears,
-            Website = request.Website,
-            GoogleMeetLink = request.GoogleMeetLink,
-            MsTeamsLink = request.MsTeamsLink,
             ProfilePhotoURL = profilePhotoUrl,
             LinkedInURL = request.LinkedInURL,
             MentorshipPhilosophy = request.MentorshipPhilosophy,
@@ -59,30 +54,12 @@ public class AdvisorService : IAdvisorService
             CreatedAt = DateTime.UtcNow
         };
 
-        if (request.Items != null) 
-        {
-            var expertiseList = request.Items.Select(x => x.Category).Where(c => !string.IsNullOrWhiteSpace(c));
-            advisor.Expertise = string.Join(",", expertiseList);
-        }
-
-        if (request.ServicePricing != null)
-        {
-            advisor.Availability = new AdvisorAvailability 
-            { 
-                IsAcceptingNewMentees = request.ServicePricing.IsBookable ?? false 
-            };
-            advisor.HourlyRate = request.ServicePricing.HourlyRate;
-            advisor.Currency = request.ServicePricing.Currency;
-            if (request.ServicePricing.SupportedDurations != null) 
-                advisor.SupportedDurations = string.Join(",", request.ServicePricing.SupportedDurations);
-        }
-
         foreach(var industry in request.AdvisorIndustryFocus)
         {
             var industryFocus = new AdvisorIndustryFocus
             {
                 AdvisorID = advisor.AdvisorID,
-                IndustryFocusID = industry.IndustryId
+                IndustryID = industry.IndustryId
             };
 
             advisor.IndustryFocus.Add(industryFocus);
@@ -96,7 +73,7 @@ public class AdvisorService : IAdvisorService
         _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
+            MapToMeDto(advisor, null, Array.Empty<AdvisorIndustryFocus>()));
     }
 
     public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId)
@@ -106,11 +83,12 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
-                .ThenInclude(i => i.Industry)
+                .ThenInclude(aif => aif.Industry)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorMeDto>.SuccessResponse(null!, "User has no profile yet");
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found. Please create your profile first.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
             MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
@@ -122,7 +100,6 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
-                .ThenInclude(i => i.Industry)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
@@ -134,31 +111,7 @@ public class AdvisorService : IAdvisorService
         if (request.Bio != null) advisor.Bio = request.Bio;
         if (request.LinkedInURL != null) advisor.LinkedInURL = request.LinkedInURL;
         if (request.MentorshipPhilosophy != null) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
-        if (request.Company != null) advisor.Company = request.Company;
-        if (request.ExperienceYears.HasValue) advisor.YearsOfExperience = request.ExperienceYears.Value;
-        if (request.Website != null) advisor.Website = request.Website;
-        if (request.GoogleMeetLink != null) advisor.GoogleMeetLink = request.GoogleMeetLink;
-        if (request.MsTeamsLink != null) advisor.MsTeamsLink = request.MsTeamsLink;
-
-        if (request.Items != null) 
-        {
-            // Assuming Items is mapped to Expertise as comma-separated
-            var expertiseList = request.Items.Select(x => x.Category).Where(c => !string.IsNullOrWhiteSpace(c));
-            advisor.Expertise = string.Join(",", expertiseList);
-        }
-
-        if (request.ServicePricing != null)
-        {
-            if (advisor.Availability == null)
-            {
-                advisor.Availability = new AdvisorAvailability { AdvisorID = advisor.AdvisorID };
-                _db.AdvisorAvailabilities.Add(advisor.Availability);
-            }
-            if (request.ServicePricing.IsBookable.HasValue) advisor.Availability.IsAcceptingNewMentees = request.ServicePricing.IsBookable.Value;
-            if (request.ServicePricing.HourlyRate.HasValue) advisor.HourlyRate = request.ServicePricing.HourlyRate.Value;
-            if (request.ServicePricing.Currency != null) advisor.Currency = request.ServicePricing.Currency;
-            if (request.ServicePricing.SupportedDurations != null) advisor.SupportedDurations = string.Join(",", request.ServicePricing.SupportedDurations);
-        }
+        advisor.UpdatedAt = DateTime.UtcNow;
 
         if (request.ProfilePhotoURL != null)
         {
@@ -177,15 +130,13 @@ public class AdvisorService : IAdvisorService
                 advisor.IndustryFocus.Add(new AdvisorIndustryFocus
                 {
                     AdvisorID = advisor.AdvisorID,
-                    IndustryFocusID = industry.IndustryId
+                    IndustryID = industry.IndustryId
                 });
             }
         }
 
-        // Tạm thời auto Active sau khi update profile để test
-        advisor.ProfileStatus = ProfileStatus.Approved;
-
         _db.Advisors.Update(advisor);
+        await _db.SaveChangesAsync();
 
         await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
         _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
@@ -247,52 +198,20 @@ public class AdvisorService : IAdvisorService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(a => a.IndustryFocus)
-                .ThenInclude(i => i.Industry)
+                .ThenInclude(aif => aif.Industry)
             .Include(a => a.Availability)
             .AsQueryable();
 
-        // Only show approved profiles
-        query = query.Where(a => a.ProfileStatus == AISEP.Domain.Enums.ProfileStatus.Approved);
-
-        // Only return advisors who are accepting new mentees
-        query = query.Where(a => a.Availability != null && a.Availability.IsAcceptingNewMentees);
-
-        // Keyword search: FullName, Title, Bio, or Industry name
+        // Keyword search on FullName
         if (!string.IsNullOrWhiteSpace(advisorQueryParams.Key))
         {
-            var key = advisorQueryParams.Key.ToLower().Trim();
-            query = query.Where(a =>
-                a.FullName.ToLower().Contains(key) ||
-                (a.Title != null && a.Title.ToLower().Contains(key)) ||
-                (a.Bio != null && a.Bio.ToLower().Contains(key)) ||
-                a.IndustryFocus.Any(i => i.Industry.IndustryName.ToLower().Contains(key)));
+            query = query.Where(q => q.FullName.ToLower().Trim().Contains(advisorQueryParams.Key.ToLower().Trim()) ||
+            q.IndustryFocus.Any(i => i.Industry.IndustryName == advisorQueryParams.Key));
         }
 
-        // Filter by expertise keyword (comma-separated column)
-        if (!string.IsNullOrWhiteSpace(advisorQueryParams.Expertise))
-        {
-            var exp = advisorQueryParams.Expertise.ToLower().Trim();
-            query = query.Where(a => a.Expertise != null && a.Expertise.ToLower().Contains(exp));
-        }
 
-        // Filter by years of experience range
-        if (advisorQueryParams.MinYearsOfExperience.HasValue)
-            query = query.Where(a => a.YearsOfExperience >= advisorQueryParams.MinYearsOfExperience.Value);
-
-        if (advisorQueryParams.MaxYearsOfExperience.HasValue)
-            query = query.Where(a => a.YearsOfExperience <= advisorQueryParams.MaxYearsOfExperience.Value);
-
-        // Filter by minimum rating
-        if (advisorQueryParams.MinRating.HasValue)
-            query = query.Where(a => a.AverageRating >= advisorQueryParams.MinRating.Value);
-
-        // Dynamic sort
-        query = advisorQueryParams.SortBy?.ToLower() switch
-        {
-            "highest_rated"    => query.OrderByDescending(a => a.AverageRating ?? 0),
-            "most_experienced" => query.OrderByDescending(a => a.YearsOfExperience ?? 0),
-            _                  => query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt)
-        };
+        // Order by UpdatedAt desc
+        query = query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt);
 
         var items = query.Select(a => new AdvisorSearchItemDto
         {
@@ -302,20 +221,10 @@ public class AdvisorService : IAdvisorService
             Bio = TruncateBio(a.Bio, 200),
             ProfilePhotoURL = a.ProfilePhotoURL,
             AverageRating = a.AverageRating,
-            ReviewCount = a.ReviewCount,
-            CompletedSessions = a.CompletedSessions,
-            YearsOfExperience = a.YearsOfExperience,
-            IsVerified = a.IsVerified,
-            AvailabilityHint = a.Availability != null ? (a.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
-            HourlyRate = a.HourlyRate,
-            Expertise = string.IsNullOrEmpty(a.Expertise) ? new List<string>() : a.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            DomainTags = string.IsNullOrEmpty(a.DomainTags) ? new List<string>() : a.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SuitableFor = string.IsNullOrEmpty(a.SuitableFor) ? new List<string>() : a.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SupportedDurations = string.IsNullOrEmpty(a.SupportedDurations) ? new List<string>() : a.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            Industry = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
+            Industries = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
             {
                 IndustryId = i.IndustryID,
-                Industry = i.Industry.IndustryName
+                Industry = i.Industry != null ? i.Industry.IndustryName : null
             }).ToList()
         }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize);
 
@@ -331,54 +240,10 @@ public class AdvisorService : IAdvisorService
         });
     }
 
-    public async Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId)
-    {
-        var advisor = await _db.Advisors
-            .Include(a => a.IndustryFocus)
-                .ThenInclude(i => i.Industry)
-            .Include(a => a.Availability)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
+    // ================================================================
+    // MAPPING
+    // ================================================================
 
-        if (advisor == null || advisor.ProfileStatus != AISEP.Domain.Enums.ProfileStatus.Approved)
-        {
-            return ApiResponse<AdvisorDetailDto>.ErrorResponse("NOT_FOUND", "Advisor not found or profile is not active.");
-        }
-
-        var dto = new AdvisorDetailDto
-        {
-            AdvisorID = advisor.AdvisorID,
-            FullName  = advisor.FullName,
-            Title = advisor.Title,
-            ProfilePhotoURL = advisor.ProfilePhotoURL,
-            Bio = advisor.Bio,
-            AverageRating = advisor.AverageRating,
-            ReviewCount = advisor.ReviewCount,
-            CompletedSessions = advisor.CompletedSessions,
-            YearsOfExperience = advisor.YearsOfExperience,
-            IsVerified = advisor.IsVerified,
-            AvailabilityHint = advisor.Availability != null ? (advisor.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
-            HourlyRate = advisor.HourlyRate,
-            Expertise = string.IsNullOrEmpty(advisor.Expertise) ? new List<string>() : advisor.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            DomainTags = string.IsNullOrEmpty(advisor.DomainTags) ? new List<string>() : advisor.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SuitableFor = string.IsNullOrEmpty(advisor.SuitableFor) ? new List<string>() : advisor.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SupportedDurations = string.IsNullOrEmpty(advisor.SupportedDurations) ? new List<string>() : advisor.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            Industry = advisor.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
-            {
-                IndustryId = i.IndustryID,
-                Industry = i.Industry.IndustryName
-            }).ToList(),
-
-            MentorshipPhilosophy = advisor.MentorshipPhilosophy,
-            ExperiencesJson = advisor.ExperiencesJson,
-            Skills = string.IsNullOrEmpty(advisor.Skills) ? new List<string>() : advisor.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            Company = advisor.Company,
-            LinkedInURL = advisor.LinkedInURL
-        };
-
-        return ApiResponse<AdvisorDetailDto>.SuccessResponse(dto);
-    }
-    
     #region helper method
     private static AdvisorMeDto MapToMeDto(
         Advisor a,
@@ -390,11 +255,6 @@ public class AdvisorService : IAdvisorService
         FullName = a.FullName,
         Title = a.Title,
         Bio = a.Bio,
-        Company = a.Company,
-        ExperienceYears = a.YearsOfExperience,
-        Website = a.Website,
-        GoogleMeetLink = a.GoogleMeetLink,
-        MsTeamsLink = a.MsTeamsLink,
         ProfilePhotoURL = a.ProfilePhotoURL,
         MentorshipPhilosophy = a.MentorshipPhilosophy,
         LinkedInURL = a.LinkedInURL,
@@ -405,18 +265,10 @@ public class AdvisorService : IAdvisorService
         CreatedAt = a.CreatedAt,
         UpdatedAt = a.UpdatedAt,
         Availability = availability != null ? MapAvailabilityDto(availability) : null,
-        ServicePricing = new ServicePricingDto
-        {
-            IsBookable = availability?.IsAcceptingNewMentees ?? false,
-            HourlyRate = a.HourlyRate,
-            Currency = a.Currency,
-            SupportedDurations = string.IsNullOrEmpty(a.SupportedDurations) ? new List<string>() : a.SupportedDurations.Split(",", StringSplitOptions.RemoveEmptyEntries).ToList()
-        },
-        Items = string.IsNullOrEmpty(a.Expertise) ? new List<AdvisorItemDto>() : a.Expertise.Split(",", StringSplitOptions.RemoveEmptyEntries).Select(e => new AdvisorItemDto { Category = e }).ToList(),
-        IndustryFocus = industryFocus.Select(i => new AdvisorIndustryFocusDto 
+        IndustryFocus = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
         {
             IndustryId = i.IndustryID,
-            Industry = i.Industry?.IndustryName ?? string.Empty
+            Industry = i.Industry?.IndustryName
         }).ToList()
     };
 
@@ -440,5 +292,3 @@ public class AdvisorService : IAdvisorService
     }
     #endregion
 }
-
-

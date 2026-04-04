@@ -10,39 +10,8 @@ public static class DbSeeder
         await SeedRolesAsync(context);
         await SeedPermissionsAsync(context);
         await SeedIndustriesAsync(context);
-        await SeedUsersAsync(context);
-        await FixMissingStartupDataAsync(context);
-    }
-
-    private static async Task FixMissingStartupDataAsync(ApplicationDbContext context)
-    {
-        var malformedStartups = await context.Startups
-            .Where(s => string.IsNullOrEmpty(s.BusinessCode) || string.IsNullOrEmpty(s.Website) || string.IsNullOrEmpty(s.Description))
-            .ToListAsync();
-
-        foreach (var s in malformedStartups)
-        {
-            if (string.IsNullOrEmpty(s.BusinessCode))
-                s.BusinessCode = "TAX-" + Guid.NewGuid().ToString().Substring(0, 6).ToUpper();
-                
-            if (string.IsNullOrEmpty(s.Description))
-                s.Description = "Công ty khởi nghiệp cung cấp giải pháp công nghệ tự động hóa cho các doanh nghiệp, tối ưu hóa quy trình quản lý.";
-                
-            if (string.IsNullOrEmpty(s.Website))
-                s.Website = "https://example-startup.com";
-                
-            if (string.IsNullOrEmpty(s.ProblemStatement))
-                s.ProblemStatement = "Các doanh nghiệp vừa và nhỏ thiếu đi công cụ hiệu quả.";
-
-            if (string.IsNullOrEmpty(s.SolutionSummary))
-                s.SolutionSummary = "Xây dựng hệ sinh thái SaaS all-in-one linh hoạt.";
-
-            if (string.IsNullOrEmpty(s.MarketScope))
-                s.MarketScope = "Khách hàng B2B nội địa và khu vực Đông Nam Á.";
-        }
-        
-        if (malformedStartups.Any()) 
-            await context.SaveChangesAsync();
+        await SeedAdminUserAsync(context);
+        await SeedStaffUserAsync(context);
     }
 
     private static async Task SeedRolesAsync(ApplicationDbContext context)
@@ -61,7 +30,6 @@ public static class DbSeeder
         context.Roles.AddRange(roles);
         await context.SaveChangesAsync();
     }
-
 
     private static async Task SeedPermissionsAsync(ApplicationDbContext context)
     {
@@ -169,65 +137,70 @@ public static class DbSeeder
             new() { IndustryID = 502, IndustryName = "Farm Automation & Robotics", Description = "Automation and agricultural robotics", ParentIndustryID = 5 },
             new() { IndustryID = 503, IndustryName = "Farmer-to-Market Platforms", Description = "Market linkage platforms", ParentIndustryID = 5 },
             new() { IndustryID = 504, IndustryName = "Cold Chain & Logistics", Description = "Cold supply chain and logistics", ParentIndustryID = 5 },
-            new() { IndustryID = 505, IndustryName = "Traceability & Food Safety", Description = "Traceability and food safety tech", ParentIndustryID = 5 },
-
-            // ===== SaaS & Enterprise Software sub-industries =====
-            new() { IndustryID = 6,   IndustryName = "SaaS & Enterprise Software", Description = "Software-as-a-Service and B2B enterprise tools", ParentIndustryID = null },
-            new() { IndustryID = 601, IndustryName = "CRM & Sales Tools",         Description = "Customer relationship management software",     ParentIndustryID = 6 },
-            new() { IndustryID = 602, IndustryName = "ERP & Operations",          Description = "Enterprise resource planning and ops tools",    ParentIndustryID = 6 },
-            new() { IndustryID = 603, IndustryName = "Marketing Tech",            Description = "Marketing automation and analytics platforms", ParentIndustryID = 6 },
-            new() { IndustryID = 604, IndustryName = "Developer Tools & DevOps",  Description = "Tools for software development and CI/CD",     ParentIndustryID = 6 },
-            new() { IndustryID = 605, IndustryName = "Data Analytics & BI",       Description = "Business intelligence and data visualization", ParentIndustryID = 6 }
+            new() { IndustryID = 505, IndustryName = "Traceability & Food Safety", Description = "Traceability and food safety tech", ParentIndustryID = 5 }
         };
 
         context.Industries.AddRange(industries);
         await context.SaveChangesAsync();
     }
 
-    private static async Task SeedUsersAsync(ApplicationDbContext context)
+    private static async Task SeedAdminUserAsync(ApplicationDbContext context)
     {
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword("12345.nN");
+        const string adminEmail = "admin@aisep.com";
+        if (await context.Users.AnyAsync(u => u.Email == adminEmail)) return;
 
-        await SeedSingleUserAsync(context, "staff@aisep.local", passwordHash, "Staff");
-        await SeedSingleUserAsync(context, "admin@aisep.local", passwordHash, "Admin");
-        // await SeedSingleUserAsync(context, "startup@aisep.local", passwordHash, "Startup"); // Đã đóng theo yêu cầu để tự test tạo mới
-        await SeedSingleUserAsync(context, "advisor@aisep.local", passwordHash, "Advisor");
-        await SeedSingleUserAsync(context, "investor@aisep.local", passwordHash, "Investor");
+        var adminRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Admin");
+        if (adminRole == null) return;
 
-        // Additional fresh accounts for testing Onboarding/KYC
-        await SeedSingleUserAsync(context, "investor2@aisep.local", passwordHash, "Investor");
-        await SeedSingleUserAsync(context, "startup2@aisep.local", passwordHash, "Startup");
-        await SeedSingleUserAsync(context, "advisor2@aisep.local", passwordHash, "Advisor");
-    }
-
-    private static async Task SeedSingleUserAsync(ApplicationDbContext context, string email, string passHash, string roleName)
-    {
-        if (await context.Users.AnyAsync(u => u.Email == email)) return;
-
-        var role = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == roleName);
-        if (role == null) return;
-
-        var user = new User
+        var admin = new User
         {
-            Email = email,
-            PasswordHash = passHash,
-            UserType = roleName,
+            Email = adminEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123456"),
+            UserType = "Admin",
             IsActive = true,
             EmailVerified = true,
             CreatedAt = DateTime.UtcNow
         };
 
-        context.Users.Add(user);
+        context.Users.Add(admin);
         await context.SaveChangesAsync();
 
-        var userRole = new UserRole
+        context.UserRoles.Add(new UserRole
         {
-            UserID = user.UserID,
-            RoleID = role.RoleID,
+            UserID = admin.UserID,
+            RoleID = adminRole.RoleID,
             AssignedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedStaffUserAsync(ApplicationDbContext context)
+    {
+        const string staffEmail = "staff@aisep.com";
+        if (await context.Users.AnyAsync(u => u.Email == staffEmail)) return;
+
+        var staffRole = await context.Roles.FirstOrDefaultAsync(r => r.RoleName == "Staff");
+        if (staffRole == null) return;
+
+        var staff = new User
+        {
+            Email = staffEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Staff@123456"),
+            UserType = "Staff",
+            IsActive = true,
+            EmailVerified = true,
+            CreatedAt = DateTime.UtcNow
         };
 
-        context.UserRoles.Add(userRole);
+        context.Users.Add(staff);
+        await context.SaveChangesAsync();
+
+        context.UserRoles.Add(new UserRole
+        {
+            UserID = staff.UserID,
+            RoleID = staffRole.RoleID,
+            AssignedAt = DateTime.UtcNow
+        });
         await context.SaveChangesAsync();
     }
 }

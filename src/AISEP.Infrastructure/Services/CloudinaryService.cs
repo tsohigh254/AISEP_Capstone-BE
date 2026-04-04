@@ -14,7 +14,7 @@ namespace AISEP.Infrastructure.Services
 {
     public class CloudinaryService : ICloudinaryService
     {
-        private readonly string[] allowedExtensionsImage = { ".jpeg", ".gif", ".png", ".jpg" };
+        private readonly string[] allowedExtensionsImage = { ".jpeg", ".png", ".jpg", ".webp" };
         private readonly string[] allowedExtensionsDocument = { ".pdf", ".ppt", ".pptx", ".doc", ".docx" };
         private readonly Cloudinary _cloudinary;
         private const int MaxFileSizeImage = 5 * 1024 * 1024;
@@ -53,7 +53,7 @@ namespace AISEP.Infrastructure.Services
 
             if (file.Length > MaxFileSizeImage) throw new InvalidOperationException($"?nh kh�ng vu?t qu� {MaxFileSizeImage / (1024 * 1024)} MB");
 
-            var fileExtension = Path.GetExtension(file.FileName);
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
 
             if (!allowedExtensionsImage.Contains(fileExtension)) throw new ArgumentException($"H�y upload c�c file c� du�i {string.Join(",", allowedExtensionsImage)}");
 
@@ -67,7 +67,9 @@ namespace AISEP.Infrastructure.Services
 
             var result = await _cloudinary.UploadAsync(uploadParams);
 
-            //Console.WriteLine(result);
+            if (result.Error != null)
+                throw new InvalidOperationException($"Cloudinary upload failed: {result.Error.Message}");
+
             return result.SecureUrl.ToString();
         }
 
@@ -107,7 +109,7 @@ namespace AISEP.Infrastructure.Services
 
             if (file.Length > MaxFileSizeDocument) throw new InvalidOperationException($"Tài liệu không vượt quá {MaxFileSizeDocument / (1024 * 1024)} MB");
 
-            var fileExtension = Path.GetExtension(file.FileName);
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
 
             if (!allowedExtensionsDocument.Contains(fileExtension)) throw new ArgumentException($"Hãy upload các file có đuôi {string.Join(",", allowedExtensionsDocument)}");
 
@@ -137,6 +139,9 @@ namespace AISEP.Infrastructure.Services
             };
 
             var result = await _cloudinary.UploadAsync(uploadParams);
+
+            if (result.Error != null)
+                throw new InvalidOperationException($"Cloudinary upload failed: {result.Error.Message}");
 
             if (result == null || result.SecureUrl == null)
                 throw new InvalidOperationException("Upload tài liệu thất bại: không nhận được response từ Cloudinary");

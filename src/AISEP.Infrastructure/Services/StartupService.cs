@@ -10,7 +10,6 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -62,7 +61,6 @@ public class StartupService : IStartupService
             OneLiner = request.OneLiner,
             Description = request.Description,
             IndustryID = request.IndustryID,
-            SubIndustry = request.SubIndustry,
             Stage = request.Stage,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
@@ -71,38 +69,22 @@ public class StartupService : IStartupService
             FundingAmountSought = request.FundingAmountSought,
             CurrentFundingRaised = request.CurrentFundingRaised,
             Valuation = request.Valuation,
-            BusinessCode = request.BusinessCode,
-            FullNameOfApplicant = request.FullNameOfApplicant,
-            RoleOfApplicant = request.RoleOfApplicant,            
-            MarketScope = request.MarketScope,
-            ProductStatus = request.ProductStatus,
-            Location = request.Location,
-            Country = request.Country,
-            ProblemStatement = request.ProblemStatement,
-            SolutionSummary = request.SolutionSummary,
-            CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds),
-            MetricSummary = request.MetricSummary,
-            TeamSize = request.TeamSize,
-            PitchDeckUrl = request.PitchDeckUrl,
-            LinkedInURL = request.LinkedInURL,
-            ContactEmail = request.ContactEmail,
-            ContactPhone = request.ContactPhone,
-
-            ProfileStatus = ProfileStatus.Approved,
+            ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
 
-        var logoUrl = request.LogoUrl != null
-            ? await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo)
-            : null;
-
-        startup.LogoURL = logoUrl;
-
-        var fileUrl = request.FileCertificateBusiness != null
-            ? await _cloudinaryService.UploadDocument(request.FileCertificateBusiness, CloudinaryFolderSaving.DocumentStorage)
-            : null;
-
-        startup.FileCertificateBusiness = fileUrl;
+        if (request.LogoUrl != null)
+        {
+            try
+            {
+                startup.LogoURL = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload logo for startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<StartupMeDto>.ErrorResponse("LOGO_UPLOAD_FAILED", ex.Message);
+            }
+        }
 
         _context.Startups.Add(startup);
         await _context.SaveChangesAsync();
@@ -119,18 +101,18 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
-            .Include(s => s.ApprovedByUser)
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
         {
-            return ApiResponse<StartupMeDto>.SuccessResponse(null, "Profile has not been created yet.");
+            return ApiResponse<StartupMeDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
         }
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));
     }
 
-    public async Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request)
+    public async Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request, bool removeLogo = false)
     {
         var startup = await _context.Startups
             .Include(s => s.TeamMembers)
@@ -160,43 +142,36 @@ public class StartupService : IStartupService
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
         if (request.Description != null) startup.Description = request.Description;
         if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
-        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
         if (request.Stage != null) startup.Stage = request.Stage;
         if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
         if (request.Website != null) startup.Website = request.Website;
         if (request.FundingAmountSought.HasValue) startup.FundingAmountSought = request.FundingAmountSought;
         if (request.CurrentFundingRaised.HasValue) startup.CurrentFundingRaised = request.CurrentFundingRaised;
-        if (request.Valuation.HasValue) startup.Valuation = request.Valuation;   
-        if (request.MarketScope != null) startup.MarketScope = request.MarketScope;
-        if (request.ProductStatus != null) startup.ProductStatus = request.ProductStatus;
-        if (request.Location != null) startup.Location = request.Location;
-        if (request.Country != null) startup.Country = request.Country;
-        if (request.ProblemStatement != null) startup.ProblemStatement = request.ProblemStatement;
-        if (request.SolutionSummary != null) startup.SolutionSummary = request.SolutionSummary;
-        if (request.CurrentNeeds != null) startup.CurrentNeeds = SerializeCurrentNeeds(request.CurrentNeeds);
-        if (request.MetricSummary != null) startup.MetricSummary = request.MetricSummary;
-        if (request.TeamSize != null) startup.TeamSize = request.TeamSize;
-        if (request.PitchDeckUrl != null) startup.PitchDeckUrl = request.PitchDeckUrl;
-        if (request.LinkedInURL != null) startup.LinkedInURL = request.LinkedInURL;
-        if (request.BusinessCode != null) startup.BusinessCode = request.BusinessCode;
-        if (request.FullNameOfApplicant != null) startup.FullNameOfApplicant = request.FullNameOfApplicant;
-        if (request.RoleOfApplicant != null) startup.RoleOfApplicant = request.RoleOfApplicant;
-        if (request.ContactEmail != null) startup.ContactEmail = request.ContactEmail;
-        if (request.ContactPhone != null) startup.ContactPhone = request.ContactPhone;
+        if (request.Valuation.HasValue) startup.Valuation = request.Valuation;
 
+        // Logo handling: file upload, remove via "null" string, or keep current
         if (request.LogoUrl != null)
         {
-            var logoUrl = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            string logoUrl;
+            try
+            {
+                logoUrl = await _cloudinaryService.UploadImage(request.LogoUrl, CloudinaryFolderSaving.Logo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload logo for startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<StartupMeDto>.ErrorResponse("LOGO_UPLOAD_FAILED", ex.Message);
+            }
             if (!string.IsNullOrEmpty(startup.LogoURL))
                 await _cloudinaryService.DeleteImage(startup.LogoURL);
             startup.LogoURL = logoUrl;
         }
-
-        if (request.FileCertificateBusiness != null)
+        else if (removeLogo)
         {
-            var fileUrl = await _cloudinaryService.UploadDocument(request.FileCertificateBusiness, CloudinaryFolderSaving.DocumentStorage);            
-            startup.FileCertificateBusiness = fileUrl;
+            if (!string.IsNullOrEmpty(startup.LogoURL))
+                await _cloudinaryService.DeleteImage(startup.LogoURL);
+            startup.LogoURL = null;
         }
 
         startup.UpdatedAt = DateTime.UtcNow;
@@ -207,6 +182,24 @@ public class StartupService : IStartupService
             $"Updated fields for {startup.CompanyName}");
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile updated successfully");
+    }
+
+    public async Task<ApiResponse<string>> UpdateVisibilityAsync(int userId, string visibility)
+    {
+        var startup = await _context.Startups.FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
+
+        startup.IsVisible = string.Equals(visibility, "Visible", StringComparison.OrdinalIgnoreCase);
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("UPDATE_VISIBILITY", "Startup", startup.StartupID,
+            $"Visibility set to {visibility}");
+
+        return ApiResponse<string>.SuccessResponse(startup.IsVisible ? "Visible" : "Hidden", "Visibility updated");
     }
 
     public async Task<ApiResponse<StartupMeDto>> SubmitForApprovalAsync(int userId)
@@ -221,16 +214,32 @@ public class StartupService : IStartupService
                 "You haven't created a startup profile yet.");
         }
 
+        // Validate required fields before submission
+        if (string.IsNullOrWhiteSpace(startup.CompanyName))
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Company name is required before submission.");
+
+        if (string.IsNullOrWhiteSpace(startup.OneLiner))
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Tagline (one-liner) is required before submission.");
+
+        if (startup.Stage == null)
+            return ApiResponse<StartupMeDto>.ErrorResponse("VALIDATION_ERROR",
+                "Startup stage is required before submission.");
+
         if (startup.ProfileStatus == ProfileStatus.Pending)
         {
             return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_PENDING",
                 "Your startup profile is already pending approval.");
         }
 
-        // Removed the check that blocked Approved profiles from submitting for KYC.
-        // In the new workflow, Approved (normal) profiles can submit for KYC (PendingKYC).
+        if (startup.ProfileStatus == ProfileStatus.Approved)
+        {
+            return ApiResponse<StartupMeDto>.ErrorResponse("ALREADY_APPROVED",
+                "Your startup profile is already approved.");
+        }
 
-        startup.ProfileStatus = ProfileStatus.PendingKYC;
+        startup.ProfileStatus = ProfileStatus.Pending;
         startup.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -238,155 +247,6 @@ public class StartupService : IStartupService
             $"{startup.CompanyName} submitted for approval");
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup submitted for approval");
-    }
-
-    public async Task<ApiResponse<string>> ToggleVisibilityAsync(int userId, bool isVisible)
-    {
-        var startup = await _context.Startups
-            .FirstOrDefaultAsync(s => s.UserID == userId);
-
-        if (startup == null)
-        {
-            return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
-                "You haven't created a startup profile yet.");
-        }
-
-        startup.IsVisible = isVisible;
-        startup.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        string action = isVisible ? "enabled" : "disabled";
-        await _auditService.LogAsync("TOGGLE_VISIBILITY", "Startup", startup.StartupID,
-            $"Startup visibility {action}");
-
-        return ApiResponse<string>.SuccessResponse($"Visibility {action}", $"Your profile is now {(isVisible ? "visible" : "hidden")} to investors.");
-    }
-
-    public async Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId)
-    {
-        var startup = await _context.Startups
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserID == userId);
-
-        if (startup == null)
-        {
-            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
-        }
-
-        var dto = new StartupKYCStatusDto
-        {
-            LastUpdated = startup.UpdatedAt ?? startup.CreatedAt
-        };
-
-        // Workflow Status Mapping (Simplified)
-        if (startup.StartupTag != StartupTag.None)
-        {
-            dto.WorkflowStatus = "VERIFIED";
-            dto.VerificationLabel = startup.StartupTag.ToString();
-            dto.Explanation = "Chúc mừng! Startup của bạn đã được xác minh chính thức trên hệ thống AISEP.";
-        }
-        else if (startup.ProfileStatus == ProfileStatus.PendingKYC)
-        {
-            dto.WorkflowStatus = "PENDING_REVIEW";
-            dto.Explanation = "Hồ sơ xác thực của bạn đang được đội ngũ Staff xem xét. Quá trình này thường mất 1-3 ngày làm việc.";
-        }
-        else if (startup.ProfileStatus == ProfileStatus.Rejected)
-        {
-            dto.WorkflowStatus = "VERIFICATION_FAILED";
-            dto.Explanation = "Hồ sơ xác thực bị từ chối hoặc cần bổ sung thông tin. Vui lòng kiểm tra lại.";
-        }
-        else
-        {
-            dto.WorkflowStatus = "NOT_STARTED";
-            dto.Explanation = "Hãy hoàn tất các thông tin định danh chuyên sâu để được xác minh trên nền tảng.";
-        }
-
-        dto.SubmissionSummary = new StartupKYCSubmissionSummaryDto
-        {
-            CompanyName = startup.CompanyName,
-            SubmittedAt = startup.UpdatedAt ?? startup.CreatedAt,
-            Version = 1
-        };
-
-        dto.History = new List<StartupKYCHistoryDto>();
-        if (startup.ProfileStatus == ProfileStatus.PendingKYC)
-        {
-            dto.History.Add(new StartupKYCHistoryDto
-            {
-                Action = "Gửi hồ sơ xác thực",
-                Date = (startup.UpdatedAt ?? startup.CreatedAt).ToString("dd/MM/yyyy HH:mm"),
-                Status = "PENDING_REVIEW"
-            });
-        }
-
-        return ApiResponse<StartupKYCStatusDto>.SuccessResponse(dto);
-    }
-
-    public async Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request, string? certificateUrl)
-    {
-        var startup = await _context.Startups
-            .FirstOrDefaultAsync(s => s.UserID == userId);
-
-        if (startup == null)
-            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
-
-        // Update fields
-        startup.CompanyName = request.CompanyName;
-        startup.FullNameOfApplicant = request.FullNameOfApplicant;
-        startup.RoleOfApplicant = request.RoleOfApplicant;
-        startup.ContactEmail = request.ContactEmail;
-        startup.ContactPhone = request.ContactPhone;
-        startup.BusinessCode = request.BusinessCode ?? startup.BusinessCode;
-        startup.Website = request.Website ?? startup.Website;
-        startup.LinkedInURL = request.LinkedInURL ?? startup.LinkedInURL;
-        startup.ProblemStatement = request.ProblemStatement ?? startup.ProblemStatement;
-        startup.SolutionSummary = request.SolutionSummary ?? startup.SolutionSummary;
-
-        if (!string.IsNullOrEmpty(certificateUrl))
-        {
-            startup.FileCertificateBusiness = certificateUrl;
-        }
-
-        // Set status to PendingKYC
-        startup.ProfileStatus = ProfileStatus.PendingKYC;
-        startup.UpdatedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-        await _auditService.LogAsync("SUBMIT_STARTUP_KYC", "Startup", startup.StartupID, "Startup submitted KYC details");
-
-        return await GetKYCStatusAsync(userId);
-    }
-
-    public async Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request)
-    {
-        var startup = await _context.Startups
-            .FirstOrDefaultAsync(s => s.UserID == userId);
-
-        if (startup == null)
-            return ApiResponse<StartupKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
-
-        // Partial update for draft
-        if (!string.IsNullOrEmpty(request.CompanyName)) startup.CompanyName = request.CompanyName;
-        if (!string.IsNullOrEmpty(request.FullNameOfApplicant)) startup.FullNameOfApplicant = request.FullNameOfApplicant;
-        if (!string.IsNullOrEmpty(request.RoleOfApplicant)) startup.RoleOfApplicant = request.RoleOfApplicant;
-        if (!string.IsNullOrEmpty(request.ContactEmail)) startup.ContactEmail = request.ContactEmail;
-        if (!string.IsNullOrEmpty(request.ContactPhone)) startup.ContactPhone = request.ContactPhone;
-        if (!string.IsNullOrEmpty(request.BusinessCode)) startup.BusinessCode = request.BusinessCode;
-        if (!string.IsNullOrEmpty(request.Website)) startup.Website = request.Website;
-        if (!string.IsNullOrEmpty(request.LinkedInURL)) startup.LinkedInURL = request.LinkedInURL;
-        if (!string.IsNullOrEmpty(request.ProblemStatement)) startup.ProblemStatement = request.ProblemStatement;
-        if (!string.IsNullOrEmpty(request.SolutionSummary)) startup.SolutionSummary = request.SolutionSummary;
-
-        // DO NOT demote Approved -> Draft
-        if (startup.ProfileStatus == ProfileStatus.Draft)
-        {
-            startup.ProfileStatus = ProfileStatus.Draft;
-        }
-
-        startup.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        return await GetKYCStatusAsync(userId);
     }
 
     // ========== PUBLIC ENDPOINTS ==========
@@ -397,7 +257,7 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
-            .FirstOrDefaultAsync(s => s.StartupID == startupId && (s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC));
+            .FirstOrDefaultAsync(s => s.StartupID == startupId);
 
         if (startup == null)
         {
@@ -411,14 +271,13 @@ public class StartupService : IStartupService
     public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery)
     {
 
-        var query = _context.Startups.AsNoTracking().Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC).AsQueryable();
+        var query = _context.Startups.AsNoTracking().AsQueryable();
 
         // Keyword search on CompanyName
         if (!string.IsNullOrWhiteSpace(startupQuery.Key))
         {
-            var key = startupQuery.Key.Trim().ToLower();
-            query = query.Where(s => s.CompanyName.Trim().ToLower().Contains(key)
-            || (s.Industry != null && s.Industry.IndustryName.Trim().ToLower().Contains(key)));
+            query = query.Where(s => s.CompanyName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower())
+            || s.Industry.IndustryName.Trim().ToLower().Contains(startupQuery.Key.Trim().ToLower()));
         }
 
 
@@ -504,11 +363,18 @@ public class StartupService : IStartupService
             CreatedAt = DateTime.UtcNow
         };
 
-        var photo = request.PhotoURL != null
-            ? await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member)
-            : null;
-
-        member.PhotoURL = photo;
+        if (request.PhotoURL != null)
+        {
+            try
+            {
+                member.PhotoURL = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload photo for team member in startup userId={UserId}: {Message}", userId, ex.Message);
+                return ApiResponse<TeamMemberDto>.ErrorResponse("PHOTO_UPLOAD_FAILED", ex.Message);
+            }
+        }
 
         _context.TeamMembers.Add(member);
         await _context.SaveChangesAsync();
@@ -548,7 +414,16 @@ public class StartupService : IStartupService
 
         if (request.PhotoURL != null)
         {
-            var photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Logo);
+            string photo;
+            try
+            {
+                photo = await _cloudinaryService.UploadImage(request.PhotoURL, CloudinaryFolderSaving.Member);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload photo for team member id={MemberId}: {Message}", teamMemberId, ex.Message);
+                return ApiResponse<TeamMemberDto>.ErrorResponse("PHOTO_UPLOAD_FAILED", ex.Message);
+            }
             if (!string.IsNullOrEmpty(member.PhotoURL))
                 await _cloudinaryService.DeleteImage(member.PhotoURL);
             member.PhotoURL = photo;
@@ -609,32 +484,12 @@ public class StartupService : IStartupService
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
-            
-            SubIndustry = s.SubIndustry,
-            MarketScope = s.MarketScope,
-            ProductStatus = s.ProductStatus,
-            Location = s.Location,
-            Country = s.Country,
-            ProblemStatement = s.ProblemStatement,
-            SolutionSummary = s.SolutionSummary,
-            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
-            MetricSummary = s.MetricSummary,
-            TeamSize = s.TeamSize,
-            PitchDeckUrl = s.PitchDeckUrl,
-            IsVisible = s.IsVisible,
-            LinkedInURL = s.LinkedInURL,
-            FileCertificateBusiness = s.FileCertificateBusiness,
-
-            FullNameOfApplicant = s.FullNameOfApplicant,
-            RoleOfApplicant = s.RoleOfApplicant,
-            ContactEmail = s.ContactEmail,
-            ContactPhone = s.ContactPhone,
-            BusinessCode = s.BusinessCode,
-
             ProfileStatus = s.ProfileStatus.ToString(),
+            Visibility = s.IsVisible ? "Visible" : "Hidden",
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
+            TeamMembers = s.TeamMembers?.Select(MapToTeamMemberDto).ToList() ?? new()
         };
     }
 
@@ -654,20 +509,6 @@ public class StartupService : IStartupService
             LogoURL = s.LogoURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
-            SubIndustry = s.SubIndustry,
-            MarketScope = s.MarketScope,
-            ProductStatus = s.ProductStatus,
-            Location = s.Location,
-            Country = s.Country,
-            ProblemStatement = s.ProblemStatement,
-            SolutionSummary = s.SolutionSummary,
-            CurrentNeeds = DeserializeCurrentNeeds(s.CurrentNeeds),
-            MetricSummary = s.MetricSummary,
-            TeamSize = s.TeamSize,
-            PitchDeckUrl = s.PitchDeckUrl,
-            LinkedInURL = s.LinkedInURL,
-            ContactEmail = s.ContactEmail,
-            ContactPhone = s.ContactPhone,
             ProfileStatus = s.ProfileStatus.ToString(),
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
@@ -701,50 +542,12 @@ public class StartupService : IStartupService
         };
     }
 
-    private static string? SerializeCurrentNeeds(IEnumerable<string>? currentNeeds)
-    {
-        if (currentNeeds == null)
-        {
-            return null;
-        }
-
-        var items = currentNeeds
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return JsonSerializer.Serialize(items);
-    }
-
-    private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
-    {
-        if (string.IsNullOrWhiteSpace(currentNeeds))
-        {
-            return new List<string>();
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<string>>(currentNeeds) ?? new List<string>();
-        }
-        catch (JsonException)
-        {
-            return currentNeeds
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .Where(x => x.Length > 0)
-                .ToList();
-        }
-    }
-
     // ========== BROWSE INVESTORS (Startup role) ==========
 
     public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery)
     {
         var query = _context.Investors
             .AsNoTracking()
-            .Where(i => i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
             .Include(i => i.Preferences)
             .Include(i => i.StageFocus)
             .Include(i => i.IndustryFocus)
@@ -773,6 +576,9 @@ public class StartupService : IStartupService
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
+            //PreferredGeographies = i.Preferences?.PreferredGeographies,
+            //TicketSizeMin = i.Preferences?.MinInvestmentSize,
+            //TicketSizeMax = i.Preferences?.MaxInvestmentSize,
             UpdatedAt = i.UpdatedAt
         }).Paging(investorQuery.Page, investorQuery.PageSize);
 

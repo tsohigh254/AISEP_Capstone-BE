@@ -46,10 +46,16 @@ public class DocumentService : IDocumentService
             return ApiResponse<DocumentDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You must create a startup profile before uploading documents.");
 
-        // 2. Upload document với hash tính sẵn
-        var uploadResult = await _cloudinaryService.UploadDocumentWithHashAsync(
-            request.File, 
-            CloudinaryFolderSaving.DocumentStorage);
+        string fileUrl;
+        try
+        {
+            fileUrl = await _cloudinaryService.UploadDocument(request.File, CloudinaryFolderSaving.DocumentStorage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload document for startup userId={UserId}: {Message}", userId, ex.Message);
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_UPLOAD_FAILED", ex.Message);
+        }
 
         // 3. Auto-version if not provided
         var version = request.Version;
@@ -75,7 +81,8 @@ public class DocumentService : IDocumentService
         {
             StartupID = startup.StartupID,
             DocumentType = request.DocumentType,
-            FileURL = uploadResult.FileUrl,
+            Title = request.Title ?? Path.GetFileNameWithoutExtension(request.File.FileName),
+            FileURL = fileUrl,
             Version = version,
             IsAnalyzed = false,
             IsArchived = false,
@@ -139,8 +146,8 @@ public class DocumentService : IDocumentService
                 IsAnalyzed = d.IsAnalyzed,
                 AnalysisStatus = d.AnalysisStatus,
                 UploadedAt = d.UploadedAt,
-                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus : null,
-                FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
+                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : null,
+                FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : null,
                 TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
             })
             .ToListAsync(ct);
@@ -251,9 +258,9 @@ public class DocumentService : IDocumentService
             IsAnalyzed = d.IsAnalyzed,
             AnalysisStatus = d.AnalysisStatus,
             UploadedAt = d.UploadedAt,
-            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus : null,
-            FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
+            ProofStatus = d.BlockchainProof?.ProofStatus.ToString(),
+            FileHash = d.BlockchainProof?.FileHash,
+            TransactionHash = d.BlockchainProof?.TransactionHash
         };
     }
 
