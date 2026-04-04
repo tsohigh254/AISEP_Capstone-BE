@@ -9,7 +9,6 @@ public class AdvisorAvailability
     public int? WeeklyAvailableHours { get; set; }
     public int? MaxConcurrentMentees { get; set; }
     public string? ResponseTimeCommitment { get; set; }
-    public bool CalendarConnected { get; set; }
     public bool IsAcceptingNewMentees { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

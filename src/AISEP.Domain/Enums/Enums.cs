@@ -269,3 +269,11 @@ public enum IncidentStatus : short
     Resolved = 2,
     RolledBack = 3
 }
+
+public enum SessionStatus : short
+{
+    Pending = 0,
+    Confirmed = 1,
+    Cancelled = 2,
+    Completed = 3
+}

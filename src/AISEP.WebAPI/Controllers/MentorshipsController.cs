@@ -1,6 +1,8 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
+using AISEP.Application.DTOs.Slot;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -64,14 +66,11 @@ public class MentorshipsController : ControllerBase
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<MentorshipListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMyMentorships(
-        [FromQuery] string? status,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetMyMentorships([FromQuery] MentorshipQueryParams mentorshipQuery)
     {
         var userId = GetCurrentUserId();
         var userType = GetCurrentUserType();
-        var result = await _mentorshipService.GetMyMentorshipsAsync(userId, userType, status, page, pageSize);
+        var result = await _mentorshipService.GetMyMentorshipsAsync(userId, userType, mentorshipQuery);
         return result.ToPagedEnvelope();
     }
 
@@ -191,6 +190,20 @@ public class MentorshipsController : ControllerBase
         return result.ToActionResult();
     }
 
+    /// <summary>
+    /// Get a paginated list of sessions for the current user.
+    /// </summary>
+    [HttpGet("sessions")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<MentorshipListItemDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySessions([FromQuery] SessionQueryParams sessionQuery)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetSessions(userId, userType, sessionQuery);
+        return result.ToPagedEnvelope();
+    }
+
+
     // ================================================================
     // 8) POST /api/mentorships/{id}/reports — Create report (Advisor)
     // ================================================================
@@ -286,5 +299,97 @@ public class MentorshipsController : ControllerBase
         var result = await _mentorshipService.GetMentorshipFeedbacksAsync(
             GetCurrentUserId(), GetCurrentUserType(), id);
         return result.ToEnvelope();
+    }
+
+    // ================================================================
+    // AVAILABLE SLOTS (Advisor)
+    // ================================================================
+
+    /// <summary>Create a single available time slot.</summary>
+    [HttpPost("available-slots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AvailableSlotDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<AvailableSlotDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateAvailableSlot([FromBody] CreateAvailableSlotRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.CreateAvailableSlotAsync(userId, request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Create multiple available slots in bulk.</summary>
+    [HttpPost("available-slots/bulk")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<List<AvailableSlotDto>>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateMultipleAvailableSlots([FromBody] CreateMultipleAvailableSlotsRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.CreateMultipleAvailableSlotsAsync(userId, request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Get my available slots (Advisor).</summary>
+    [HttpGet("my-available-slots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<AvailableSlotDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyAvailableSlots([FromQuery] AvailableSlotQueryParams queryParams)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.GetMyAvailableSlotsAsync(userId, queryParams);
+        return result.ToPagedEnvelope();
+    }
+
+    /// <summary>Update an available slot.</summary>
+    [HttpPut("available-slots/{slotId:int}")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AvailableSlotDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AvailableSlotDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<AvailableSlotDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateAvailableSlot(int slotId, [FromBody] UpdateAvailableSlotRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.UpdateAvailableSlotAsync(userId, slotId, request);
+        return result.ToActionResult();
+    }
+
+    /// <summary>Delete an available slot.</summary>
+    [HttpDelete("available-slots/{slotId:int}")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAvailableSlot(int slotId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.DeleteAvailableSlotAsync(userId, slotId);
+        return result.ToActionResult();
+    }
+
+    /// <summary>Get available slots for a specific advisor.</summary>
+    [HttpGet("advisors/{advisorId:int}/available-slots")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<AvailableSlotDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<AvailableSlotDto>>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAdvisorAvailableSlots(int advisorId, [FromQuery] AvailableSlotQueryParams queryParams)
+    {
+        var result = await _mentorshipService.GetAdvisorAvailableSlotsAsync(advisorId, queryParams);
+        return result.ToPagedEnvelope();
+    }
+
+    /// <summary>Startup books a session by selecting an available slot.</summary>
+    [HttpPost("book-session")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> BookSessionFromSlot([FromBody] BookSessionFromSlotRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.BookSessionFromSlotAsync(userId, request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
     }
 }

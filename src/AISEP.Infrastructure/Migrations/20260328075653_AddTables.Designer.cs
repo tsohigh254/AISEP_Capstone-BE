@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328075653_AddTables")]
+    partial class AddTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,45 +33,18 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("AdvisorID"));
 
-                    b.Property<short>("AdvisorTag")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ApprovedBy")
-                        .HasColumnType("integer");
-
                     b.Property<float?>("AverageRating")
                         .HasColumnType("real");
 
                     b.Property<string>("Bio")
                         .HasColumnType("text");
 
-                    b.Property<int>("CompletedSessions")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DomainTags")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExperiencesJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Expertise")
-                        .HasColumnType("text");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<decimal?>("HourlyRate")
-                        .HasColumnType("numeric");
-
-                    b.Property<bool>("IsVerified")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("LinkedInURL")
                         .HasColumnType("text");
@@ -83,18 +59,6 @@ namespace AISEP.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)0);
-
-                    b.Property<int>("ReviewCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Skills")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SuitableFor")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SupportedDurations")
-                        .HasColumnType("text");
 
                     b.Property<string>("Title")
                         .HasColumnType("text");
@@ -111,12 +75,7 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int>("UserID")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("YearsOfExperience")
-                        .HasColumnType("integer");
-
                     b.HasKey("AdvisorID");
-
-                    b.HasIndex("ApprovedBy");
 
                     b.HasIndex("UserID")
                         .IsUnique();
@@ -426,21 +385,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("ReviewNotes")
-                        .HasColumnType("text");
-
-                    b.Property<short>("ReviewStatus")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ReviewedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ReviewedByUserUserID")
-                        .HasColumnType("integer");
-
                     b.Property<int>("StartupID")
                         .HasColumnType("integer");
 
@@ -454,8 +398,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("DocumentID");
-
-                    b.HasIndex("ReviewedByUserUserID");
 
                     b.HasIndex("StartupID");
 
@@ -599,61 +541,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("FlaggedContents");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.Incident", b =>
-                {
-                    b.Property<int>("IncidentID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IncidentID"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("CreatedByUserUserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsRolledBack")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ResolvedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ResolvedByUserUserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RollbackNotes")
-                        .HasColumnType("text");
-
-                    b.Property<short>("Severity")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("IncidentID");
-
-                    b.HasIndex("CreatedByUserUserID");
-
-                    b.HasIndex("ResolvedByUserUserID");
-
-                    b.ToTable("Incidents");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.Industry", b =>
                 {
                     b.Property<int>("IndustryID")
@@ -783,19 +670,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("InvestorID"));
 
-                    b.Property<DateTime?>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ApprovedBy")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Bio")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BusinessCode")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContactEmail")
                         .HasColumnType("text");
 
                     b.Property<string>("Country")
@@ -804,12 +679,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CurrentOrganization")
-                        .HasColumnType("text");
-
-                    b.Property<string>("CurrentRoleTitle")
-                        .HasColumnType("text");
-
                     b.Property<string>("FirmName")
                         .HasColumnType("text");
 
@@ -817,20 +686,8 @@ namespace AISEP.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("IDProofFileURL")
-                        .HasColumnType("text");
-
-                    b.Property<string>("InvestmentProofFileURL")
-                        .HasColumnType("text");
-
                     b.Property<string>("InvestmentThesis")
                         .HasColumnType("text");
-
-                    b.Property<short>("InvestorTag")
-                        .HasColumnType("smallint");
-
-                    b.Property<short?>("InvestorType")
-                        .HasColumnType("smallint");
 
                     b.Property<string>("LinkedInURL")
                         .HasColumnType("text");
@@ -846,12 +703,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)0);
 
-                    b.Property<string>("Remarks")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SubmitterRole")
-                        .HasColumnType("text");
-
                     b.Property<string>("Title")
                         .HasColumnType("text");
 
@@ -865,8 +716,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("InvestorID");
-
-                    b.HasIndex("ApprovedBy");
 
                     b.HasIndex("UserID")
                         .IsUnique();
@@ -1685,19 +1534,8 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int?>("ApprovedBy")
                         .HasColumnType("integer");
 
-                    b.Property<string>("BusinessCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("CompanyName")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContactEmail")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContactPhone")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1709,15 +1547,8 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
-                    b.Property<string>("FileCertificateBusiness")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("FoundedDate")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FullNameOfApplicant")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<decimal?>("FundingAmountSought")
                         .HasColumnType("numeric");
@@ -1725,23 +1556,11 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int?>("IndustryID")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("IsVisible")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("LinkedInURL")
-                        .HasColumnType("text");
-
                     b.Property<string>("LogoURL")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MarketScope")
                         .HasColumnType("text");
 
                     b.Property<string>("OneLiner")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProblemStatement")
                         .HasColumnType("text");
 
                     b.Property<short>("ProfileStatus")
@@ -1749,17 +1568,7 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)0);
 
-                    b.Property<string>("RoleOfApplicant")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("SolutionSummary")
-                        .HasColumnType("text");
-
                     b.Property<short?>("Stage")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("StartupTag")
                         .HasColumnType("smallint");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -2104,18 +1913,11 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Advisor", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.User", "ApprovedByUser")
-                        .WithMany()
-                        .HasForeignKey("ApprovedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AISEP.Domain.Entities.User", "User")
                         .WithOne("Advisor")
                         .HasForeignKey("AISEP.Domain.Entities.Advisor", "UserID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ApprovedByUser");
 
                     b.Navigation("User");
                 });
@@ -2237,17 +2039,11 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.User", "ReviewedByUser")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByUserUserID");
-
                     b.HasOne("AISEP.Domain.Entities.Startup", "Startup")
                         .WithMany("Documents")
                         .HasForeignKey("StartupID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ReviewedByUser");
 
                     b.Navigation("Startup");
                 });
@@ -2297,21 +2093,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("ReviewedByUser");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.Incident", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserUserID");
-
-                    b.HasOne("AISEP.Domain.Entities.User", "ResolvedByUser")
-                        .WithMany()
-                        .HasForeignKey("ResolvedByUserUserID");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("ResolvedByUser");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.Industry", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.Industry", "ParentIndustry")
@@ -2354,18 +2135,11 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Investor", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.User", "ApprovedByUser")
-                        .WithMany()
-                        .HasForeignKey("ApprovedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AISEP.Domain.Entities.User", "User")
                         .WithOne("Investor")
                         .HasForeignKey("AISEP.Domain.Entities.Investor", "UserID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ApprovedByUser");
 
                     b.Navigation("User");
                 });

@@ -1,3 +1,5 @@
+using AISEP.Domain.Enums;
+
 namespace AISEP.Application.DTOs.Mentorship;
 
 // ============================= REQUEST DTOs =============================
@@ -13,7 +15,6 @@ public class CreateMentorshipRequest
     public int AdvisorId { get; set; }
     public string ChallengeDescription { get; set; } = null!;
     public string? SpecificQuestions { get; set; }
-    public string? PreferredFormat { get; set; }
     public string? ExpectedDuration { get; set; }
     public string? ExpectedScope { get; set; }
 }
@@ -36,7 +37,6 @@ public class CreateSessionRequest
 {
     public DateTime ScheduledStartAt { get; set; }
     public int DurationMinutes { get; set; }
-    public string? SessionFormat { get; set; }
     public string? MeetingUrl { get; set; }
 }
 
@@ -50,13 +50,9 @@ public class UpdateSessionRequest
 {
     public DateTime? ScheduledStartAt { get; set; }
     public int? DurationMinutes { get; set; }
-    public string? SessionFormat { get; set; }
     public string? MeetingUrl { get; set; }
-    public string? SessionStatus { get; set; }
+    public SessionStatus SessionStatus { get; set; }
     public string? TopicsDiscussed { get; set; }
-    public string? KeyInsights { get; set; }
-    public string? ActionItems { get; set; }
-    public string? NextSteps { get; set; }
 }
 
 /// <summary>
@@ -115,7 +111,6 @@ public class MentorshipListItemDto
     public string AdvisorName { get; set; } = string.Empty;
     public string MentorshipStatus { get; set; } = string.Empty;
     public string? ChallengeDescription { get; set; }
-    public string? PreferredFormat { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -130,23 +125,15 @@ public class MentorshipDetailDto
     public string AdvisorName { get; set; } = string.Empty;
     public string MentorshipStatus { get; set; } = string.Empty;
     public string? ChallengeDescription { get; set; }
-    public string? SpecificQuestions { get; set; }
-    public string? PreferredFormat { get; set; }
     public string? ExpectedDuration { get; set; }
-    public string? ExpectedScope { get; set; }
-    public string? ObligationSummary { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
     public string? RejectedReason { get; set; }
-    public DateTime? CompletedAt { get; set; }
     public bool CompletionConfirmedByStartup { get; set; }
     public bool CompletionConfirmedByAdvisor { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
-    public List<SessionDto> Sessions { get; set; } = new();
-    public List<ReportDto> Reports { get; set; } = new();
-    public List<FeedbackDto> Feedbacks { get; set; } = new();
 }
 
 /// <summary>Session DTO.</summary>
@@ -156,15 +143,10 @@ public class SessionDto
     public int MentorshipID { get; set; }
     public DateTime? ScheduledStartAt { get; set; }
     public int? DurationMinutes { get; set; }
-    public string? SessionFormat { get; set; }
     public string? MeetingURL { get; set; }
-    public string? SessionStatus { get; set; }
+    public string SessionStatus { get; set; }
     public string? TopicsDiscussed { get; set; }
-    public string? KeyInsights { get; set; }
-    public string? ActionItems { get; set; }
-    public string? NextSteps { get; set; }
     public DateTime CreatedAt { get; set; }
-    public DateTime? UpdatedAt { get; set; }
 }
 
 public class SessionListItemDto : SessionDto

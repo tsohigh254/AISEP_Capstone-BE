@@ -72,6 +72,16 @@ public class AdvisorsController : ControllerBase
         return result.ToActionResult();
     }
 
+    [HttpGet("me/{id}")]
+    //[Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorMeDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAdvisorProfileById(int id, CancellationToken ct = default)
+    {
+        var result = await _advisorService.GetMyProfileAsync(id);
+        return result.ToActionResult();
+    }
+
     // ================================================================
     // 3) PUT /api/advisors/me — Update my profile
     // ================================================================

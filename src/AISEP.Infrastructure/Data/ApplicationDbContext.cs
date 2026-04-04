@@ -71,7 +71,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
+    public DbSet<AdvisorAvailableSlot> AdvisorAvailableSlots => Set<AdvisorAvailableSlot>();
 
+    public DbSet<AdvisorWeeklyScheduleTemplate> AdvisorWeeklyScheduleTemplates => Set<AdvisorWeeklyScheduleTemplate>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -135,6 +137,8 @@ public class ApplicationDbContext : DbContext
 
         // Mentorship
         modelBuilder.Entity<StartupAdvisorMentorship>().Property(e => e.MentorshipStatus).HasConversion<short>().HasDefaultValue(MentorshipStatus.Requested);
+
+        modelBuilder.Entity<MentorshipSession>().Property(e => e.SessionStatus).HasConversion<short>().HasDefaultValue(SessionStatus.Pending);
     }
 
     private void ConfigurePrimaryKeys(ModelBuilder modelBuilder)
@@ -159,6 +163,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AdvisorAvailability>().HasKey(aa => aa.AvailabilityID);
         modelBuilder.Entity<AdvisorIndustryFocus>().HasKey(aif => aif.IndustryFocusID);
         modelBuilder.Entity<AdvisorTestimonial>().HasKey(at => at.TestimonialID);
+        modelBuilder.Entity<AdvisorWeeklyScheduleTemplate>().HasKey(awst => awst.TemplateID);
+        modelBuilder.Entity<AdvisorAvailableSlot>().HasKey(aas => aas.SlotID);
 
         // Investor
         modelBuilder.Entity<Investor>().HasKey(i => i.InvestorID);
@@ -343,5 +349,36 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<MentorshipSession>()
+            .HasOne(s => s.MentorshipFeedback)
+            .WithOne(s => s.Session)
+            .HasForeignKey<MentorshipFeedback>(f => f.SessionID);
+
+        // AdvisorWeeklyScheduleTemplate relationships
+        modelBuilder.Entity<AdvisorWeeklyScheduleTemplate>()
+            .HasOne(awst => awst.Advisor)
+            .WithMany(a => a.WeeklyScheduleTemplates)
+            .HasForeignKey(awst => awst.AdvisorID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // AdvisorAvailableSlot relationships
+        modelBuilder.Entity<AdvisorAvailableSlot>()
+            .HasOne(aas => aas.Advisor)
+            .WithMany(a => a.AvailableSlots)
+            .HasForeignKey(aas => aas.AdvisorID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AdvisorAvailableSlot>()
+            .HasOne(aas => aas.Template)
+            .WithMany()
+            .HasForeignKey(aas => aas.TemplateID)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<AdvisorAvailableSlot>()
+            .HasOne(aas => aas.BookedSession)
+            .WithOne()
+            .HasForeignKey<AdvisorAvailableSlot>(aas => aas.BookedSessionID)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

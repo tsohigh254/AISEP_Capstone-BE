@@ -1,6 +1,9 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
+using AISEP.Application.DTOs.Slot;
+using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
@@ -56,10 +59,7 @@ public class MentorshipService : IMentorshipService
             AdvisorID = request.AdvisorId,
             MentorshipStatus = MentorshipStatus.Requested,
             ChallengeDescription = request.ChallengeDescription,
-            SpecificQuestions = request.SpecificQuestions,
-            PreferredFormat = request.PreferredFormat,
             ExpectedDuration = request.ExpectedDuration,
-            ExpectedScope = request.ExpectedScope,
             RequestedAt = DateTime.UtcNow,
             LastUpdatedByRole = "Startup",
             CreatedAt = DateTime.UtcNow
@@ -81,15 +81,14 @@ public class MentorshipService : IMentorshipService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<MentorshipListItemDto>>> GetMyMentorshipsAsync(
-        int userId, string userType, string? status, int page, int pageSize)
+        int userId, string userType, MentorshipQueryParams mentorshipQuery)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
-        page = Math.Max(page, 1);
 
-        IQueryable<StartupAdvisorMentorship> query = _db.StartupAdvisorMentorships
+        var query = _db.StartupAdvisorMentorships
             .AsNoTracking()
             .Include(m => m.Startup)
-            .Include(m => m.Advisor);
+            .Include(m => m.Advisor)
+            .AsQueryable();
 
         if (userType == "Startup")
         {
@@ -119,16 +118,8 @@ public class MentorshipService : IMentorshipService
                 "ACCESS_DENIED", "Only Startup, Advisor, Staff, or Admin can view mentorships.");
         }
 
-        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<MentorshipStatus>(status, true, out var statusEnum))
-            query = query.Where(m => m.MentorshipStatus == statusEnum);
-
-        query = query.OrderByDescending(m => m.CreatedAt);
-
-        var totalItems = await query.CountAsync();
-
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+        var items = query
+            .OrderByDescending(m => m.CreatedAt)
             .Select(m => new MentorshipListItemDto
             {
                 MentorshipID = m.MentorshipID,
@@ -138,21 +129,19 @@ public class MentorshipService : IMentorshipService
                 AdvisorName = m.Advisor.FullName,
                 MentorshipStatus = m.MentorshipStatus.ToString(),
                 ChallengeDescription = m.ChallengeDescription,
-                PreferredFormat = m.PreferredFormat,
                 RequestedAt = m.RequestedAt,
                 CreatedAt = m.CreatedAt
-            })
-            .ToListAsync();
+            }).Paging(mentorshipQuery.Page, mentorshipQuery.PageSize);
 
         return ApiResponse<PagedResponse<MentorshipListItemDto>>.SuccessResponse(
             new PagedResponse<MentorshipListItemDto>
             {
-                Items = items,
+                Items = await items.ToListAsync(),
                 Paging = new PagingInfo
                 {
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalItems = totalItems,
+                    Page = mentorshipQuery.Page,
+                    PageSize = mentorshipQuery.PageSize,
+                    TotalItems = await query.CountAsync(),
                 }
             });
     }
@@ -168,9 +157,6 @@ public class MentorshipService : IMentorshipService
             .AsSplitQuery()
             .Include(m => m.Startup)
             .Include(m => m.Advisor)
-            .Include(m => m.Sessions.OrderByDescending(s => s.ScheduledStartAt))
-            .Include(m => m.Reports.OrderByDescending(r => r.CreatedAt))
-            .Include(m => m.Feedbacks.OrderByDescending(f => f.SubmittedAt))
             .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
 
         if (mentorship == null)
@@ -336,10 +322,7 @@ public class MentorshipService : IMentorshipService
             MentorshipID = mentorshipId,
             ScheduledStartAt = request.ScheduledStartAt,
             DurationMinutes = request.DurationMinutes,
-            SessionFormat = request.SessionFormat,
             MeetingURL = request.MeetingUrl,
-            SessionStatus = "Scheduled",
-            CreatedAt = DateTime.UtcNow
         };
 
         _db.MentorshipSessions.Add(session);
@@ -384,14 +367,9 @@ public class MentorshipService : IMentorshipService
 
         if (request.ScheduledStartAt.HasValue) session.ScheduledStartAt = request.ScheduledStartAt.Value;
         if (request.DurationMinutes.HasValue) session.DurationMinutes = request.DurationMinutes.Value;
-        if (request.SessionFormat != null) session.SessionFormat = request.SessionFormat;
         if (request.MeetingUrl != null) session.MeetingURL = request.MeetingUrl;
         if (request.SessionStatus != null) session.SessionStatus = request.SessionStatus;
         if (request.TopicsDiscussed != null) session.TopicsDiscussed = request.TopicsDiscussed;
-        if (request.KeyInsights != null) session.KeyInsights = request.KeyInsights;
-        if (request.ActionItems != null) session.ActionItems = request.ActionItems;
-        if (request.NextSteps != null) session.NextSteps = request.NextSteps;
-        session.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
 
@@ -400,6 +378,63 @@ public class MentorshipService : IMentorshipService
 
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
     }
+
+    // ================================================================
+    // GET SESSION 
+    // ================================================================
+
+    public async Task<ApiResponse<PagedResponse<SessionDto>>> GetSessions(int userId, string userType, SessionQueryParams sessionQuery)
+    {
+        var query = _db.MentorshipSessions.AsNoTracking().AsQueryable();
+
+        if (userType == "Startup")
+        {
+            var startup = await _db.Startups.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserID == userId);
+
+            if (startup == null)
+                return ApiResponse<PagedResponse<SessionDto>>.ErrorResponse(
+                    "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+            query = query.Where(m => m.Mentorship.StartupID == startup.StartupID);
+        }
+        else if (userType == "Advisor")
+        {
+            var advisor = await _db.Advisors.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.UserID == userId);
+            if (advisor == null)
+                return ApiResponse<PagedResponse<SessionDto>>.ErrorResponse(
+                    "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+            query = query.Where(m => m.Mentorship.AdvisorID == advisor.AdvisorID);
+        }
+
+        var sessionsToDto = query
+        .OrderByDescending(s => s.CreatedAt)
+        .Select(s => new SessionDto
+        {
+            SessionID = s.SessionID,
+            MentorshipID = s.MentorshipID,
+            ScheduledStartAt = s.ScheduledStartAt,
+            DurationMinutes = s.DurationMinutes,
+            MeetingURL = s.MeetingURL,
+            SessionStatus = s.SessionStatus.ToString(),
+            TopicsDiscussed = s.TopicsDiscussed,
+            CreatedAt = s.CreatedAt,
+        }).Paging(sessionQuery.Page, sessionQuery.PageSize);
+
+        return ApiResponse<PagedResponse<SessionDto>>.SuccessResponse(
+            new PagedResponse<SessionDto>
+            {
+                Items = await sessionsToDto.ToListAsync(),
+                Paging = new PagingInfo
+                {
+                    Page = sessionQuery.Page,
+                    PageSize = sessionQuery.PageSize,
+                    TotalItems = await query.CountAsync(),
+                }
+            });
+    }
+
 
     // ================================================================
     // CREATE REPORT (Advisor)
@@ -524,9 +559,327 @@ public class MentorshipService : IMentorshipService
     }
 
     // ================================================================
+    // SLOT (Startup)
+    // ================================================================
+
+    public async Task<ApiResponse<AvailableSlotDto>> CreateAvailableSlotAsync(int userId, CreateAvailableSlotRequest request)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<AvailableSlotDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        if (request.EndTime <= request.StartTime)
+            return ApiResponse<AvailableSlotDto>.ErrorResponse("INVALID_TIME_RANGE",
+                "EndTime must be after StartTime.");
+
+        var slot = new AdvisorAvailableSlot
+        {
+            AdvisorID = advisor.AdvisorID,
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            Notes = request.Notes,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.AdvisorAvailableSlots.Add(slot);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CREATE_AVAILABLE_SLOT", "AdvisorAvailableSlot", slot.SlotID,
+            $"AdvisorId={advisor.AdvisorID}, StartTime={request.StartTime}, EndTime={request.EndTime}");
+        _logger.LogInformation("Available slot {SlotId} created by advisor {AdvisorId}",
+            slot.SlotID, advisor.AdvisorID);
+
+        return ApiResponse<AvailableSlotDto>.SuccessResponse(MapToAvailableSlotDto(slot));
+    }
+
+    public async Task<ApiResponse<List<AvailableSlotDto>>> CreateMultipleAvailableSlotsAsync(int userId, CreateMultipleAvailableSlotsRequest request)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<List<AvailableSlotDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        if (request.Slots == null || request.Slots.Count == 0)
+            return ApiResponse<List<AvailableSlotDto>>.ErrorResponse("EMPTY_SLOTS",
+                "At least one slot must be provided.");
+
+        var slots = new List<AdvisorAvailableSlot>();
+
+        foreach (var slotReq in request.Slots)
+        {
+            if (slotReq.EndTime <= slotReq.StartTime)
+                return ApiResponse<List<AvailableSlotDto>>.ErrorResponse("INVALID_TIME_RANGE",
+                    $"EndTime must be after StartTime for slot at {slotReq.StartTime}.");
+
+            slots.Add(new AdvisorAvailableSlot
+            {
+                AdvisorID = advisor.AdvisorID,
+                StartTime = slotReq.StartTime,
+                EndTime = slotReq.EndTime,
+                Notes = slotReq.Notes,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        _db.AdvisorAvailableSlots.AddRange(slots);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CREATE_MULTIPLE_AVAILABLE_SLOTS", "AdvisorAvailableSlot", 0,
+            $"AdvisorId={advisor.AdvisorID}, Count={slots.Count}");
+        _logger.LogInformation("Created {Count} available slots for advisor {AdvisorId}",
+            slots.Count, advisor.AdvisorID);
+
+        var dtos = slots.Select(MapToAvailableSlotDto).ToList();
+        return ApiResponse<List<AvailableSlotDto>>.SuccessResponse(dtos);
+    }
+
+    public async Task<ApiResponse<AvailableSlotDto>> UpdateAvailableSlotAsync(int userId, int slotId, UpdateAvailableSlotRequest request)
+    {
+        var slot = await _db.AdvisorAvailableSlots
+            .FirstOrDefaultAsync(s => s.SlotID == slotId);
+
+        if (slot == null)
+            return ApiResponse<AvailableSlotDto>.ErrorResponse("SLOT_NOT_FOUND",
+                "Available slot not found.");
+
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null || slot.AdvisorID != advisor.AdvisorID)
+            return ApiResponse<AvailableSlotDto>.ErrorResponse("SLOT_NOT_OWNED",
+                "You do not own this available slot.");
+
+        // Cannot update booked slots
+        if (slot.IsBooked)
+            return ApiResponse<AvailableSlotDto>.ErrorResponse("SLOT_ALREADY_BOOKED",
+                "Cannot update a slot that is already booked.");
+
+        if (request.StartTime.HasValue && request.EndTime.HasValue)
+        {
+            if (request.EndTime.Value <= request.StartTime.Value)
+                return ApiResponse<AvailableSlotDto>.ErrorResponse("INVALID_TIME_RANGE",
+                    "EndTime must be after StartTime.");
+            slot.StartTime = request.StartTime.Value;
+            slot.EndTime = request.EndTime.Value;
+        }
+        else if (request.StartTime.HasValue)
+        {
+            if (request.StartTime.Value >= slot.EndTime)
+                return ApiResponse<AvailableSlotDto>.ErrorResponse("INVALID_TIME_RANGE",
+                    "StartTime must be before EndTime.");
+            slot.StartTime = request.StartTime.Value;
+        }
+        else if (request.EndTime.HasValue)
+        {
+            if (request.EndTime.Value <= slot.StartTime)
+                return ApiResponse<AvailableSlotDto>.ErrorResponse("INVALID_TIME_RANGE",
+                    "EndTime must be after StartTime.");
+            slot.EndTime = request.EndTime.Value;
+        }
+
+        if (request.Notes != null)
+            slot.Notes = request.Notes;
+
+        slot.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("UPDATE_AVAILABLE_SLOT", "AdvisorAvailableSlot", slotId, null);
+        _logger.LogInformation("Available slot {SlotId} updated", slotId);
+
+        return ApiResponse<AvailableSlotDto>.SuccessResponse(MapToAvailableSlotDto(slot));
+    }
+
+    public async Task<ApiResponse<string>> DeleteAvailableSlotAsync(int userId, int slotId)
+    {
+        var slot = await _db.AdvisorAvailableSlots
+            .FirstOrDefaultAsync(s => s.SlotID == slotId);
+
+        if (slot == null)
+            return ApiResponse<string>.ErrorResponse("SLOT_NOT_FOUND",
+                "Available slot not found.");
+
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null || slot.AdvisorID != advisor.AdvisorID)
+            return ApiResponse<string>.ErrorResponse("SLOT_NOT_OWNED",
+                "You do not own this available slot.");
+
+        if (slot.IsBooked)
+            return ApiResponse<string>.ErrorResponse("SLOT_ALREADY_BOOKED",
+                "Cannot delete a slot that is already booked.");
+
+        _db.AdvisorAvailableSlots.Remove(slot);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("DELETE_AVAILABLE_SLOT", "AdvisorAvailableSlot", slotId, null);
+        _logger.LogInformation("Available slot {SlotId} deleted", slotId);
+
+        return ApiResponse<string>.SuccessResponse("Slot deleted successfully.");
+    }
+
+    public async Task<ApiResponse<PagedResponse<AvailableSlotDto>>> GetMyAvailableSlotsAsync(int userId, AvailableSlotQueryParams queryParams)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<PagedResponse<AvailableSlotDto>>.ErrorResponse(
+                "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        var query = _db.AdvisorAvailableSlots
+            .AsNoTracking()
+            .Where(s => s.AdvisorID == advisor.AdvisorID)
+            .AsQueryable();
+
+        var items = query
+            .OrderBy(s => s.StartTime)
+            .Select(s => new AvailableSlotDto
+            {
+                SlotID = s.SlotID,
+                AdvisorID = s.AdvisorID,
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                IsBooked = s.IsBooked,
+                BookedSessionID = s.BookedSessionID,
+                Notes = s.Notes,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            }).Paging(queryParams.Page, queryParams.PageSize);
+
+        return ApiResponse<PagedResponse<AvailableSlotDto>>.SuccessResponse(
+            new PagedResponse<AvailableSlotDto>
+            {
+                Items = await items.ToListAsync(),
+                Paging = new PagingInfo
+                {
+                    Page = queryParams.Page,
+                    PageSize = queryParams.PageSize,
+                    TotalItems = await query.CountAsync(),
+                }
+            });
+    }
+
+    public async Task<ApiResponse<PagedResponse<AvailableSlotDto>>> GetAdvisorAvailableSlotsAsync(int advisorId, AvailableSlotQueryParams queryParams)
+    {
+        var advisorExists = await _db.Advisors.AnyAsync(a => a.AdvisorID == advisorId);
+        if (!advisorExists)
+            return ApiResponse<PagedResponse<AvailableSlotDto>>.ErrorResponse(
+                "ADVISOR_NOT_FOUND", "Advisor not found.");
+
+        var query = _db.AdvisorAvailableSlots
+            .AsNoTracking()
+            .Where(s => s.AdvisorID == advisorId && !s.IsBooked)
+            .AsQueryable();
+
+        var items = query
+            .OrderBy(s => s.StartTime)
+            .Select(s => new AvailableSlotDto
+            {
+                SlotID = s.SlotID,
+                AdvisorID = s.AdvisorID,
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                IsBooked = s.IsBooked,
+                BookedSessionID = s.BookedSessionID,
+                Notes = s.Notes,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            }).Paging(queryParams.Page, queryParams.PageSize);
+
+        return ApiResponse<PagedResponse<AvailableSlotDto>>.SuccessResponse(
+            new PagedResponse<AvailableSlotDto>
+            {
+                Items = await items.ToListAsync(),
+                Paging = new PagingInfo
+                {
+                    Page = queryParams.Page,
+                    PageSize = queryParams.PageSize,
+                    TotalItems = await query.CountAsync(),
+                }
+            });
+    }
+
+    public async Task<ApiResponse<SessionDto>> BookSessionFromSlotAsync(int userId, BookSessionFromSlotRequest request)
+    {
+        var startup = await _db.Startups.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<SessionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "Startup profile not found.");
+
+        // Verify mentorship exists and user is the startup owner
+        var mentorship = await _db.StartupAdvisorMentorships
+            .FirstOrDefaultAsync(m => m.MentorshipID == request.MentorshipID);
+        if (mentorship == null)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_FOUND",
+                "Mentorship not found.");
+
+        if (mentorship.StartupID != startup.StartupID)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
+                "You are not the startup owner of this mentorship.");
+
+        if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_MENTORSHIP_STATUS",
+                $"Cannot book session for mentorship with status '{mentorship.MentorshipStatus}'.");
+
+        // Get available slot
+        var slot = await _db.AdvisorAvailableSlots
+            .FirstOrDefaultAsync(s => s.SlotID == request.AvailableSlotID);
+        if (slot == null)
+            return ApiResponse<SessionDto>.ErrorResponse("SLOT_NOT_FOUND",
+                "Available slot not found.");
+
+        if (slot.IsBooked)
+            return ApiResponse<SessionDto>.ErrorResponse("SLOT_ALREADY_BOOKED",
+                "This slot is already booked.");
+
+        if (slot.AdvisorID != mentorship.AdvisorID)
+            return ApiResponse<SessionDto>.ErrorResponse("SLOT_MISMATCH",
+                "This slot does not belong to the advisor in this mentorship.");
+
+        // Create session
+        var durationMinutes = (int)(slot.EndTime - slot.StartTime).TotalMinutes;
+        var session = new MentorshipSession
+        {
+            MentorshipID = request.MentorshipID,
+            ScheduledStartAt = slot.StartTime,
+            DurationMinutes = durationMinutes,
+            MeetingURL = request.MeetingUrl ?? string.Empty,
+            SessionStatus = SessionStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.MentorshipSessions.Add(session);
+
+        // Mark slot as booked
+        slot.IsBooked = true;
+        slot.BookedSessionID = session.SessionID;
+        slot.UpdatedAt = DateTime.UtcNow;
+
+        // Move mentorship to InProgress if Accepted
+        if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+            mentorship.LastUpdatedByRole = "Startup";
+            mentorship.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("BOOK_SESSION_FROM_SLOT", "MentorshipSession", session.SessionID,
+            $"MentorshipId={request.MentorshipID}, SlotId={request.AvailableSlotID}");
+        _logger.LogInformation("Session {SessionId} booked from slot {SlotId} by startup {StartupId}",
+            session.SessionID, request.AvailableSlotID, startup.StartupID);
+
+        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
+    }
+  
+    // ================================================================
     // HELPERS
     // ================================================================
 
+    #region helper method
     private async Task<(StartupAdvisorMentorship? mentorship, ApiResponse<MentorshipDto>? error)>
         GetMentorshipForAdvisor(int userId, int mentorshipId)
     {
@@ -570,10 +923,6 @@ public class MentorshipService : IMentorshipService
         return false;
     }
 
-    // ================================================================
-    // MAPPING
-    // ================================================================
-
     private static MentorshipDto MapToDto(StartupAdvisorMentorship m) => new()
     {
         MentorshipID = m.MentorshipID,
@@ -581,10 +930,7 @@ public class MentorshipService : IMentorshipService
         AdvisorID = m.AdvisorID,
         MentorshipStatus = m.MentorshipStatus.ToString(),
         ChallengeDescription = m.ChallengeDescription,
-        SpecificQuestions = m.SpecificQuestions,
-        PreferredFormat = m.PreferredFormat,
         ExpectedDuration = m.ExpectedDuration,
-        ExpectedScope = m.ExpectedScope,
         RequestedAt = m.RequestedAt,
         AcceptedAt = m.AcceptedAt,
         RejectedAt = m.RejectedAt,
@@ -602,23 +948,15 @@ public class MentorshipService : IMentorshipService
         AdvisorName = m.Advisor.FullName,
         MentorshipStatus = m.MentorshipStatus.ToString(),
         ChallengeDescription = m.ChallengeDescription,
-        SpecificQuestions = m.SpecificQuestions,
-        PreferredFormat = m.PreferredFormat,
         ExpectedDuration = m.ExpectedDuration,
-        ExpectedScope = m.ExpectedScope,
-        ObligationSummary = m.ObligationSummary,
         RequestedAt = m.RequestedAt,
         AcceptedAt = m.AcceptedAt,
         RejectedAt = m.RejectedAt,
         RejectedReason = m.RejectedReason,
-        CompletedAt = m.CompletedAt,
         CompletionConfirmedByStartup = m.CompletionConfirmedByStartup,
         CompletionConfirmedByAdvisor = m.CompletionConfirmedByAdvisor,
         CreatedAt = m.CreatedAt,
         UpdatedAt = m.UpdatedAt,
-        Sessions = m.Sessions.Select(MapSessionDto).ToList(),
-        Reports = m.Reports.Select(MapReportDto).ToList(),
-        Feedbacks = m.Feedbacks.Select(MapFeedbackDto).ToList()
     };
 
     private static SessionDto MapSessionDto(MentorshipSession s) => new()
@@ -627,15 +965,10 @@ public class MentorshipService : IMentorshipService
         MentorshipID = s.MentorshipID,
         ScheduledStartAt = s.ScheduledStartAt,
         DurationMinutes = s.DurationMinutes,
-        SessionFormat = s.SessionFormat,
         MeetingURL = s.MeetingURL,
-        SessionStatus = s.SessionStatus,
+        SessionStatus = s.SessionStatus.ToString(),
         TopicsDiscussed = s.TopicsDiscussed,
-        KeyInsights = s.KeyInsights,
-        ActionItems = s.ActionItems,
-        NextSteps = s.NextSteps,
         CreatedAt = s.CreatedAt,
-        UpdatedAt = s.UpdatedAt
     };
 
     private static ReportDto MapReportDto(MentorshipReport r) => new()
@@ -744,6 +1077,19 @@ public class MentorshipService : IMentorshipService
 
         return ApiResponse<List<FeedbackDto>>.SuccessResponse(feedbacks);
     }
+
+    private static AvailableSlotDto MapToAvailableSlotDto(AdvisorAvailableSlot slot) => new()
+    {
+        SlotID = slot.SlotID,
+        AdvisorID = slot.AdvisorID,
+        StartTime = slot.StartTime,
+        EndTime = slot.EndTime,
+        IsBooked = slot.IsBooked,
+        BookedSessionID = slot.BookedSessionID,
+        Notes = slot.Notes,
+        CreatedAt = slot.CreatedAt,
+        UpdatedAt = slot.UpdatedAt
+    };
 }
 
 
