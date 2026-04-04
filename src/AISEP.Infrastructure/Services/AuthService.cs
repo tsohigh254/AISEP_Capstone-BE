@@ -95,7 +95,12 @@ public class AuthService : IAuthService
 
         var newOtp = await GenerateOtp(user.UserID);
 
-        await SendEmail(user.UserID, user.Email, newOtp);
+        // Fire-and-forget: gửi email không block response
+        _ = Task.Run(async () =>
+        {
+            try { await SendEmail(user.UserID, user.Email, newOtp); }
+            catch { /* Email failure logged by EmailService */ }
+        });
 
         return new AuthResponse<string>
         {

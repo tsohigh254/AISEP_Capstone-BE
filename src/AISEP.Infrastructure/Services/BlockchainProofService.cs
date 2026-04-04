@@ -46,15 +46,30 @@ public class BlockchainProofService : IBlockchainProofService
         if (doc == null)
             return ApiResponse<HashResponseDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found or not owned by you.");
 
-        var fileHash = await ComputeFileHashAsync(doc.FileURL, ct);
-
-        // Upsert proof record
-        var proof = await _context.DocumentBlockchainProofs
+        // Kiểm tra xem hash đã được tính khi upload chưa
+        var existingProof = await _context.DocumentBlockchainProofs
             .FirstOrDefaultAsync(p => p.DocumentID == documentId, ct);
 
-        if (proof == null)
+        string fileHash;
+        bool hashAlreadyExists = false;
+
+        if (existingProof != null && !string.IsNullOrWhiteSpace(existingProof.FileHash))
         {
-            proof = new DocumentBlockchainProof
+            // Hash đã có sẵn từ lúc upload, không cần tải file lại
+            fileHash = existingProof.FileHash;
+            hashAlreadyExists = true;
+            _logger.LogInformation("Hash already exists for document {DocumentID}, skipping recomputation", documentId);
+        }
+        else
+        {
+            // Fallback: tính hash từ file (cho documents cũ hoặc uploaded trước khi có tính năng này)
+            fileHash = await ComputeFileHashAsync(doc.FileURL, ct);
+        }
+
+        // Upsert proof record
+        if (existingProof == null)
+        {
+            existingProof = new DocumentBlockchainProof
             {
                 DocumentID = documentId,
                 FileHash = fileHash,
@@ -62,18 +77,19 @@ public class BlockchainProofService : IBlockchainProofService
                 ProofStatus = ProofStatus.HashComputed,
                 AnchoredBy = userId
             };
-            _context.DocumentBlockchainProofs.Add(proof);
+            _context.DocumentBlockchainProofs.Add(existingProof);
         }
-        else
+        else if (!hashAlreadyExists)
         {
-            proof.FileHash = fileHash;
-            proof.HashAlgorithm = "SHA-256";
+            // Chỉ update nếu hash mới được tính
+            existingProof.FileHash = fileHash;
+            existingProof.HashAlgorithm = "SHA-256";
         }
 
         await _context.SaveChangesAsync(ct);
 
-        await _audit.LogAsync("COMPUTE_HASH", "DocumentBlockchainProof", proof.ProofID,
-            $"Computed SHA-256 for document {documentId}: {fileHash[..16]}...");
+        await _audit.LogAsync("COMPUTE_HASH", "DocumentBlockchainProof", existingProof.ProofID,
+            $"Hash for document {documentId}: {fileHash[..16]}... {(hashAlreadyExists ? "(existing)" : "(computed)")}");
 
         return ApiResponse<HashResponseDto>.SuccessResponse(new HashResponseDto
         {
@@ -260,6 +276,11 @@ public class BlockchainProofService : IBlockchainProofService
     // Private helpers
     // ================================================================
 
+    /// <summary>
+    /// Tính hash SHA-256 từ file URL trên Cloudinary.
+    /// ⚠️ FALLBACK ONLY: Method này chỉ dùng cho documents cũ uploaded trước khi có auto-hash.
+    /// Documents mới đã có hash tính sẵn khi upload, không cần download lại.
+    /// </summary>
     private async Task<string> ComputeFileHashAsync(string fileUrl, CancellationToken ct)
     {
         using var httpClient = new HttpClient();

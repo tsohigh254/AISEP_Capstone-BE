@@ -111,6 +111,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 
 // Blockchain — toggle between Stub and Ethereum via config

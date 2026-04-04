@@ -125,3 +125,47 @@ public class StartupSearchItemDto
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
+
+// ========== INDUSTRY FOCUS DTOs ==========
+
+public class IndustryFocusDto
+{
+    public int FocusId { get; set; }
+    public string Industry { get; set; } = string.Empty;
+}
+
+public class AddIndustryFocusRequest
+{
+    public string Industry { get; set; } = string.Empty;
+}
+
+// ========== STAGE FOCUS DTOs ==========
+
+public class StageFocusDto
+{
+    public int StageFocusId { get; set; }
+    public string Stage { get; set; } = string.Empty;
+}
+
+public class AddStageFocusRequest
+{
+    public AISEP.Domain.Enums.StartupStage Stage { get; set; }
+}
+
+// ========== COMPARE DTOs ==========
+
+public class StartupCompareDto
+{
+    public int StartupID { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string? OneLiner { get; set; }
+    public string? Stage { get; set; }
+    public string? IndustryName { get; set; }
+    public decimal? FundingAmountSought { get; set; }
+    public decimal? CurrentFundingRaised { get; set; }
+    public decimal? Valuation { get; set; }
+    public int TeamSize { get; set; }
+    public string? LogoURL { get; set; }
+    public DateTime? FoundedDate { get; set; }
+    public string? ProfileStatus { get; set; }
+}

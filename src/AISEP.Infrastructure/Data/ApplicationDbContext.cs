@@ -68,6 +68,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Industry> Industries => Set<Industry>();
     public DbSet<IndustryTrend> IndustryTrends => Set<IndustryTrend>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
@@ -191,6 +192,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
         modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
         modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
+        modelBuilder.Entity<Incident>().HasKey(i => i.IncidentID);
         modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
         modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
     }
@@ -320,6 +322,26 @@ public class ApplicationDbContext : DbContext
             .HasOne(ir => ir.Connection)
             .WithMany(c => c.InformationRequests)
             .HasForeignKey(ir => ir.ConnectionID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Incident relationships
+        modelBuilder.Entity<Incident>()
+            .HasOne(i => i.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Incident>()
+            .HasOne(i => i.ResolvedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.ResolvedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Document review relationship
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -248,4 +248,43 @@ public class MentorshipsController : ControllerBase
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
     }
+
+    // ================================================================
+    // 11) POST /api/mentorships/{id}/complete — Complete (Advisor)
+    // ================================================================
+
+    /// <summary>Mark a mentorship as completed. Advisor-only.</summary>
+    [HttpPost("{id:int}/complete")]
+    [Authorize(Policy = "AdvisorOnly")]
+    public async Task<IActionResult> Complete(int id)
+    {
+        var result = await _mentorshipService.CompleteAsync(GetCurrentUserId(), id);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 12) GET /api/mentorships/{id}/sessions — List sessions
+    // ================================================================
+
+    /// <summary>List sessions for a specific mentorship.</summary>
+    [HttpGet("{id:int}/sessions")]
+    public async Task<IActionResult> GetSessions(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipSessionsAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
+    }
+
+    // ================================================================
+    // 13) GET /api/mentorships/{id}/feedbacks — List feedbacks
+    // ================================================================
+
+    /// <summary>List feedbacks for a specific mentorship.</summary>
+    [HttpGet("{id:int}/feedbacks")]
+    public async Task<IActionResult> GetFeedbacks(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipFeedbacksAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
+    }
 }

@@ -232,3 +232,31 @@ public enum InvestorTag : short
     PendingMoreInfo = 3,
     VerificationFailed = 4
 }
+
+// ───────────────────────── Document Review ───────────────────
+
+public enum DocumentReviewStatus : short
+{
+    Pending = 0,
+    Verified = 1,
+    Approved = 2,
+    Rejected = 3
+}
+
+// ───────────────────────── Incident ──────────────────────────
+
+public enum IncidentSeverity : short
+{
+    Low = 0,
+    Medium = 1,
+    High = 2,
+    Critical = 3
+}
+
+public enum IncidentStatus : short
+{
+    Open = 0,
+    Investigating = 1,
+    Resolved = 2,
+    RolledBack = 3
+}
