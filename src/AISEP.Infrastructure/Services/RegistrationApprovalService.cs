@@ -28,9 +28,9 @@ namespace AISEP.Infrastructure.Services
             _logger = logger;
         }
 
-        public async Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest)
+        public async Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveRegistrationRequest registrationRequest)
         {
-            var startup = await _context.Startups.FirstOrDefaultAsync(s => s.StartupID == startupRegistrationRequest.StartupId);
+            var startup = await _context.Startups.FirstOrDefaultAsync(s => s.StartupID == registrationRequest.Id);
 
             if (startup == null)
             {
@@ -42,16 +42,18 @@ namespace AISEP.Infrastructure.Services
             startup.ApprovedAt = DateTime.UtcNow;
             startup.ApprovedBy = staffId;
 
-            if (startupRegistrationRequest.Score >= 10)
+            if (registrationRequest.Score >= 10)
             {
                 startup.StartupTag = StartupTag.VerifiedCompany;
-            }else if (startupRegistrationRequest.Score >= 6 && startupRegistrationRequest.Score <= 9)
+                startup.ProfileStatus = ProfileStatus.Approved;
+            }else if (registrationRequest.Score >= 6 && registrationRequest.Score <= 9)
             {
                 startup.StartupTag = StartupTag.BasicVerified;
-            }else if (startupRegistrationRequest.Score >= 2 && startupRegistrationRequest.Score <= 5)
+                startup.ProfileStatus = ProfileStatus.Approved;
+            }else if (registrationRequest.Score >= 2 && registrationRequest.Score <= 5)
             {
                 startup.StartupTag = StartupTag.VerificationFailed;
-                startup.ProfileStatus = ProfileStatus.Rejected; // Overwrite if failed
+                startup.ProfileStatus = ProfileStatus.Rejected;
             }
 
             _context.Startups.Update(startup);
@@ -184,10 +186,10 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<Investor>.SuccessResponse(investor, "Rejected successfully");
         }
 
-        public async Task<ApiResponse<PagedResponse<AdvisorDto>>> GetPendingRegistrationsAdvisorAsync(RegistrationQueryParams registrationQuery)
+        public async Task<ApiResponse<PagedResponse<AdvisorDto>>> GetAdvisorAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Advisors
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
+                .Where(s => s.ProfileStatus != ProfileStatus.Draft)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -232,10 +234,10 @@ namespace AISEP.Infrastructure.Services
                 );
         }
 
-        public async Task<ApiResponse<PagedResponse<InvestorDto>>> GetPendingRegistrationsInvestorAsync(RegistrationQueryParams registrationQuery)
+        public async Task<ApiResponse<PagedResponse<InvestorDto>>> GetInvestorAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Investors
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
+                .Where(s => s.ProfileStatus != ProfileStatus.Draft)
                 .AsNoTracking()
                 .AsQueryable();
 
@@ -274,27 +276,58 @@ namespace AISEP.Infrastructure.Services
                 );
         }
 
-        public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> GetPendingRegistrationsStartupAsync(RegistrationQueryParams registrationQuery)
+        public async Task<ApiResponse<PagedResponse<StartupDto>>> GetStartupAsync(RegistrationQueryParams registrationQuery)
         {
             var registrations = _context.Startups
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
+                .Where(s => s.ProfileStatus != ProfileStatus.Draft)
                 .AsNoTracking()
                 .AsQueryable();
 
-            var registrationsToDto = registrations.Select(r => new StartupListItemDto
+            var registrationsToDto = registrations.Select(r => new StartupDto
             {
                 StartupID = r.StartupID,
+                UserID = r.UserID,
                 CompanyName = r.CompanyName,
+                OneLiner = r.OneLiner,
+                Description = r.Description,
+                IndustryID = r.IndustryID,
                 IndustryName = r.Industry.IndustryName,
                 Stage = r.Stage.ToString(),
+                FoundedDate = r.FoundedDate,
+                Website = r.Website,
                 LogoURL = r.LogoURL,
+                FundingAmountSought = r.FundingAmountSought,
+                CurrentFundingRaised = r.CurrentFundingRaised,
+                Valuation = r.Valuation,
+                FullNameOfApplicant = r.FullNameOfApplicant,
+                RoleOfApplicant = r.RoleOfApplicant,
+                ContactEmail = r.ContactEmail,
+                ContactPhone = r.ContactPhone,
+                BussinessCode = r.BussinessCode,
+                MarketScope = r.MarketScope,
+                ProblemStatement = r.ProblemStatement,
+                SolutionSummary = r.SolutionSummary,
+                LinkedInURL = r.LinkedInURL,
+                TeamSize = r.TeamMembers.Count(),
+                FileCertificateBusiness = r.FileCertificateBusiness,
                 ProfileStatus = r.ProfileStatus.ToString(),
+                CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
+                TeamMembers = r.TeamMembers.Select(m => new TeamMemberPublicDto
+                {
+                    FullName = m.FullName,
+                    Role = m.Role,
+                    Title = m.Title,
+                    LinkedInURL = m.LinkedInURL,
+                    Bio = m.Bio,
+                    PhotoURL = m.PhotoURL,
+                    IsFounder = m.IsFounder,
+                }).ToList()
             }).Paging(registrationQuery.Page, registrationQuery.PageSize);
 
-            return ApiResponse<PagedResponse<StartupListItemDto>>.SuccessResponse
+            return ApiResponse<PagedResponse<StartupDto>>.SuccessResponse
                 (
-                     new PagedResponse<StartupListItemDto>
+                     new PagedResponse<StartupDto>
                      {
                          Items = await registrationsToDto.ToListAsync(),
                          Paging = new PagingInfo
@@ -307,7 +340,7 @@ namespace AISEP.Infrastructure.Services
                 );
         }
 
-        public async Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId)
+        public async Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId)
         {
             var investor = await _context.Investors
                 .Include(i => i.User)
@@ -347,7 +380,7 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<InvestorDto>.SuccessResponse(investorToDto);
         }
 
-        public async Task<ApiResponse<AdvisorDto>> GetPendingRegistrationAdvisorByIdAsync(int advisorId)
+        public async Task<ApiResponse<AdvisorDto>> GetAdvisorByIdAsync(int advisorId)
         {
             var advisor = await _context.Advisors
                 .Include(a => a.IndustryFocus)
@@ -383,7 +416,7 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<AdvisorDto>.SuccessResponse(advisorToDto);
         }
 
-        public async Task<ApiResponse<StartupDto>> GetPendingRegistrationStartupByIdAsync(int startupId)
+        public async Task<ApiResponse<StartupDto>> GetStartupByIdAsync(int startupId)
         {
             var startup = await _context.Startups
                .Include(s => s.TeamMembers)
@@ -439,6 +472,13 @@ namespace AISEP.Infrastructure.Services
             };
 
             return ApiResponse<StartupDto>.SuccessResponse(startupToDto);
+        }
+
+        public async Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveRegistrationRequest approveRegistration)
+        {
+            var investor = await _context.Investors.FirstOrDefaultAsync(s => s.InvestorID == approveRegistration.Id);
+
+            return ApiResponse<Investor>.SuccessResponse(investor, "Investor approved successfully");
         }
 
         private static List<string> DeserializeCurrentNeeds(string? currentNeeds)

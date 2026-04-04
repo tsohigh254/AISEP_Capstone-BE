@@ -33,7 +33,7 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingStartupRegistrations([FromQuery] RegistrationQueryParams query)
         {
-            var response = await _registrationService.GetPendingRegistrationsStartupAsync(query);
+            var response = await _registrationService.GetStartupAsync(query);
             return Ok(response);
         }
 
@@ -46,7 +46,7 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingAdvisorRegistrations([FromQuery] RegistrationQueryParams query)
         {
-            var response = await _registrationService.GetPendingRegistrationsAdvisorAsync(query);
+            var response = await _registrationService.GetAdvisorAsync(query);
             return Ok(response);
         }
 
@@ -59,7 +59,7 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingInvestorRegistrations([FromQuery] RegistrationQueryParams query)
         {
-            var response = await _registrationService.GetPendingRegistrationsInvestorAsync(query);
+            var response = await _registrationService.GetInvestorAsync(query);
             return Ok(response);
         }
 
@@ -72,7 +72,7 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingStartupRegistrationById(int startupId)
         {
-            var response = await _registrationService.GetPendingRegistrationStartupByIdAsync(startupId);
+            var response = await _registrationService.GetStartupByIdAsync(startupId);
             return Ok(response);
         }
 
@@ -85,7 +85,7 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingInvestorRegistrationById(int investorId)
         {
-            var response = await _registrationService.GetPendingRegistrationInvestorByIdAsync(investorId);
+            var response = await _registrationService.GetInvestorByIdAsync(investorId);
             return Ok(response);
         }
 
@@ -98,69 +98,44 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPendingAdvisorRegistrationById(int advisorId)
         {
-            var response = await _registrationService.GetPendingRegistrationAdvisorByIdAsync(advisorId);
+            var response = await _registrationService.GetAdvisorByIdAsync(advisorId);
             return Ok(response);
         }
 
         /// <summary>
         /// Approve startup registration
         /// </summary>
-        [HttpPost("approve/startups/{staffId}")]
+        [HttpPost("approve/startups")]
         [Authorize(Policy = "StaffOrAdmin")]
         [ProducesResponseType(typeof(ApiResponse<Startup>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> ApproveStartupRegistration(int staffId, [FromBody]ApproveStartupRegistrationRequest startupRegistrationRequest)
+        public async Task<IActionResult> ApproveStartupRegistration([FromBody]ApproveRegistrationRequest startupRegistrationRequest)
         {
+            var staffId = GetCurrentUserId();
             var response = await _registrationService.ApproveStartupRegistrationAsync(staffId, startupRegistrationRequest);
             return Ok(response);
         }
 
-        [HttpPost("approve/advisors/{staffId}")]
+        [HttpPost("approve/investors")]
         [Authorize(Policy = "StaffOrAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> ApproveAdvisorRegistration(int staffId, [FromBody]ApproveAdvisorRegistrationRequest request)
+        public async Task<IActionResult> ApproveInvestorRegistration([FromBody]ApproveRegistrationRequest request)
         {
-            var response = await _registrationService.ApproveAdvisorRegistrationAsync(staffId, request);
-            return Ok(response);
-        }
-
-        [HttpPost("approve/investors/{staffId}")]
-        [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> ApproveInvestorRegistration(int staffId, [FromBody]ApproveInvestorRegistrationRequest request)
-        {
+            var staffId = GetCurrentUserId();
             var response = await _registrationService.ApproveInvestorRegistrationAsync(staffId, request);
             return Ok(response);
         }
 
-        [HttpPost("reject/startups/{staffId}")]
-        [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> RejectStartupRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
+        #region helper method
+        private int GetCurrentUserId()
         {
-            var response = await _registrationService.RejectStartupRegistrationAsync(staffId, request);
-            return Ok(response);
+            var claim = User.FindFirst("sub")?.Value
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(claim, out var id) ? id : 0;
         }
-
-        [HttpPost("reject/advisors/{staffId}")]
-        [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> RejectAdvisorRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
-        {
-            var response = await _registrationService.RejectAdvisorRegistrationAsync(staffId, request);
-            return Ok(response);
-        }
-
-        [HttpPost("reject/investors/{staffId}")]
-        [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<IActionResult> RejectInvestorRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
-        {
-            var response = await _registrationService.RejectInvestorRegistrationAsync(staffId, request);
-            return Ok(response);
-        }
+        #endregion
     }
 }

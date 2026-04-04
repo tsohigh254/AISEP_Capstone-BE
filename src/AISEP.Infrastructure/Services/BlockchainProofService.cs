@@ -278,8 +278,6 @@ public class BlockchainProofService : IBlockchainProofService
 
     /// <summary>
     /// Tính hash SHA-256 từ file URL trên Cloudinary.
-    /// ⚠️ FALLBACK ONLY: Method này chỉ dùng cho documents cũ uploaded trước khi có auto-hash.
-    /// Documents mới đã có hash tính sẵn khi upload, không cần download lại.
     /// </summary>
     private async Task<string> ComputeFileHashAsync(string fileUrl, CancellationToken ct)
     {
@@ -407,4 +405,5 @@ public class BlockchainProofService : IBlockchainProofService
             return null;
         }
     }
+    #endregion
 }

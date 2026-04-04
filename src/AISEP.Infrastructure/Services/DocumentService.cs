@@ -132,14 +132,14 @@ public class DocumentService : IDocumentService
                 DocumentID = d.DocumentID,
                 StartupID = d.StartupID,
                 Title = d.Title,
-                DocumentType = d.DocumentType.ToString(),
+                DocumentType = d.DocumentType,
                 Version = d.Version,
                 FileUrl = d.FileURL ?? string.Empty,
                 IsArchived = d.IsArchived,
                 IsAnalyzed = d.IsAnalyzed,
-                AnalysisStatus = d.AnalysisStatus.ToString(),
+                AnalysisStatus = d.AnalysisStatus,
                 UploadedAt = d.UploadedAt,
-                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus : null,
                 FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
                 TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
             })
@@ -245,13 +245,13 @@ public class DocumentService : IDocumentService
             StartupID = d.StartupID,
             Title = d.Title,
             FileUrl = d.FileURL ?? string.Empty,
-            DocumentType = d.DocumentType.ToString(),
+            DocumentType = d.DocumentType,
             Version = d.Version,
             IsArchived = d.IsArchived,
             IsAnalyzed = d.IsAnalyzed,
-            AnalysisStatus = d.AnalysisStatus.ToString(),
+            AnalysisStatus = d.AnalysisStatus,
             UploadedAt = d.UploadedAt,
-            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus : null,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
             TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
         };
@@ -261,19 +261,22 @@ public class DocumentService : IDocumentService
     {
         var documents = _context.Documents.AsQueryable();
 
+        if (documentQuery.DocumentType.HasValue)
+            documents = documents.Where(d => d.DocumentType == documentQuery.DocumentType.Value);
+
         var documentsToDto = documents.Select(d => new DocumentDto
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
-            DocumentType = d.DocumentType.ToString(),
+            DocumentType = d.DocumentType,
             Title = d.Title,
             Version = d.Version,
             FileUrl = d.FileURL,
             IsAnalyzed = d.IsAnalyzed,
             IsArchived = d.IsArchived,
-            AnalysisStatus = d.AnalysisStatus.ToString(),
+            AnalysisStatus = d.AnalysisStatus,
             UploadedAt = d.UploadedAt,
-            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
+            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus : null,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
             TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
         }).Paging(documentQuery.Page, documentQuery.PageSize);

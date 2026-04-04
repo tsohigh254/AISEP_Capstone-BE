@@ -1,6 +1,7 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Document;
 using AISEP.Application.Interfaces;
+using AISEP.Application.QueryParams;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -98,6 +99,28 @@ public class DocumentsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _documentService.GetMyDocumentAsync(documentId, userId, ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 4) GET /api/documents/staff/all — Get all documents (staff only)
+    // ================================================================
+
+    /// <summary>
+    /// Get all documents across all startups (staff only).
+    /// Supports filtering by document type and pagination.
+    /// </summary>
+    /// <param name="documentQuery">Query parameters for filtering and pagination.</param>
+    [HttpGet("staff/all")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<DocumentDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetAllDocuments(
+        [FromQuery] DocumentQueryParams documentQuery,
+        CancellationToken ct = default)
+    {
+        var result = await _documentService.GetAllDocumentByStaff(documentQuery);
         return result.ToActionResult();
     }
 

@@ -32,9 +32,9 @@ namespace AISEP.Application.DTOs.Staff
         public DateTime ApprovedDate { get; set; }
     }
 
-    public class ApproveStartupRegistrationRequest
+    public class ApproveRegistrationRequest
     {
-        public int StartupId { get; set; }
+        public int Id { get; set; }
         public int Score { get; set; }
     }
 

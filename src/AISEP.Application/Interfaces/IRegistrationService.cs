@@ -15,18 +15,13 @@ namespace AISEP.Application.Interfaces
 {
     public interface IRegistrationService
     {
-        Task<ApiResponse<PagedResponse<StartupListItemDto>>> GetPendingRegistrationsStartupAsync(RegistrationQueryParams registrationQuery);
-        Task<ApiResponse<PagedResponse<AdvisorDto>>> GetPendingRegistrationsAdvisorAsync(RegistrationQueryParams registrationQuery);
-        Task<ApiResponse<PagedResponse<InvestorDto>>> GetPendingRegistrationsInvestorAsync(RegistrationQueryParams registrationQuery);
-        Task<ApiResponse<StartupDto>> GetPendingRegistrationStartupByIdAsync(int startupId);
-        Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId);
-        Task<ApiResponse<AdvisorDto>> GetPendingRegistrationAdvisorByIdAsync(int advisorId);
-        Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest);
-        Task<ApiResponse<Advisor>> ApproveAdvisorRegistrationAsync(int staffId, ApproveAdvisorRegistrationRequest advisorRegistrationRequest);
-        Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveInvestorRegistrationRequest investorRegistrationRequest);
-        
-        Task<ApiResponse<Startup>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request);
-        Task<ApiResponse<Advisor>> RejectAdvisorRegistrationAsync(int staffId, RejectRegistrationRequest request);
-        Task<ApiResponse<Investor>> RejectInvestorRegistrationAsync(int staffId, RejectRegistrationRequest request);
+        Task<ApiResponse<PagedResponse<StartupDto>>> GetStartupAsync(RegistrationQueryParams registrationQuery);
+        Task<ApiResponse<PagedResponse<AdvisorDto>>> GetAdvisorAsync(RegistrationQueryParams registrationQuery);
+        Task<ApiResponse<PagedResponse<InvestorDto>>> GetInvestorAsync(RegistrationQueryParams registrationQuery);
+        Task<ApiResponse<StartupDto>> GetStartupByIdAsync(int startupId);
+        Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId);
+        Task<ApiResponse<AdvisorDto>> GetAdvisorByIdAsync(int advisorId);
+        Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveRegistrationRequest registrationRequest);
+        Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveRegistrationRequest approveRegistration);
     }
 }
