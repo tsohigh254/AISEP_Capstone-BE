@@ -223,6 +223,40 @@ public enum StartupTag : short
     VerificationFailed = 4
 }
 
+public enum StartupKycWorkflowStatus : short
+{
+    NotSubmitted = 0,
+    Draft = 1,
+    UnderReview = 2,
+    PendingMoreInfo = 3,
+    Approved = 4,
+    Rejected = 5,
+    Superseded = 6
+}
+
+public enum StartupKycResultLabel : short
+{
+    None = 0,
+    PendingMoreInfo = 1,
+    BasicVerified = 2,
+    VerifiedCompany = 3,
+    VerificationFailed = 4
+}
+
+public enum StartupVerificationType : short
+{
+    WithLegalEntity = 0,
+    WithoutLegalEntity = 1
+}
+
+public enum StartupKycEvidenceKind : short
+{
+    BusinessRegistrationCertificate = 0,
+    ProofOfOperation = 1,
+    ProductMaterials = 2,
+    Other = 3
+}
+
 public enum AdvisorTag : short
 {
     None = 0,

@@ -6,6 +6,7 @@ using AISEP.Application.DTOs.Startup;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
 using AISEP.Domain.Entities;
+using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -77,6 +78,19 @@ namespace AISEP.WebAPI.Controllers
         }
 
         /// <summary>
+        /// Get active startup KYC submission for staff review
+        /// </summary>
+        [HttpGet("pending/startups/{startupId}/kyc")]
+        [ProducesResponseType(typeof(ApiResponse<StartupKycSubmissionDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetPendingStartupKycById(int startupId)
+        {
+            var response = await _registrationService.GetPendingRegistrationStartupKycByIdAsync(startupId);
+            return Ok(response);
+        }
+
+        /// <summary>
         /// Get pending investor registration by ID
         /// </summary>
         [HttpGet("pending/investors/{investorId}")]
@@ -107,7 +121,7 @@ namespace AISEP.WebAPI.Controllers
         /// </summary>
         [HttpPost("approve/startups/{staffId}")]
         [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(typeof(ApiResponse<Startup>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiEnvelope<StartupKycSubmissionDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -115,7 +129,7 @@ namespace AISEP.WebAPI.Controllers
         public async Task<IActionResult> ApproveStartupRegistration(int staffId, [FromBody]ApproveStartupRegistrationRequest startupRegistrationRequest)
         {
             var response = await _registrationService.ApproveStartupRegistrationAsync(staffId, startupRegistrationRequest);
-            return Ok(response);
+            return response.ToEnvelope();
         }
 
         [HttpPost("approve/advisors/{staffId}")]
@@ -138,11 +152,11 @@ namespace AISEP.WebAPI.Controllers
 
         [HttpPost("reject/startups/{staffId}")]
         [Authorize(Policy = "StaffOrAdmin")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiEnvelope<StartupKycSubmissionDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> RejectStartupRegistration(int staffId, [FromBody]RejectRegistrationRequest request)
         {
             var response = await _registrationService.RejectStartupRegistrationAsync(staffId, request);
-            return Ok(response);
+            return response.ToEnvelope();
         }
 
         [HttpPost("reject/advisors/{staffId}")]

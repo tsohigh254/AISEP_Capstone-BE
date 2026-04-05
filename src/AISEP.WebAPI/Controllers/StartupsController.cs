@@ -149,11 +149,10 @@ public class StartupsController : ControllerBase
     [HttpPost("me/kyc/submit")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubmitKYC([FromBody] SubmitStartupKYCRequest request)
+    public async Task<IActionResult> SubmitKYC([FromForm] SubmitStartupKYCRequest request)
     {
         var userId = GetCurrentUserId();
-        // certificateUrl can be null if previously uploaded during onboarding
-        var result = await _startupService.SubmitKYCAsync(userId, request, null);
+        var result = await _startupService.SubmitKYCAsync(userId, request);
         return result.ToActionResult();
     }
 
@@ -163,7 +162,7 @@ public class StartupsController : ControllerBase
     [HttpPatch("me/kyc/draft")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<StartupKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveStartupKYCDraftRequest request)
+    public async Task<IActionResult> SaveKYCDraft([FromForm] SaveStartupKYCDraftRequest request)
     {
         var userId = GetCurrentUserId();
         var result = await _startupService.SaveKYCDraftAsync(userId, request);

@@ -16,7 +16,7 @@ public interface IStartupService
 
     // KYC
     Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId);
-    Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request, string? certificateUrl);
+    Task<ApiResponse<StartupKYCStatusDto>> SubmitKYCAsync(int userId, SubmitStartupKYCRequest request);
     Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request);
 
     // Public (investors/advisors)

@@ -36,6 +36,8 @@ namespace AISEP.Application.DTOs.Staff
     {
         public int StartupId { get; set; }
         public int Score { get; set; }
+        public string? Remarks { get; set; }
+        public bool RequiresNewEvidence { get; set; }
     }
 
     public class ApproveAdvisorRegistrationRequest
@@ -55,5 +57,6 @@ namespace AISEP.Application.DTOs.Staff
     {
         public int Id { get; set; }
         public string Reason { get; set; } = string.Empty;
+        public bool? RequiresNewEvidence { get; set; }
     }
 }

@@ -216,7 +216,7 @@ public static class ApiEnvelopeExtensions
         if (code.EndsWith("_NOT_FOUND"))
             return StatusCodes.Status404NotFound;
 
-        if (code.EndsWith("_ALREADY_EXISTS"))
+        if (code.EndsWith("_ALREADY_EXISTS") || code.EndsWith("_EXISTS"))
             return StatusCodes.Status409Conflict;
 
         if (code.EndsWith("_NOT_OWNED"))
