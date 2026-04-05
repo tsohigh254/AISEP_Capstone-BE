@@ -11,5 +11,6 @@ namespace AISEP.Application.Configuration
         public string CloudName { get; set; } = null!;
         public string ApiKey { get; set; } = null!;
         public string ApiSecret { get; set; } = null!;
+        public int SignedUrlExpirationMinutes { get; set; } = 5;
     }
 }

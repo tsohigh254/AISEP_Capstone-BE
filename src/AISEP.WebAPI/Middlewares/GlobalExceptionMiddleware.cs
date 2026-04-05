@@ -34,6 +34,15 @@ public class GlobalExceptionMiddleware
         _logger.LogError(exception, "Unhandled exception occurred. RequestId: {RequestId}, Path: {Path}", 
             requestId, context.Request.Path);
 
+        if (context.Response.HasStarted)
+        {
+            _logger.LogWarning(
+                "The response has already started for RequestId: {RequestId}, Path: {Path}. Skipping exception envelope write.",
+                requestId,
+                context.Request.Path);
+            return;
+        }
+
         context.Response.ContentType = "application/json";
         
         var (statusCode, message) = exception switch

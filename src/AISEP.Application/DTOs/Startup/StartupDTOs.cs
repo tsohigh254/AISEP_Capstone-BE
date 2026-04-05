@@ -22,7 +22,7 @@ public class CreateStartupRequest
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
 
-    public string BusinessCode { get; set; }
+    public string? BusinessCode { get; set; }
     public string FullNameOfApplicant { get; set; } 
     public string RoleOfApplicant { get; set; } 
     public string ContactEmail { get; set; } 
@@ -83,12 +83,24 @@ public class UpdateStartupRequest
 
 public class SubmitStartupKYCRequest
 {
-    public string CompanyName { get; set; } = null!;
+    public string StartupVerificationType { get; set; } = string.Empty;
+    public string? LegalFullName { get; set; }
+    public string? ProjectName { get; set; }
+    public string? EnterpriseCode { get; set; }
+    public string RepresentativeFullName { get; set; } = string.Empty;
+    public string RepresentativeRole { get; set; } = string.Empty;
+    public string WorkEmail { get; set; } = string.Empty;
+    public string? PublicLink { get; set; }
+    public List<IFormFile> EvidenceFiles { get; set; } = new();
+    public List<string> EvidenceFileKinds { get; set; } = new();
+
+    // Legacy fields kept for backward compatibility during migration.
+    public string? CompanyName { get; set; }
     public string? IndustryName { get; set; }
     public string? Stage { get; set; }
-    public string FullNameOfApplicant { get; set; } = null!;
-    public string RoleOfApplicant { get; set; } = null!;
-    public string ContactEmail { get; set; } = null!;
+    public string? FullNameOfApplicant { get; set; }
+    public string? RoleOfApplicant { get; set; }
+    public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
     public string? BusinessCode { get; set; }
     public string? Website { get; set; }
@@ -210,6 +222,7 @@ public class StartupListItemDto
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public string? StartupVerificationType { get; set; }
 }
 
 // ========== TEAM MEMBER DTOs ==========
