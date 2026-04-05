@@ -134,14 +134,14 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
-    // 5.5) PUT /api/mentorships/{id}/cancel — Cancel (Startup)
+    // 5.5) PUT /api/mentorships/{id}/cancel — Cancel
     // ================================================================
 
     /// <summary>
-    /// Cancel a mentorship request. Startup-only. Status must be 'Requested'.
+    /// Cancel a mentorship request by Startup or Advisor.
     /// </summary>
     [HttpPut("{id:int}/cancel")]
-    [Authorize(Policy = "StartupOnly")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status404NotFound)]
@@ -149,6 +149,23 @@ public class MentorshipsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _mentorshipService.CancelAsync(userId, id, request.Reason);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 5b) PUT /api/mentorships/{id}/complete — Complete (Advisor)
+    // ================================================================
+
+    /// <summary>
+    /// Mark a mentorship as completed after the session has occurred. Advisor-only.
+    /// </summary>
+    [HttpPut("{id:int}/complete")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Complete(int id)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.CompleteAsync(userId, id);
         return result.ToActionResult();
     }
 
