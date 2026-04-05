@@ -608,4 +608,159 @@ public class InvestorService : IInvestorService
             UpdatedAt = pref?.UpdatedAt
         };
     }
+
+    // ================================================================
+    // INDUSTRY FOCUS
+    // ================================================================
+
+    public async Task<ApiResponse<List<IndustryFocusDto>>> GetIndustryFocusAsync(int userId)
+    {
+        var investor = await _db.Investors.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<List<IndustryFocusDto>>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var items = await _db.InvestorIndustryFocuses
+            .Where(f => f.InvestorID == investor.InvestorID)
+            .AsNoTracking()
+            .Select(f => new IndustryFocusDto { FocusId = f.FocusID, Industry = f.Industry })
+            .ToListAsync();
+
+        return ApiResponse<List<IndustryFocusDto>>.SuccessResponse(items);
+    }
+
+    public async Task<ApiResponse<IndustryFocusDto>> AddIndustryFocusAsync(int userId, AddIndustryFocusRequest request)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<IndustryFocusDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var exists = await _db.InvestorIndustryFocuses
+            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.Industry == request.Industry);
+        if (exists)
+            return ApiResponse<IndustryFocusDto>.ErrorResponse("INDUSTRY_FOCUS_ALREADY_EXISTS", "Industry focus already exists");
+
+        var focus = new InvestorIndustryFocus
+        {
+            InvestorID = investor.InvestorID,
+            Industry = request.Industry
+        };
+        _db.InvestorIndustryFocuses.Add(focus);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<IndustryFocusDto>.SuccessResponse(
+            new IndustryFocusDto { FocusId = focus.FocusID, Industry = focus.Industry }, "Industry focus added");
+    }
+
+    public async Task<ApiResponse<string>> RemoveIndustryFocusAsync(int userId, int focusId)
+    {
+        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<string>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var focus = await _db.InvestorIndustryFocuses
+            .FirstOrDefaultAsync(f => f.FocusID == focusId && f.InvestorID == investor.InvestorID);
+        if (focus == null)
+            return ApiResponse<string>.ErrorResponse("INDUSTRY_FOCUS_NOT_FOUND", "Industry focus not found");
+
+        _db.InvestorIndustryFocuses.Remove(focus);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse("Removed");
+    }
+
+    // ================================================================
+    // STAGE FOCUS
+    // ================================================================
+
+    public async Task<ApiResponse<List<StageFocusDto>>> GetStageFocusAsync(int userId)
+    {
+        var investor = await _db.Investors.AsNoTracking()
+            .FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<List<StageFocusDto>>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var items = await _db.InvestorStageFocuses
+            .Where(f => f.InvestorID == investor.InvestorID)
+            .AsNoTracking()
+            .Select(f => new StageFocusDto { StageFocusId = f.StageFocusID, Stage = f.Stage.ToString() })
+            .ToListAsync();
+
+        return ApiResponse<List<StageFocusDto>>.SuccessResponse(items);
+    }
+
+    public async Task<ApiResponse<StageFocusDto>> AddStageFocusAsync(int userId, AddStageFocusRequest request)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<StageFocusDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var exists = await _db.InvestorStageFocuses
+            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.Stage == request.Stage);
+        if (exists)
+            return ApiResponse<StageFocusDto>.ErrorResponse("STAGE_FOCUS_ALREADY_EXISTS", "Stage focus already exists");
+
+        var focus = new InvestorStageFocus
+        {
+            InvestorID = investor.InvestorID,
+            Stage = request.Stage
+        };
+        _db.InvestorStageFocuses.Add(focus);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<StageFocusDto>.SuccessResponse(
+            new StageFocusDto { StageFocusId = focus.StageFocusID, Stage = focus.Stage.ToString() }, "Stage focus added");
+    }
+
+    public async Task<ApiResponse<string>> RemoveStageFocusAsync(int userId, int stageFocusId)
+    {
+        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<string>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
+
+        var focus = await _db.InvestorStageFocuses
+            .FirstOrDefaultAsync(f => f.StageFocusID == stageFocusId && f.InvestorID == investor.InvestorID);
+        if (focus == null)
+            return ApiResponse<string>.ErrorResponse("STAGE_FOCUS_NOT_FOUND", "Stage focus not found");
+
+        _db.InvestorStageFocuses.Remove(focus);
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<string>.SuccessResponse("Removed");
+    }
+
+    // ================================================================
+    // COMPARE STARTUPS
+    // ================================================================
+
+    public async Task<ApiResponse<List<StartupCompareDto>>> CompareStartupsAsync(List<int> startupIds)
+    {
+        if (startupIds.Count < 2 || startupIds.Count > 5)
+            return ApiResponse<List<StartupCompareDto>>.ErrorResponse("VALIDATION_ERROR",
+                "Please provide 2-5 startup IDs to compare");
+
+        var startups = await _db.Startups
+            .Include(s => s.Industry)
+            .Include(s => s.TeamMembers)
+            .Where(s => startupIds.Contains(s.StartupID))
+            .AsNoTracking()
+            .Select(s => new StartupCompareDto
+            {
+                StartupID = s.StartupID,
+                CompanyName = s.CompanyName,
+                OneLiner = s.OneLiner,
+                Stage = s.Stage.ToString(),
+                IndustryName = s.Industry.IndustryName,
+                FundingAmountSought = s.FundingAmountSought,
+                CurrentFundingRaised = s.CurrentFundingRaised,
+                Valuation = s.Valuation,
+                TeamSize = s.TeamMembers.Count(),
+                LogoURL = s.LogoURL,
+                FoundedDate = s.FoundedDate,
+                ProfileStatus = s.ProfileStatus.ToString()
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<StartupCompareDto>>.SuccessResponse(startups);
+    }
 }

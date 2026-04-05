@@ -1,10 +1,11 @@
-﻿using AISEP.Application.Configuration;
+using AISEP.Application.Configuration;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.Interfaces;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System.Text;
 
 namespace AISEP.Infrastructure.Services
 {
@@ -121,6 +122,79 @@ namespace AISEP.Infrastructure.Services
                 Url = result.SecureUrl.ToString(),
                 PublicId = result.PublicId
             };
+        }
+
+        public async Task<DocumentUploadResult> UploadDocumentWithHashAsync(IFormFile file, string folder)
+        {
+            if (file == null || file.Length == 0)
+                throw new FileNotFoundException("Document file cannot be empty.");
+
+            if (file.Length > MaxFileSizeDocument)
+                throw new InvalidOperationException($"Document must not exceed {MaxFileSizeDocument / (1024 * 1024)} MB.");
+
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedExtensionsDocument.Contains(fileExtension))
+                throw new ArgumentException($"Only these document extensions are allowed: {string.Join(",", AllowedExtensionsDocument)}");
+
+            // Copy file to memory stream to read multiple times
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            // 1. Compute hash BEFORE upload
+            string fileHash;
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                var hashBytes = await sha256.ComputeHashAsync(memoryStream);
+                fileHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+            }
+
+            // Reset stream for upload
+            memoryStream.Position = 0;
+
+            // 2. Upload to Cloudinary
+            var uploadParams = new RawUploadParams
+            {
+                File = new FileDescription(file.FileName, memoryStream),
+                Folder = folder,
+                UseFilename = false,
+                UniqueFilename = true
+            };
+
+            var result = await _cloudinary.UploadAsync(uploadParams);
+
+            if (result?.SecureUrl == null)
+                throw new InvalidOperationException("Document upload failed: Cloudinary did not return secure URL.");
+
+            return new DocumentUploadResult
+            {
+                FileUrl = result.SecureUrl.ToString(),
+                FileHash = fileHash,
+                HashAlgorithm = "SHA-256"
+            };
+        }
+
+        public async Task<byte[]> DownloadFileAsync(string fileUrl, CancellationToken ct = default)
+        {
+            using var httpClient = new HttpClient();
+
+            // Try 1: direct URL (works if PDF delivery is enabled)
+            var response = await httpClient.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadAsByteArrayAsync(ct);
+
+            // Try 2: signed URL via Cloudinary DownloadPrivate
+            var storageKey = ExtractDocumentStorageKeyFromUrl(fileUrl);
+            if (!string.IsNullOrWhiteSpace(storageKey))
+            {
+                var signedUrl = GenerateSignedDocumentUrl(storageKey);
+                response = await httpClient.GetAsync(signedUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsByteArrayAsync(ct);
+            }
+
+            throw new InvalidOperationException(
+                $"Cannot download file from Cloudinary. All methods failed. URL: {fileUrl}");
         }
 
         public string GenerateSignedDocumentUrl(

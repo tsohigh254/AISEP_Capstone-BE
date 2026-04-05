@@ -76,5 +76,18 @@ public class DocumentDto
     public string? ProofStatus { get; set; }
     public string? FileHash { get; set; }
     public string? TransactionHash { get; set; }
+    public string? ReviewStatus { get; set; }
+    public int? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewNotes { get; set; }
+}
+
+// ──────────────────────────────────────────────
+// Staff Review DTOs
+// ──────────────────────────────────────────────
+
+public class StaffReviewDocumentRequest
+{
+    public string? Notes { get; set; }
 }
 
