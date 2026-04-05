@@ -65,6 +65,20 @@ public class MentorshipService : IMentorshipService
             CreatedAt = DateTime.UtcNow
         };
 
+        if (request.RequestedSlots != null && request.RequestedSlots.Count > 0)
+        {
+            foreach (var slot in request.RequestedSlots)
+            {
+                mentorship.Sessions.Add(new MentorshipSession
+                {
+                    ScheduledStartAt = slot.StartAt.ToUniversalTime(),
+                    DurationMinutes = (int)(slot.EndAt - slot.StartAt).TotalMinutes,
+                    SessionStatus = "ProposedByStartup",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+
         _db.StartupAdvisorMentorships.Add(mentorship);
         await _db.SaveChangesAsync();
 
@@ -126,23 +140,25 @@ public class MentorshipService : IMentorshipService
 
         var totalItems = await query.CountAsync();
 
-        var items = await query
+        var queryItems = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(m => new MentorshipListItemDto
+            .ToListAsync();
+
+        var items = queryItems.Select(m => new MentorshipListItemDto
             {
                 MentorshipID = m.MentorshipID,
                 StartupID = m.StartupID,
-                StartupName = m.Startup.CompanyName,
+                StartupName = m.Startup?.CompanyName ?? "Unknown",
                 AdvisorID = m.AdvisorID,
-                AdvisorName = m.Advisor.FullName,
-                MentorshipStatus = m.MentorshipStatus.ToString(),
+                AdvisorName = m.Advisor?.FullName ?? "Unknown",
+                Status = m.MentorshipStatus.ToString(),
                 ChallengeDescription = m.ChallengeDescription,
                 PreferredFormat = m.PreferredFormat,
                 RequestedAt = m.RequestedAt,
                 CreatedAt = m.CreatedAt
             })
-            .ToListAsync();
+            .ToList();
 
         return ApiResponse<PagedResponse<MentorshipListItemDto>>.SuccessResponse(
             new PagedResponse<MentorshipListItemDto>
@@ -242,24 +258,29 @@ public class MentorshipService : IMentorshipService
     public async Task<ApiResponse<MentorshipDto>> CancelAsync(int userId, int mentorshipId, string? reason)
     {
         var startup = await _db.Startups.FirstOrDefaultAsync(s => s.UserID == userId);
-        if (startup == null) return ApiResponse<MentorshipDto>.ErrorResponse("UNAUTHORIZED", "Only startups can cancel mentorships.");
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        
+        if (startup == null && advisor == null) 
+            return ApiResponse<MentorshipDto>.ErrorResponse("UNAUTHORIZED", "User must be a startup or advisor.");
 
         var mentorship = await _db.StartupAdvisorMentorships
-            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && m.StartupID == startup.StartupID);
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && 
+            (startup != null ? m.StartupID == startup.StartupID : m.AdvisorID == advisor.AdvisorID));
 
         if (mentorship == null) return ApiResponse<MentorshipDto>.ErrorResponse("NOT_FOUND", "Mentorship not found.");
 
         if (mentorship.MentorshipStatus == MentorshipStatus.Cancelled)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION", "Already cancelled.");
 
-        if (mentorship.MentorshipStatus != MentorshipStatus.Requested)
+        if (mentorship.MentorshipStatus == MentorshipStatus.Completed || mentorship.MentorshipStatus == MentorshipStatus.Rejected)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION", $"Cannot cancel mentorship. Currently {mentorship.MentorshipStatus}.");
 
         mentorship.MentorshipStatus = MentorshipStatus.Cancelled;
+        var role = startup != null ? "Startup" : "Advisor";
         mentorship.RejectedReason = string.IsNullOrEmpty(mentorship.RejectedReason)
-            ? "Cancelled by Startup. Reason: " + reason
-            : mentorship.RejectedReason + "\nCancelled Reason: " + reason;
-        mentorship.LastUpdatedByRole = "Startup";
+            ? $"Cancelled by {role}. Reason: " + reason
+            : mentorship.RejectedReason + $"\nCancelled Reason ({role}): " + reason;
+        mentorship.LastUpdatedByRole = role;
         mentorship.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -268,13 +289,31 @@ public class MentorshipService : IMentorshipService
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
 
-    // ================================================================
-    public async Task<ApiResponse<PagedResponse<SessionListItemDto>>> GetMySessionsAsync(int userId, string userType, string? status, int page, int pageSize)
-    {
-        var query = _db.MentorshipSessions
-            .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
-            .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
-            .AsNoTracking();
+        public async Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId)
+        {
+            var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
+            if (mentorship == null) return error!;
+
+            if (mentorship.MentorshipStatus != MentorshipStatus.InProgress)
+                return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION", $"Cannot complete mentorship with status '{mentorship.MentorshipStatus}'. Must be 'InProgress'.");
+
+            mentorship.MentorshipStatus = MentorshipStatus.Completed;
+            mentorship.LastUpdatedByRole = "Advisor";
+            mentorship.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+            await _audit.LogAsync("COMPLETE_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId, null);
+
+            return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
+        }
+
+        // ================================================================
+        public async Task<ApiResponse<PagedResponse<SessionListItemDto>>> GetMySessionsAsync(int userId, string userType, string? status, int page, int pageSize)
+        {
+            var query = _db.MentorshipSessions
+                .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
+                .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
+                .AsNoTracking();
 
         if (userType == "Startup")
         {
@@ -334,7 +373,9 @@ public class MentorshipService : IMentorshipService
         var session = new MentorshipSession
         {
             MentorshipID = mentorshipId,
-            ScheduledStartAt = request.ScheduledStartAt,
+            ScheduledStartAt = request.ScheduledStartAt.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(request.ScheduledStartAt, DateTimeKind.Utc)
+                : request.ScheduledStartAt.ToUniversalTime(),
             DurationMinutes = request.DurationMinutes,
             SessionFormat = request.SessionFormat,
             MeetingURL = request.MeetingUrl,

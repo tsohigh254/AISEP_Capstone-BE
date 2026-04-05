@@ -61,10 +61,10 @@ namespace AISEP.Infrastructure.Services
             {
                 OrderCode = paymentRequest.OrderCode,
                 Amount = paymentRequest.Amount,
-                Description = "Nâng cấp tài khoản",
+                Description = string.IsNullOrEmpty(paymentRequest.Description) ? "Nâng cấp tài khoản" : paymentRequest.Description,
                 ExpiredAt = (int)DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
-                ReturnUrl = $"{url}/checkout/success?orderCode=${paymentRequest.OrderCode}",
-                CancelUrl = url
+                ReturnUrl = string.IsNullOrEmpty(paymentRequest.ReturnUrl) ? $"{url}/checkout/success?orderCode={paymentRequest.OrderCode}" : paymentRequest.ReturnUrl,
+                CancelUrl = string.IsNullOrEmpty(paymentRequest.CancelUrl) ? url : paymentRequest.CancelUrl
             };
 
 
