@@ -356,8 +356,8 @@ public class InvestorService : IInvestorService
         page = Math.Max(page, 1);
 
         var query = _db.Startups.AsNoTracking()
-            .Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC)
-            .AsQueryable();
+              // .Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC)
+              .AsQueryable();
 
         // Keyword filter (company name)
         if (!string.IsNullOrWhiteSpace(q))

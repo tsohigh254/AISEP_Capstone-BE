@@ -277,6 +277,7 @@ public class InvestorsController : ControllerBase
     /// <param name="page">Page number (default 1)</param>
     /// <param name="pageSize">Items per page (default 20, max 100)</param>
     [HttpGet("search")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<StartupSearchItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchStartups(
         [FromQuery] string? q,
@@ -296,6 +297,35 @@ public class InvestorsController : ControllerBase
     // ================================================================
     // RECOMMENDATIONS (PLACEHOLDER)
     // ================================================================
+
+    [AllowAnonymous]
+    [HttpGet("debug-investor")]
+    public async Task<IActionResult> DebugInvestor([FromServices] AISEP.Infrastructure.Data.ApplicationDbContext db, [FromQuery] string email = "investor@aisep.local")
+    {
+        var user = db.Users.FirstOrDefault(u => u.Email == email);
+        if (user == null) return NotFound($"User {email} not found");
+
+        var investor = db.Investors.FirstOrDefault(i => i.UserID == user.UserID);
+        if (investor == null) return NotFound($"Investor profile for {email} not found");
+
+        return Ok(new {
+            User = new { user.UserID, user.Email, user.IsActive, user.UserType },
+            Investor = new {
+                investor.InvestorID,
+                investor.FullName,
+                investor.FirmName,
+                investor.Title,
+                investor.Bio,
+                investor.ProfileStatus,
+                investor.InvestorType,
+                investor.Location,
+                investor.ContactEmail,
+                investor.BusinessCode,
+                investor.CreatedAt,
+                investor.UpdatedAt
+            }
+        });
+    }
 
     /// <summary>
     /// Get AI-powered startup recommendations (not yet implemented)
