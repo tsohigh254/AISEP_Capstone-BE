@@ -12,21 +12,9 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "ContactEmail",
-                table: "Advisors");
-
-            migrationBuilder.DropColumn(
-                name: "CurrentOrganization",
-                table: "Advisors");
-
-            migrationBuilder.DropColumn(
-                name: "CurrentRoleTitle",
-                table: "Advisors");
-
-            migrationBuilder.DropColumn(
-                name: "ProofFileURL",
-                table: "Advisors");
+            // Removed DropColumn for ContactEmail, CurrentOrganization,
+            // CurrentRoleTitle, ProofFileURL — these columns don't exist
+            // in production DB (already removed or never created).
 
             migrationBuilder.CreateTable(
                 name: "Incidents",
@@ -78,30 +66,6 @@ namespace AISEP.Infrastructure.Migrations
         {
             migrationBuilder.DropTable(
                 name: "Incidents");
-
-            migrationBuilder.AddColumn<string>(
-                name: "ContactEmail",
-                table: "Advisors",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "CurrentOrganization",
-                table: "Advisors",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "CurrentRoleTitle",
-                table: "Advisors",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "ProofFileURL",
-                table: "Advisors",
-                type: "text",
-                nullable: true);
         }
     }
 }
