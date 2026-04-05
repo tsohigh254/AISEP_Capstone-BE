@@ -235,7 +235,7 @@ public class StartupsController : ControllerBase
     [HttpGet("investors")]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<InvestorSearchItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SearchInvestors(InvestorQueryParams investorQuery)
+    public async Task<IActionResult> SearchInvestors([FromQuery] InvestorQueryParams investorQuery)
     {
         var result = await _startupService.SearchInvestorsAsync(investorQuery);
         return result.ToPagedEnvelope();
