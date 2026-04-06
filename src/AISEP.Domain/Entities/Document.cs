@@ -17,7 +17,14 @@ public class Document
     public DateTime? ArchivedAt { get; set; }
     public bool IsArchived { get; set; }
 
+    // Staff review
+    public DocumentReviewStatus ReviewStatus { get; set; } = DocumentReviewStatus.Pending;
+    public int? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewNotes { get; set; }
+
     // Navigation properties
+    public User? ReviewedByUser { get; set; }
     public Startup Startup { get; set; } = null!;
     public DocumentBlockchainProof? BlockchainProof { get; set; }
 }
