@@ -444,7 +444,8 @@ public class AdminService : IAdminService
         if (!string.IsNullOrEmpty(query.Key))
             q = q.Where(a => a.ActionType.Contains(query.Key)
                 || a.EntityType.Contains(query.Key)
-                || (a.ActionDetails != null && a.ActionDetails.Contains(query.Key)));
+                || (a.ActionDetails != null && a.ActionDetails.Contains(query.Key))
+                || (a.User != null && a.User.Email.Contains(query.Key)));
 
         var total = await q.CountAsync();
 
