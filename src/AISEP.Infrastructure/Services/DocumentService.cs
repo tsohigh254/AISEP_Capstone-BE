@@ -95,15 +95,16 @@ public class DocumentService : IDocumentService
         };
 
         _context.DocumentBlockchainProofs.Add(proof);
+        document.BlockchainProof = proof; // link navigation property for MapToDto
         await _context.SaveChangesAsync(ct);
 
         await _audit.LogAsync("UPLOAD_DOCUMENT", "Document", document.DocumentID,
             $"Uploaded ({request.DocumentType} v{version}) with hash {uploadResult.FileHash.Substring(0, 8)}... for startup {startup.StartupID}");
 
         _logger.LogInformation(
-            "Document {DocumentID} uploaded for startup {StartupID} with hash computed: {Hash}", 
-            document.DocumentID, 
-            startup.StartupID, 
+            "Document {DocumentID} uploaded for startup {StartupID} with hash computed: {Hash}",
+            document.DocumentID,
+            startup.StartupID,
             uploadResult.FileHash);
 
         return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(document), "Document uploaded successfully with hash computed");
@@ -126,24 +127,11 @@ public class DocumentService : IDocumentService
             .AsNoTracking()
             .Where(d => d.StartupID == startup.StartupID);
 
-        var items = await query
-            .Select(d => new DocumentDto
-            {
-                DocumentID = d.DocumentID,
-                StartupID = d.StartupID,
-                Title = d.Title,
-                DocumentType = d.DocumentType.ToString(),
-                Version = d.Version,
-                FileUrl = d.FileURL ?? string.Empty,
-                IsArchived = d.IsArchived,
-                IsAnalyzed = d.IsAnalyzed,
-                AnalysisStatus = d.AnalysisStatus.ToString(),
-                UploadedAt = d.UploadedAt,
-                ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
-                FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-                TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
-            })
+        var docs = await query
+            .Include(d => d.BlockchainProof)
             .ToListAsync(ct);
+
+        var items = docs.Select(MapToDto).ToList();
 
         return ApiResponse<IEnumerable<DocumentDto>>.SuccessResponse(items, "Get documents successfully");
     }
@@ -261,32 +249,21 @@ public class DocumentService : IDocumentService
     {
         var documents = _context.Documents.AsQueryable();
 
-        var documentsToDto = documents.Select(d => new DocumentDto
-        {
-            DocumentID = d.DocumentID,
-            StartupID = d.StartupID,
-            DocumentType = d.DocumentType.ToString(),
-            Title = d.Title,
-            Version = d.Version,
-            FileUrl = d.FileURL,
-            IsAnalyzed = d.IsAnalyzed,
-            IsArchived = d.IsArchived,
-            AnalysisStatus = d.AnalysisStatus.ToString(),
-            UploadedAt = d.UploadedAt,
-            ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
-            FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
-        }).Paging(documentQuery.Page, documentQuery.PageSize);
+        var totalItems = await documents.CountAsync();
+        var pagedDocs = await documents
+            .Include(d => d.BlockchainProof)
+            .Paging(documentQuery.Page, documentQuery.PageSize)
+            .ToListAsync();
 
         return ApiResponse<PagedResponse<DocumentDto>>.SuccessResponse(
             new PagedResponse<DocumentDto>
             {
-                Items = await documentsToDto.ToListAsync(),
+                Items = pagedDocs.Select(MapToDto).ToList(),
                 Paging = new PagingInfo
                 {
                     Page = documentQuery.Page,
                     PageSize = documentQuery.PageSize,
-                    TotalItems = await documents.CountAsync()
+                    TotalItems = totalItems
                 }
             });
     }
