@@ -105,7 +105,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Conversation>().Property(e => e.ConversationStatus).HasConversion<short>().HasDefaultValue(ConversationStatus.Active);
 
         // Blockchain
-        modelBuilder.Entity<DocumentBlockchainProof>().Property(e => e.ProofStatus).HasConversion<short>().HasDefaultValue(ProofStatus.Anchored);
+        modelBuilder.Entity<DocumentBlockchainProof>().Property(e => e.ProofStatus).HasConversion<short>().HasDefaultValue(ProofStatus.HashComputed);
 
         // Moderation
         modelBuilder.Entity<FlaggedContent>().Property(e => e.ModerationStatus).HasConversion<short>().HasDefaultValue(ModerationStatus.None);
