@@ -102,9 +102,20 @@ public class InvestorsController : ControllerBase
         return result.ToActionResult();
     }
 
-    // ================================================================
-        // KYC / APPROVAL
-        // ================================================================     
+    /// <summary>
+    /// Upload or update the investor's profile photo (Avatar)
+    /// </summary>
+    [HttpPost("me/photo")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadPhoto(IFormFile photo)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _investorService.UploadPhotoAsync(userId, photo);
+        return result.ToActionResult();
+    }
 
     /// <summary>
     /// Get current investor's KYC status and submitted data

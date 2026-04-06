@@ -1,9 +1,11 @@
+using AISEP.Application.Const;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,12 +16,14 @@ public class InvestorService : IInvestorService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<InvestorService> _logger;
+    private readonly ICloudinaryService _cloudinaryService;
 
-    public InvestorService(ApplicationDbContext db, IAuditService audit, ILogger<InvestorService> logger)
+    public InvestorService(ApplicationDbContext db, IAuditService audit, ILogger<InvestorService> logger, ICloudinaryService cloudinaryService)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _cloudinaryService = cloudinaryService;
     }
 
     // ================================================================
@@ -416,6 +420,41 @@ public class InvestorService : IInvestorService
                 TotalItems = totalItems,
             }
         });
+    }
+
+    public async Task<ApiResponse<InvestorDto>> UploadPhotoAsync(int userId, IFormFile photo)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+
+        if (photo == null || photo.Length == 0)
+            return ApiResponse<InvestorDto>.ErrorResponse("INVALID_FILE", "Please provide a valid image file.");
+
+        try
+        {
+            var profilePhotoUrl = await _cloudinaryService.UploadImage(photo, CloudinaryFolderSaving.Profile);
+            
+            if (!string.IsNullOrEmpty(investor.ProfilePhotoURL))
+            {
+                await _cloudinaryService.DeleteImage(investor.ProfilePhotoURL);
+            }
+
+            investor.ProfilePhotoURL = profilePhotoUrl;
+            investor.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await _audit.LogAsync("UPLOAD_INVESTOR_PHOTO", "Investor", investor.InvestorID, null);
+            _logger.LogInformation("Investor {InvestorId} uploaded new profile photo", investor.InvestorID);
+
+            return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading investor photo for user {UserId}", userId);
+            return ApiResponse<InvestorDto>.ErrorResponse("UPLOAD_FAILED", "Failed to upload photo to storage service.");
+        }
     }
 
     public async Task<ApiResponse<InvestorDto>> SubmitForApprovalAsync(int userId)

@@ -167,11 +167,9 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
 
         // Generate tokens
-        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
-        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
-
-        // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
+        var (accessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
+        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         SetupToken(context, refreshTokenExpires, refreshToken);
 
@@ -181,7 +179,7 @@ public class AuthService : IAuthService
             Message = "Login successful",
             Data = new AuthData
             {
-                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),          
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = accessToken,
                 AccessTokenExpires = accessTokenExpires,
             }
@@ -241,15 +239,13 @@ public class AuthService : IAuthService
 
         // Generate new tokens
         var user = token.User;
-        var (newAccessToken, accessTokenExpires) = GenerateAccessToken(user);
+        var roles = await GetUserRolesAsync(user.UserID);
+        var (newAccessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
         var (newRefreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         // Link old token to new one
         token.ReplacedByToken = newRefreshToken;
         await _context.SaveChangesAsync();
-
-        // Get user roles
-        var roles = await GetUserRolesAsync(user.UserID);
 
         SetupToken(context, refreshTokenExpires, newRefreshToken);
 
@@ -382,7 +378,7 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse<string>> ResetPasswordAsync(ResetPasswordRequest request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
         if (user == null)
         {
@@ -419,7 +415,7 @@ public class AuthService : IAuthService
     {
         var user = await _context.Users
             .Include(u => u.EmailOtps)
-            .FirstOrDefaultAsync(u => u.Email == emailVerifyRequest.Email);
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == emailVerifyRequest.Email.ToLower());
 
         if (user != null && !user.IsActive)      
             return new AuthResponse<AuthData>            {
@@ -465,11 +461,9 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
 
         // Generate tokens
-        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
-        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
-
-        // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
+        var (accessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
+        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         SetupToken(context, refreshTokenExpires, refreshToken);
 
@@ -571,10 +565,10 @@ public class AuthService : IAuthService
             .Replace("=", "");
     }
 
-    private (string token, DateTime expires) GenerateAccessToken(User user)
+private (string token, DateTime expires) GenerateAccessToken(User user, IList<string> roles)
     {
         var expires = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes);
-        
+
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.UserID.ToString()),
@@ -582,6 +576,11 @@ public class AuthService : IAuthService
             new("userType", user.UserType),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
