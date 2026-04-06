@@ -23,9 +23,9 @@ public class CreateStartupRequest
     public decimal? Valuation { get; set; }
 
     public string? BusinessCode { get; set; }
-    public string FullNameOfApplicant { get; set; } 
-    public string RoleOfApplicant { get; set; } 
-    public string ContactEmail { get; set; } 
+    public string? FullNameOfApplicant { get; set; } 
+    public string? RoleOfApplicant { get; set; } 
+    public string? ContactEmail { get; set; } 
     public string? ContactPhone { get; set; }
 
     // UI Extra Requirements
