@@ -28,4 +28,7 @@ public class BlockchainSettings
 
     /// <summary>Multiplier applied to estimated gas (e.g. 1.2 = 20% buffer).</summary>
     public double GasEstimateMultiplier { get; set; } = 1.2;
+
+    /// <summary>Etherscan base URL for building transaction links.</summary>
+    public string EtherscanBaseUrl { get; set; } = "https://sepolia.etherscan.io";
 }

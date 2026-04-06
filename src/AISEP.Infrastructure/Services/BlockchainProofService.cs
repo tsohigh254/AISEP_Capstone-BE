@@ -183,7 +183,8 @@ public class BlockchainProofService : IBlockchainProofService
             FileHash = fileHash,
             TransactionHash = txHash,
             Status = "Pending",
-            SubmittedAt = proof.AnchoredAt!.Value
+            SubmittedAt = proof.AnchoredAt!.Value,
+            EtherscanUrl = BuildEtherscanUrl(txHash)
         });
     }
 
@@ -245,7 +246,8 @@ public class BlockchainProofService : IBlockchainProofService
             TransactionHash = proof.TransactionHash,
             Status = txStatus.Status ?? "Unknown",
             BlockNumber = txStatus.BlockNumber,
-            ConfirmedAt = txStatus.ConfirmedAt
+            ConfirmedAt = txStatus.ConfirmedAt,
+            EtherscanUrl = BuildEtherscanUrl(proof.TransactionHash)
         });
     }
 
@@ -322,7 +324,9 @@ public class BlockchainProofService : IBlockchainProofService
                 DocumentID = doc.DocumentID,
                 ComputedHash = computedHash,
                 OnChainVerified = false,
-                Status = "NotFound"
+                Status = "NotFound",
+                AnchoredAt = null,
+                EtherscanUrl = null
             });
         }
 
@@ -363,7 +367,9 @@ public class BlockchainProofService : IBlockchainProofService
             DocumentID = doc.DocumentID,
             ComputedHash = computedHash,
             OnChainVerified = verified,
-            Status = status
+            Status = status,
+            AnchoredAt = proof.AnchoredAt,
+            EtherscanUrl = BuildEtherscanUrl(proof.TransactionHash)
         });
     }
 
@@ -386,6 +392,12 @@ public class BlockchainProofService : IBlockchainProofService
             .FirstOrDefaultAsync(ct);
     }
 
+
+    private string? BuildEtherscanUrl(string? txHash)
+    {
+        if (string.IsNullOrWhiteSpace(txHash)) return null;
+        return $"{_blockchainSettings.EtherscanBaseUrl.TrimEnd('/')}/tx/{txHash}";
+    }
 
     /// <summary>Extract filename from Cloudinary URL.</summary>
     /// <example>
