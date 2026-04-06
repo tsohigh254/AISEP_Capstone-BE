@@ -183,6 +183,11 @@ namespace AISEP.Infrastructure.Services
             if (response.IsSuccessStatusCode)
                 return await response.Content.ReadAsByteArrayAsync(ct);
 
+            var directStatus = response.StatusCode;
+            var directError = response.Headers.Contains("x-cld-error")
+                ? string.Join(", ", response.Headers.GetValues("x-cld-error"))
+                : "none";
+
             // Try 2: signed URL via Cloudinary DownloadPrivate
             var storageKey = ExtractDocumentStorageKeyFromUrl(fileUrl);
             if (!string.IsNullOrWhiteSpace(storageKey))
@@ -191,10 +196,20 @@ namespace AISEP.Infrastructure.Services
                 response = await httpClient.GetAsync(signedUrl, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.IsSuccessStatusCode)
                     return await response.Content.ReadAsByteArrayAsync(ct);
+
+                var signedStatus = response.StatusCode;
+                var signedError = response.Headers.Contains("x-cld-error")
+                    ? string.Join(", ", response.Headers.GetValues("x-cld-error"))
+                    : "none";
+
+                throw new InvalidOperationException(
+                    $"Cannot download file from Cloudinary. Direct: {directStatus} ({directError}), " +
+                    $"Signed: {signedStatus} ({signedError}), StorageKey: {storageKey}, URL: {fileUrl}");
             }
 
             throw new InvalidOperationException(
-                $"Cannot download file from Cloudinary. All methods failed. URL: {fileUrl}");
+                $"Cannot download file from Cloudinary. Direct: {directStatus} ({directError}), " +
+                $"Could not extract storage key. URL: {fileUrl}");
         }
 
         public string GenerateSignedDocumentUrl(
