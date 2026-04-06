@@ -265,4 +265,30 @@ public class MentorshipsController : ControllerBase
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
     }
+
+    // ================================================================
+    // 12) GET /api/mentorships/{id}/sessions — List sessions
+    // ================================================================
+
+    /// <summary>List sessions for a specific mentorship.</summary>
+    [HttpGet("{id:int}/sessions")]
+    public async Task<IActionResult> GetSessions(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipSessionsAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
+    }
+
+    // ================================================================
+    // 13) GET /api/mentorships/{id}/feedbacks — List feedbacks
+    // ================================================================
+
+    /// <summary>List feedbacks for a specific mentorship.</summary>
+    [HttpGet("{id:int}/feedbacks")]
+    public async Task<IActionResult> GetFeedbacks(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipFeedbacksAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
+    }
 }
