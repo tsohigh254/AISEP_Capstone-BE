@@ -1,7 +1,10 @@
+using AISEP.Application.DTOs;
+using AISEP.Application.DTOs.Common;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace AISEP.Infrastructure.Services;
@@ -68,5 +71,51 @@ public class AuditService : IAuditService
         }
 
         await LogAsync(userId, actionType, entityType, entityId, actionDetails, ipAddress, userAgent);
+    }
+
+    public async Task<PagedData<AuditLogResponse>> GetLogsAsync(string? search, string? actionType, int page, int pageSize, CancellationToken ct)
+    {
+        var query = _context.AuditLogs
+            .Include(a => a.User)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(actionType))
+            query = query.Where(a => a.ActionType == actionType);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(a =>
+                (a.User != null && a.User.Email.ToLower().Contains(term)) ||
+                a.ActionType.ToLower().Contains(term) ||
+                a.EntityType.ToLower().Contains(term) ||
+                (a.ActionDetails != null && a.ActionDetails.ToLower().Contains(term)));
+        }
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(a => new AuditLogResponse(
+                a.LogID,
+                a.User != null ? a.User.Email : "system",
+                a.ActionType,
+                a.EntityType,
+                a.EntityID,
+                a.ActionDetails,
+                a.IPAddress,
+                a.CreatedAt))
+            .ToListAsync(ct);
+
+        return new PagedData<AuditLogResponse>
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Data = items
+        };
     }
 }
