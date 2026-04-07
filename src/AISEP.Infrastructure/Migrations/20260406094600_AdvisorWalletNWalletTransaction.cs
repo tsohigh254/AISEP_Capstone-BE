@@ -106,6 +106,21 @@ namespace AISEP.Infrastructure.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            // --- Auto-create a wallet for every existing advisor so WalletId is unique ---
+            migrationBuilder.Sql(@"
+                INSERT INTO ""AdvisorWallets"" (""AdvisorId"", ""Balance"", ""TotalEarned"", ""TotalWithdrawn"", ""CreatedAt"")
+                SELECT ""AdvisorID"", 0, 0, 0, NOW()
+                FROM ""Advisors""
+                WHERE ""WalletId"" = 0;
+            ");
+            migrationBuilder.Sql(@"
+                UPDATE ""Advisors"" a
+                SET ""WalletId"" = w.""WalletId""
+                FROM ""AdvisorWallets"" w
+                WHERE w.""AdvisorId"" = a.""AdvisorID"";
+            ");
+            // --- End auto-create ---
+
             migrationBuilder.CreateIndex(
                 name: "IX_Advisors_WalletId",
                 table: "Advisors",
