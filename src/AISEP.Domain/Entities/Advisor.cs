@@ -41,6 +41,12 @@ public class Advisor
     
     public string? ExperiencesJson { get; set; }    // JSON array of experience objects
     public string? Skills { get; set; }             // comma-separated
+    public string? CurrentOrganization { get; set; }
+    public string? BasicExpertiseProofFileURL { get; set; }
+    public string? BasicExpertiseProofFileName { get; set; }
+    public string? ContactEmail { get; set; }
+    public bool RequiresNewEvidence { get; set; }
+    public string? RejectionRemarks { get; set; }
 
     public int WalletId { get; set; }
 

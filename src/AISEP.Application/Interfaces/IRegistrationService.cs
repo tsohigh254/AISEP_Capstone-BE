@@ -21,6 +21,7 @@ namespace AISEP.Application.Interfaces
         Task<ApiResponse<StartupDto>> GetPendingRegistrationStartupByIdAsync(int startupId);
         Task<ApiResponse<StartupKycSubmissionDto>> GetPendingRegistrationStartupKycByIdAsync(int startupId);
         Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId);
+        Task<ApiResponse<InvestorKycSubmissionDto>> GetPendingRegistrationInvestorKycByIdAsync(int investorId);
         Task<ApiResponse<AdvisorDto>> GetPendingRegistrationAdvisorByIdAsync(int advisorId);
         Task<ApiResponse<StartupKycSubmissionDto>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest);
         Task<ApiResponse<Advisor>> ApproveAdvisorRegistrationAsync(int staffId, ApproveAdvisorRegistrationRequest advisorRegistrationRequest);

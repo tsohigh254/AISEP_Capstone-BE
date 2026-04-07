@@ -26,17 +26,6 @@ public class Investor
     public int? ApprovedBy { get; set; }
     public User? ApprovedByUser { get; set; }
 
-    // KYC Information
-    public InvestorType? InvestorType { get; set; }
-    public string? ContactEmail { get; set; }
-    public string? CurrentOrganization { get; set; }
-    public string? CurrentRoleTitle { get; set; }
-    public string? BusinessCode { get; set; }
-    public string? SubmitterRole { get; set; }
-    public string? IDProofFileURL { get; set; }
-    public string? InvestmentProofFileURL { get; set; }
-    public string? Remarks { get; set; }
-
     // Navigation properties
     public User User { get; set; } = null!;
     public InvestorPreferences? Preferences { get; set; }
@@ -46,4 +35,6 @@ public class Investor
     public ICollection<PortfolioCompany> PortfolioCompanies { get; set; } = new List<PortfolioCompany>();
     public ICollection<StartupInvestorConnection> StartupConnections { get; set; } = new List<StartupInvestorConnection>();
     public ICollection<InformationRequest> InformationRequests { get; set; } = new List<InformationRequest>();
+    public ICollection<InvestorKycSubmission> KycSubmissions { get; set; } = new List<InvestorKycSubmission>();
 }
+

@@ -48,6 +48,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<InvestorIndustryFocus> InvestorIndustryFocuses => Set<InvestorIndustryFocus>();
     public DbSet<InvestorStageFocus> InvestorStageFocuses => Set<InvestorStageFocus>();
     public DbSet<PortfolioCompany> PortfolioCompanies => Set<PortfolioCompany>();
+    public DbSet<InvestorKycSubmission> InvestorKycSubmissions => Set<InvestorKycSubmission>();
+    public DbSet<InvestorKycEvidenceFile> InvestorKycEvidenceFiles => Set<InvestorKycEvidenceFile>();
 
     // AI & Scoring
     public DbSet<StartupPotentialScore> StartupPotentialScores => Set<StartupPotentialScore>();
