@@ -1,12 +1,14 @@
 ﻿using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Payment;
 using AISEP.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AISEP.WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class PaymentController : ControllerBase
     {
         private readonly IPaymentService _paymentService;
@@ -77,6 +79,7 @@ namespace AISEP.WebAPI.Controllers
         /// </summary>
         /// <returns>Webhook processing result</returns>
         [HttpPost("callback")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]

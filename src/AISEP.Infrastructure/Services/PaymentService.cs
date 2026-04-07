@@ -4,7 +4,6 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
-using DotNetEnv;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +20,7 @@ namespace AISEP.Infrastructure.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly PayOSClient _payOS;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<PaymentService> _logger;
         private const decimal PLATFORM_FEE_PERCENTAGE = 15M;
 
@@ -32,6 +32,7 @@ namespace AISEP.Infrastructure.Services
         {
             _context = context;
             _payOS = payOS;
+            _configuration = configuration;
             _logger = logger;
         }
 
@@ -148,18 +149,17 @@ namespace AISEP.Infrastructure.Services
 
         private async Task<PaymentInfoDto> PaymentLink(PaymentRequestDto paymentRequest)
         {
-            Env.Load();
             var orderCode = int.Parse(DateTimeOffset.Now.ToString("ffffff"));
-            var url = Env.GetString("Frontend__URI");
+            var url = _configuration["Frontend:URI"] ?? "http://localhost:3000";
 
             var paymentLinkRequest = new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
                 Amount = paymentRequest.Amount,
-                Description = "Thanh toán ??n hàng",
+                Description = "Thanh toï¿½n ??n hï¿½ng",
                 ExpiredAt = (int)DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
                 ReturnUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout/result?status=success",
-                CancelUrl = $"url/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout"
+                CancelUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout"
             };
 
             var paymentInfo = await _payOS.PaymentRequests.CreateAsync(paymentLinkRequest);

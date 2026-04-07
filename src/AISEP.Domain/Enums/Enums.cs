@@ -294,6 +294,8 @@ public enum TransactionStatus : short
     Pending = 0,      // Đang chờ
     Completed = 1,    // Hoàn thành
     Failed = 2        // Thất bại
+}
+
 // ───────────────────────── Document Review ───────────────────
 
 public enum DocumentReviewStatus : short

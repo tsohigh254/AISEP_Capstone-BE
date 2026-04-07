@@ -402,6 +402,8 @@ public class ApplicationDbContext : DbContext
             .HasOne(t => t.Mentorship)
             .WithMany()
             .HasForeignKey(t => t.MentorshipID)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Incident relationships
         modelBuilder.Entity<Incident>()
             .HasOne(i => i.CreatedByUser)
