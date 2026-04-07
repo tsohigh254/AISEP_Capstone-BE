@@ -71,7 +71,6 @@ public class MentorshipService : IMentorshipService
             {
                 mentorship.Sessions.Add(new MentorshipSession
                 {   
-                    MeetingURL = request.MeetingUrl,
                     ScheduledStartAt = slot.StartAt.ToUniversalTime(),
                     DurationMinutes = (int)(slot.EndAt - slot.StartAt).TotalMinutes,
                     SessionStatus = "ProposedByStartup",

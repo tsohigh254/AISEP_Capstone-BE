@@ -4,6 +4,7 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
+using DotNetEnv;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -149,8 +150,9 @@ namespace AISEP.Infrastructure.Services
 
         private async Task<PaymentInfoDto> PaymentLink(PaymentRequestDto paymentRequest)
         {
+            Env.Load();
             var orderCode = int.Parse(DateTimeOffset.Now.ToString("ffffff"));
-            var url = _configuration["Frontend:URI"] ?? "http://localhost:3000";
+            var url = Env.GetString("Frontend__URI");
 
             var paymentLinkRequest = new CreatePaymentLinkRequest
             {
