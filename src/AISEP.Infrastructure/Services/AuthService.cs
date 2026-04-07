@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Org.BouncyCastle.Asn1.Ocsp;
@@ -28,23 +29,29 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
     private readonly EmailSettings _emailSettings;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         ApplicationDbContext context, 
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
-        IOptions<EmailSettings> emailSettings)
+        IOptions<EmailSettings> emailSettings,
+        ILogger<AuthService> logger)
     {
         _context = context;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _emailSettings = emailSettings.Value;
+        _logger = logger;
     }
 
     public async Task<AuthResponse<string>> RegisterAsync(RegisterRequest request)
     {
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var validUserTypes = new[] { "Startup", "Investor", "Advisor" };
+
         // Check if email already exists
-        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
+        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
         if (existingUser != null)
         {
             return new AuthResponse<string>
@@ -55,8 +62,10 @@ public class AuthService : IAuthService
         }
 
         // Validate user type
-        var validUserTypes = new[] { "Startup", "Investor", "Advisor" };
-        if (!validUserTypes.Contains(request.UserType))
+        var normalizedUserType = validUserTypes.FirstOrDefault(x =>
+            string.Equals(x, request.UserType, StringComparison.OrdinalIgnoreCase));
+
+        if (normalizedUserType is null)
         {
             return new AuthResponse<string>
             {
@@ -65,44 +74,61 @@ public class AuthService : IAuthService
             };
         }
 
-        // Create new user
-        var user = new User
-        {
-            Email = request.Email.ToLower(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            UserType = request.UserType,
-            IsActive = true,
-            EmailVerified = false,
-            CreatedAt = DateTime.UtcNow
-        };
+        await using var transaction = await _context.Database.BeginTransactionAsync();
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        // Assign default role based on user type
-        var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == request.UserType);
-        if (role != null)
+        try
         {
-            var userRole = new UserRole
+            // Create new user
+            var user = new User
             {
-                UserID = user.UserID,
-                RoleID = role.RoleID,
-                AssignedAt = DateTime.UtcNow
+                Email = normalizedEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                UserType = normalizedUserType,
+                IsActive = true,
+                EmailVerified = false,
+                CreatedAt = DateTime.UtcNow
             };
-            _context.UserRoles.Add(userRole);
+
+            _context.Users.Add(user);
             await _context.SaveChangesAsync();
-        }       
 
-        var newOtp = await GenerateOtp(user.UserID);
+            // Assign default role based on user type
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName == normalizedUserType);
+            if (role != null)
+            {
+                var userRole = new UserRole
+                {
+                    UserID = user.UserID,
+                    RoleID = role.RoleID,
+                    AssignedAt = DateTime.UtcNow
+                };
+                _context.UserRoles.Add(userRole);
+                await _context.SaveChangesAsync();
+            }
 
-        await SendEmail(user.UserID, user.Email, newOtp);
+            var newOtp = await GenerateOtp(user.UserID);
 
-        return new AuthResponse<string>
+            await SendEmail(user.UserID, user.Email, newOtp);
+            await transaction.CommitAsync();
+
+            return new AuthResponse<string>
+            {
+                Success = true,
+                Message = "Register successfully, open your email to get the otp code",
+                Data = user.Email
+            };
+        }
+        catch (Exception ex)
         {
-            Success = true,
-            Message = "Register successfully, open your email to get the otp code",
-            Data = user.Email
-        };
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Registration failed for email {Email}", normalizedEmail);
+
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "Unable to complete registration because the verification email could not be sent. Please try again."
+            };
+        }
     }
 
     public async Task<AuthResponse<AuthData>> LoginAsync(LoginRequest request, HttpContext context, string? ipAddress = null, string? userAgent = null)
@@ -127,16 +153,23 @@ public class AuthService : IAuthService
             };
         }
 
+        if (!user.EmailVerified)
+        {
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "Please verify your email before logging in"
+            };
+        }
+
         // Update last login
         user.LastLoginAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
         // Generate tokens
-        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
-        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
-
-        // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
+        var (accessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
+        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         SetupToken(context, refreshTokenExpires, refreshToken);
 
@@ -146,7 +179,7 @@ public class AuthService : IAuthService
             Message = "Login successful",
             Data = new AuthData
             {
-                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),          
+                Info = new UserProfileResponse(user.UserID, user.Email, user.UserType, user.IsActive, user.EmailVerified, user.CreatedAt, user.LastLoginAt, roles),
                 AccessToken = accessToken,
                 AccessTokenExpires = accessTokenExpires,
             }
@@ -188,20 +221,31 @@ public class AuthService : IAuthService
             };
         }
 
+        if (!token.User.EmailVerified)
+        {
+            token.RevokedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            SetupToken(context, DateTime.UnixEpoch, string.Empty);
+
+            return new AuthResponse<AuthData>
+            {
+                Success = false,
+                Message = "Please verify your email before logging in"
+            };
+        }
+
         // Revoke current token
         token.RevokedAt = DateTime.UtcNow;
 
         // Generate new tokens
         var user = token.User;
-        var (newAccessToken, accessTokenExpires) = GenerateAccessToken(user);
+        var roles = await GetUserRolesAsync(user.UserID);
+        var (newAccessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
         var (newRefreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         // Link old token to new one
         token.ReplacedByToken = newRefreshToken;
         await _context.SaveChangesAsync();
-
-        // Get user roles
-        var roles = await GetUserRolesAsync(user.UserID);
 
         SetupToken(context, refreshTokenExpires, newRefreshToken);
 
@@ -334,7 +378,7 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse<string>> ResetPasswordAsync(ResetPasswordRequest request)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower());
 
         if (user == null)
         {
@@ -371,7 +415,7 @@ public class AuthService : IAuthService
     {
         var user = await _context.Users
             .Include(u => u.EmailOtps)
-            .FirstOrDefaultAsync(u => u.Email == emailVerifyRequest.Email);
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == emailVerifyRequest.Email.ToLower());
 
         if (user != null && !user.IsActive)      
             return new AuthResponse<AuthData>            {
@@ -417,11 +461,9 @@ public class AuthService : IAuthService
         await _context.SaveChangesAsync();
 
         // Generate tokens
-        var (accessToken, accessTokenExpires) = GenerateAccessToken(user);
-        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
-
-        // Get user roles
         var roles = await GetUserRolesAsync(user.UserID);
+        var (accessToken, accessTokenExpires) = GenerateAccessToken(user, roles);
+        var (refreshToken, refreshTokenExpires) = await GenerateRefreshTokenAsync(user.UserID, ipAddress, userAgent);
 
         SetupToken(context, refreshTokenExpires, refreshToken);
 
@@ -440,7 +482,8 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse<string>> ResendVerificationAsync(ResendEmailRequest resendEmailRequest)
     {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == resendEmailRequest.Email);
+        var normalizedEmail = resendEmailRequest.Email.Trim().ToLowerInvariant();
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
 
         if (user == null)
             return new AuthResponse<string>
@@ -449,15 +492,41 @@ public class AuthService : IAuthService
                 Message = "User does not exists"
             };
 
-        foreach (var otp in user.EmailOtps)
+        if (user.EmailVerified)
         {
-            if (!otp.IsUsed)
-                otp.IsUsed = true;
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "Email is already verified"
+            };
         }
 
-        var newOtp = await GenerateOtp(user.UserID);
+        var pendingOtps = await _context.EmailOtps
+            .Where(otp => otp.UserId == user.UserID && !otp.IsUsed)
+            .ToListAsync();
 
-        await SendEmail(user.UserID, user.Email, newOtp);
+        foreach (var otp in pendingOtps)
+        {
+            otp.IsUsed = true;
+        }
+
+        await _context.SaveChangesAsync();
+
+        try
+        {
+            var newOtp = await GenerateOtp(user.UserID);
+            await SendEmail(user.UserID, user.Email, newOtp);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resend verification email to {Email}", user.Email);
+
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "Unable to send verification email right now. Please try again."
+            };
+        }
 
         return new AuthResponse<string>
         {
@@ -496,10 +565,10 @@ public class AuthService : IAuthService
             .Replace("=", "");
     }
 
-    private (string token, DateTime expires) GenerateAccessToken(User user)
+private (string token, DateTime expires) GenerateAccessToken(User user, IList<string> roles)
     {
         var expires = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes);
-        
+
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.UserID.ToString()),
@@ -507,6 +576,11 @@ public class AuthService : IAuthService
             new("userType", user.UserType),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

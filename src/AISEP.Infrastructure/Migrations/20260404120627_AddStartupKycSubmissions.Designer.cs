@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260404120627_AddStartupKycSubmissions")]
+    partial class AddStartupKycSubmissions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -120,9 +123,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int>("UserID")
                         .HasColumnType("integer");
 
-                    b.Property<int>("WalletId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Website")
                         .HasColumnType("text");
 
@@ -134,9 +134,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("ApprovedBy");
 
                     b.HasIndex("UserID")
-                        .IsUnique();
-
-                    b.HasIndex("WalletId")
                         .IsUnique();
 
                     b.ToTable("Advisors");
@@ -254,34 +251,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("AdvisorTestimonials");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWallet", b =>
-                {
-                    b.Property<int>("WalletId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("WalletId"));
-
-                    b.Property<int>("AdvisorId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("TotalEarned")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalWithdrawn")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("WalletId");
-
-                    b.ToTable("AdvisorWallets");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<int>("LogID")
@@ -389,21 +358,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("ReviewNotes")
-                        .HasColumnType("text");
-
-                    b.Property<short>("ReviewStatus")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ReviewedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ReviewedByUserUserID")
-                        .HasColumnType("integer");
-
                     b.Property<int>("StartupID")
                         .HasColumnType("integer");
 
@@ -417,8 +371,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("DocumentID");
-
-                    b.HasIndex("ReviewedByUserUserID");
 
                     b.HasIndex("StartupID");
 
@@ -560,61 +512,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("ReviewedBy");
 
                     b.ToTable("FlaggedContents");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.Incident", b =>
-                {
-                    b.Property<int>("IncidentID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IncidentID"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("CreatedByUserUserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsRolledBack")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ResolvedBy")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ResolvedByUserUserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RollbackNotes")
-                        .HasColumnType("text");
-
-                    b.Property<short>("Severity")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("IncidentID");
-
-                    b.HasIndex("CreatedByUserUserID");
-
-                    b.HasIndex("ResolvedByUserUserID");
-
-                    b.ToTable("Incidents");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Industry", b =>
@@ -1813,9 +1710,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<DateTime?>("AcceptedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal>("ActualAmount")
-                        .HasColumnType("numeric");
-
                     b.Property<int>("AdvisorID")
                         .HasColumnType("integer");
 
@@ -1851,17 +1745,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("ObligationSummary")
                         .HasColumnType("text");
 
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("PaymentStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)0);
-
-                    b.Property<decimal>("PlatformFeeAmount")
-                        .HasColumnType("numeric");
-
                     b.Property<string>("PreferredFormat")
                         .HasColumnType("text");
 
@@ -1874,16 +1757,10 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<DateTime?>("RequestedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal>("SessionAmount")
-                        .HasColumnType("numeric");
-
                     b.Property<string>("SpecificQuestions")
                         .HasColumnType("text");
 
                     b.Property<int>("StartupID")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("TransactionCode")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -2054,9 +1931,6 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.Property<string>("Remarks")
                         .HasColumnType("text");
-
-                    b.Property<bool>("RequiresNewEvidence")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("RepresentativeFullName")
                         .IsRequired()
@@ -2323,41 +2197,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("UserRoles");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.WalletTransaction", b =>
-                {
-                    b.Property<int>("TransactionID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TransactionID"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("MentorshipID")
-                        .HasColumnType("integer");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<short>("Type")
-                        .HasColumnType("smallint");
-
-                    b.Property<int>("WalletId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("TransactionID");
-
-                    b.HasIndex("MentorshipID");
-
-                    b.HasIndex("WalletId");
-
-                    b.ToTable("WalletTransactions");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.Advisor", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "ApprovedByUser")
@@ -2370,14 +2209,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasForeignKey("AISEP.Domain.Entities.Advisor", "UserID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("AISEP.Domain.Entities.AdvisorWallet", "AdvisorWallet")
-                        .WithOne("Advisor")
-                        .HasForeignKey("AISEP.Domain.Entities.Advisor", "WalletId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AdvisorWallet");
 
                     b.Navigation("ApprovedByUser");
 
@@ -2465,17 +2296,11 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.User", "ReviewedByUser")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByUserUserID");
-
                     b.HasOne("AISEP.Domain.Entities.Startup", "Startup")
                         .WithMany("Documents")
                         .HasForeignKey("StartupID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ReviewedByUser");
 
                     b.Navigation("Startup");
                 });
@@ -2523,21 +2348,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("RelatedUser");
 
                     b.Navigation("ReviewedByUser");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.Incident", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserUserID");
-
-                    b.HasOne("AISEP.Domain.Entities.User", "ResolvedByUser")
-                        .WithMany()
-                        .HasForeignKey("ResolvedByUserUserID");
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("ResolvedByUser");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Industry", b =>
@@ -3010,25 +2820,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.WalletTransaction", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.StartupAdvisorMentorship", "Mentorship")
-                        .WithMany()
-                        .HasForeignKey("MentorshipID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("AISEP.Domain.Entities.AdvisorWallet", "Wallet")
-                        .WithMany("Transactions")
-                        .HasForeignKey("WalletId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Mentorship");
-
-                    b.Navigation("Wallet");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.Advisor", b =>
                 {
                     b.Navigation("Availability");
@@ -3038,14 +2829,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Mentorships");
 
                     b.Navigation("Testimonials");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWallet", b =>
-                {
-                    b.Navigation("Advisor")
-                        .IsRequired();
-
-                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.Conversation", b =>

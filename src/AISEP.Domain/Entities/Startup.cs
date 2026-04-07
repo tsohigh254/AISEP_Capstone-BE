@@ -29,7 +29,7 @@ public class Startup
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BusinessCode { get; set; }
+    public string BusinessCode { get; set; } = string.Empty;
 
     // Registration Documents (Required for staff review)
     public string? FileCertificateBusiness { get; set; }
@@ -70,4 +70,5 @@ public class Startup
     public ICollection<StartupInvestorConnection> InvestorConnections { get; set; } = new List<StartupInvestorConnection>();
     public ICollection<InvestorWatchlist> WatchedByInvestors { get; set; } = new List<InvestorWatchlist>();
     public ICollection<AdvisorTestimonial> AdvisorTestimonials { get; set; } = new List<AdvisorTestimonial>();
+    public ICollection<StartupKycSubmission> KycSubmissions { get; set; } = new List<StartupKycSubmission>();
 }

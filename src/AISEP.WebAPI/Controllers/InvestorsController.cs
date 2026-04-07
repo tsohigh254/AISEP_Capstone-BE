@@ -102,9 +102,20 @@ public class InvestorsController : ControllerBase
         return result.ToActionResult();
     }
 
-    // ================================================================
-        // KYC / APPROVAL
-        // ================================================================     
+    /// <summary>
+    /// Upload or update the investor's profile photo (Avatar)
+    /// </summary>
+    [HttpPost("me/photo")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadPhoto(IFormFile photo)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _investorService.UploadPhotoAsync(userId, photo);
+        return result.ToActionResult();
+    }
 
     /// <summary>
     /// Get current investor's KYC status and submitted data
@@ -337,5 +348,77 @@ public class InvestorsController : ControllerBase
         return ApiEnvelopeExtensions.ErrorEnvelope(
             "AI recommendation engine is not yet enabled. This feature is coming soon.",
             StatusCodes.Status501NotImplemented);
+    }
+
+    // ================================================================
+    // INDUSTRY FOCUS
+    // ================================================================
+
+    /// <summary>Get investor's industry focus list.</summary>
+    [HttpGet("me/industry-focus")]
+    public async Task<IActionResult> GetIndustryFocus()
+    {
+        var result = await _investorService.GetIndustryFocusAsync(GetCurrentUserId());
+        return result.ToActionResult();
+    }
+
+    /// <summary>Add an industry focus.</summary>
+    [HttpPost("me/industry-focus")]
+    public async Task<IActionResult> AddIndustryFocus([FromBody] AddIndustryFocusRequest request)
+    {
+        var result = await _investorService.AddIndustryFocusAsync(GetCurrentUserId(), request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Remove an industry focus.</summary>
+    [HttpDelete("me/industry-focus/{focusId:int}")]
+    public async Task<IActionResult> RemoveIndustryFocus(int focusId)
+    {
+        var result = await _investorService.RemoveIndustryFocusAsync(GetCurrentUserId(), focusId);
+        if (!result.Success) return result.ToErrorResult();
+        return ApiEnvelopeExtensions.DeletedEnvelope("Industry focus removed");
+    }
+
+    // ================================================================
+    // STAGE FOCUS
+    // ================================================================
+
+    /// <summary>Get investor's stage focus list.</summary>
+    [HttpGet("me/stage-focus")]
+    public async Task<IActionResult> GetStageFocus()
+    {
+        var result = await _investorService.GetStageFocusAsync(GetCurrentUserId());
+        return result.ToActionResult();
+    }
+
+    /// <summary>Add a stage focus.</summary>
+    [HttpPost("me/stage-focus")]
+    public async Task<IActionResult> AddStageFocus([FromBody] AddStageFocusRequest request)
+    {
+        var result = await _investorService.AddStageFocusAsync(GetCurrentUserId(), request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>Remove a stage focus.</summary>
+    [HttpDelete("me/stage-focus/{stageFocusId:int}")]
+    public async Task<IActionResult> RemoveStageFocus(int stageFocusId)
+    {
+        var result = await _investorService.RemoveStageFocusAsync(GetCurrentUserId(), stageFocusId);
+        if (!result.Success) return result.ToErrorResult();
+        return ApiEnvelopeExtensions.DeletedEnvelope("Stage focus removed");
+    }
+
+    // ================================================================
+    // COMPARE STARTUPS
+    // ================================================================
+
+    /// <summary>Compare 2-5 startups side by side.</summary>
+    [HttpGet("compare")]
+    public async Task<IActionResult> CompareStartups([FromQuery] List<int> startupIds)
+    {
+        var result = await _investorService.CompareStartupsAsync(startupIds);
+        return result.ToActionResult();
     }
 }

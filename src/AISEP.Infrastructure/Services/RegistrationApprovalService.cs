@@ -19,17 +19,89 @@ namespace AISEP.Infrastructure.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<RegistrationApprovalService> _logger;
+        private readonly ICloudinaryService _cloudinaryService;
 
         public RegistrationApprovalService(
             ApplicationDbContext context,
-            ILogger<RegistrationApprovalService> logger)
+            ILogger<RegistrationApprovalService> logger,
+            ICloudinaryService cloudinaryService)
         {
             _context = context;
             _logger = logger;
+            _cloudinaryService = cloudinaryService;
         }
 
-        public async Task<ApiResponse<Startup>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest)
+        public async Task<ApiResponse<StartupKycSubmissionDto>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest)
         {
+            var startupSubmission = await _context.StartupKycSubmissions
+                .Include(s => s.Startup)
+                .Include(s => s.EvidenceFiles)
+                .Include(s => s.RequestedAdditionalItems)
+                .FirstOrDefaultAsync(s => s.StartupID == startupRegistrationRequest.StartupId && s.IsActive);
+
+            if (startupSubmission == null)
+            {
+                return ApiResponse<StartupKycSubmissionDto>.ErrorResponse("STARTUP_KYC_SUBMISSION_NOT_FOUND",
+                    "No active startup KYC submission was found for this startup.");
+            }
+
+            var reviewedStartup = startupSubmission.Startup;
+            var reviewedAt = DateTime.UtcNow;
+
+            startupSubmission.ReviewedAt = reviewedAt;
+            startupSubmission.ReviewedBy = staffId;
+            startupSubmission.UpdatedAt = reviewedAt;
+            startupSubmission.Remarks = string.IsNullOrWhiteSpace(startupRegistrationRequest.Remarks)
+                ? null
+                : startupRegistrationRequest.Remarks.Trim();
+            startupSubmission.RequiresNewEvidence = startupRegistrationRequest.RequiresNewEvidence;
+
+            if (startupRegistrationRequest.Score >= 10)
+            {
+                startupSubmission.WorkflowStatus = StartupKycWorkflowStatus.Approved;
+                startupSubmission.ResultLabel = StartupKycResultLabel.VerifiedCompany;
+                startupSubmission.Explanation = "Startup KYC has been approved as a verified company.";
+                startupSubmission.RequiresNewEvidence = false;
+                reviewedStartup.ProfileStatus = ProfileStatus.Approved;
+                reviewedStartup.StartupTag = StartupTag.VerifiedCompany;
+                reviewedStartup.ApprovedAt = reviewedAt;
+                reviewedStartup.ApprovedBy = staffId;
+            }
+            else if (startupRegistrationRequest.Score >= 6)
+            {
+                startupSubmission.WorkflowStatus = StartupKycWorkflowStatus.Approved;
+                startupSubmission.ResultLabel = StartupKycResultLabel.BasicVerified;
+                startupSubmission.Explanation = "Startup KYC has been approved as basic verified.";
+                startupSubmission.RequiresNewEvidence = false;
+                reviewedStartup.ProfileStatus = ProfileStatus.Approved;
+                reviewedStartup.StartupTag = StartupTag.BasicVerified;
+                reviewedStartup.ApprovedAt = reviewedAt;
+                reviewedStartup.ApprovedBy = staffId;
+            }
+            else if (startupRegistrationRequest.Score >= 2)
+            {
+                startupSubmission.WorkflowStatus = StartupKycWorkflowStatus.PendingMoreInfo;
+                startupSubmission.ResultLabel = StartupKycResultLabel.PendingMoreInfo;
+                startupSubmission.Explanation = "Additional information has been requested for this KYC submission.";
+                reviewedStartup.ProfileStatus = ProfileStatus.PendingKYC;
+                reviewedStartup.StartupTag = StartupTag.PendingMoreInfo;
+                reviewedStartup.UpdatedAt = reviewedAt;
+            }
+            else
+            {
+                startupSubmission.WorkflowStatus = StartupKycWorkflowStatus.Rejected;
+                startupSubmission.ResultLabel = StartupKycResultLabel.VerificationFailed;
+                startupSubmission.Explanation = "Startup KYC has been rejected.";
+                reviewedStartup.ProfileStatus = ProfileStatus.Rejected;
+                reviewedStartup.StartupTag = StartupTag.VerificationFailed;
+                reviewedStartup.UpdatedAt = reviewedAt;
+            }
+
+            await _context.SaveChangesAsync();
+            return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
+                MapToKycSubmissionDto(startupSubmission),
+                "Startup reviewed successfully");
+#if false
             var startup = await _context.Startups.FirstOrDefaultAsync(s => s.StartupID == startupRegistrationRequest.StartupId);
 
             if (startup == null)
@@ -58,6 +130,7 @@ namespace AISEP.Infrastructure.Services
             await _context.SaveChangesAsync();
 
             return ApiResponse<Startup>.SuccessResponse(startup, "Startup reviewed successfully");
+#endif
         }
 
         public async Task<ApiResponse<Advisor>> ApproveAdvisorRegistrationAsync(int staffId, ApproveAdvisorRegistrationRequest request)
@@ -147,8 +220,39 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<Investor>.SuccessResponse(investor, "Investor reviewed successfully");
         }
 
-        public async Task<ApiResponse<Startup>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request)
+        public async Task<ApiResponse<StartupKycSubmissionDto>> RejectStartupRegistrationAsync(int staffId, RejectRegistrationRequest request)
         {
+            var startupSubmission = await _context.StartupKycSubmissions
+                .Include(s => s.Startup)
+                .Include(s => s.EvidenceFiles)
+                .Include(s => s.RequestedAdditionalItems)
+                .FirstOrDefaultAsync(s => s.StartupID == request.Id && s.IsActive);
+
+            if (startupSubmission == null)
+            {
+                return ApiResponse<StartupKycSubmissionDto>.ErrorResponse("STARTUP_KYC_SUBMISSION_NOT_FOUND",
+                    "No active startup KYC submission was found for this startup.");
+            }
+
+            var reviewedAt = DateTime.UtcNow;
+            startupSubmission.WorkflowStatus = StartupKycWorkflowStatus.Rejected;
+            startupSubmission.ResultLabel = StartupKycResultLabel.VerificationFailed;
+            startupSubmission.Explanation = "Startup KYC has been rejected.";
+            startupSubmission.Remarks = request.Reason;
+            startupSubmission.RequiresNewEvidence = request.RequiresNewEvidence ?? false;
+            startupSubmission.ReviewedAt = reviewedAt;
+            startupSubmission.ReviewedBy = staffId;
+            startupSubmission.UpdatedAt = reviewedAt;
+
+            startupSubmission.Startup.ProfileStatus = ProfileStatus.Rejected;
+            startupSubmission.Startup.StartupTag = StartupTag.VerificationFailed;
+            startupSubmission.Startup.UpdatedAt = reviewedAt;
+
+            await _context.SaveChangesAsync();
+            return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
+                MapToKycSubmissionDto(startupSubmission),
+                "Rejected successfully");
+#if false
             var startup = await _context.Startups.FirstOrDefaultAsync(s => s.StartupID == request.Id);
             if (startup == null)
                 return ApiResponse<Startup>.ErrorResponse("NOT_FOUND", "Profile not found");
@@ -158,6 +262,7 @@ namespace AISEP.Infrastructure.Services
             _context.Startups.Update(startup);
             await _context.SaveChangesAsync();
             return ApiResponse<Startup>.SuccessResponse(startup, "Rejected successfully");
+#endif
         }
 
         public async Task<ApiResponse<Advisor>> RejectAdvisorRegistrationAsync(int staffId, RejectRegistrationRequest request)
@@ -276,6 +381,41 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> GetPendingRegistrationsStartupAsync(RegistrationQueryParams registrationQuery)
         {
+            var submissionQuery = _context.StartupKycSubmissions
+                .AsNoTracking()
+                .Include(s => s.Startup)
+                .ThenInclude(s => s.Industry)
+                .Where(s => s.IsActive
+                    && (s.WorkflowStatus == StartupKycWorkflowStatus.UnderReview
+                        || s.WorkflowStatus == StartupKycWorkflowStatus.PendingMoreInfo))
+                .AsQueryable();
+
+            var startupItems = submissionQuery
+                .OrderByDescending(s => s.UpdatedAt)
+                .Select(s => new StartupListItemDto
+                {
+                    StartupID = s.StartupID,
+                    CompanyName = s.Startup.CompanyName,
+                    IndustryName = s.Startup.Industry != null ? s.Startup.Industry.IndustryName : null,
+                    Stage = s.Startup.Stage != null ? s.Startup.Stage.ToString() : null,
+                    LogoURL = s.Startup.LogoURL,
+                    ProfileStatus = MapWorkflowStatus(s.WorkflowStatus),
+                    UpdatedAt = s.UpdatedAt,
+                    StartupVerificationType = MapVerificationType(s.StartupVerificationType)
+                }).Paging(registrationQuery.Page, registrationQuery.PageSize);
+
+            return ApiResponse<PagedResponse<StartupListItemDto>>.SuccessResponse(
+                new PagedResponse<StartupListItemDto>
+                {
+                    Items = await startupItems.ToListAsync(),
+                    Paging = new PagingInfo
+                    {
+                        Page = registrationQuery.Page,
+                        PageSize = registrationQuery.PageSize,
+                        TotalItems = await submissionQuery.CountAsync()
+                    }
+                });
+#if false
             var registrations = _context.Startups
                 .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
                 .AsNoTracking()
@@ -305,11 +445,7 @@ namespace AISEP.Infrastructure.Services
                          }
                      }
                 );
-        }
-
-        public Task<ApiResponse<RegistrationApprovalResponse>> RejectRegistrationAsync(Guid userId, string reason)
-        {
-            throw new NotImplementedException();
+#endif
         }
 
         public async Task<ApiResponse<InvestorDto>> GetPendingRegistrationInvestorByIdAsync(int investorId)
@@ -446,6 +582,23 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<StartupDto>.SuccessResponse(startupToDto);
         }
 
+        public async Task<ApiResponse<StartupKycSubmissionDto>> GetPendingRegistrationStartupKycByIdAsync(int startupId)
+        {
+            var submission = await _context.StartupKycSubmissions
+                .AsNoTracking()
+                .Include(s => s.EvidenceFiles)
+                .Include(s => s.RequestedAdditionalItems)
+                .FirstOrDefaultAsync(s => s.StartupID == startupId && s.IsActive);
+
+            if (submission == null)
+            {
+                return ApiResponse<StartupKycSubmissionDto>.ErrorResponse("STARTUP_KYC_SUBMISSION_NOT_FOUND",
+                    "No active startup KYC submission was found for this startup.");
+            }
+
+            return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(MapToKycSubmissionDto(submission));
+        }
+
         private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
         {
             if (string.IsNullOrWhiteSpace(currentNeeds))
@@ -465,6 +618,117 @@ namespace AISEP.Infrastructure.Services
                     .Where(x => x.Length > 0)
                     .ToList();
             }
+        }
+
+        private StartupKycSubmissionDto MapToKycSubmissionDto(StartupKycSubmission submission)
+        {
+            return new StartupKycSubmissionDto
+            {
+                Id = submission.SubmissionID,
+                StartupId = submission.StartupID,
+                Version = submission.Version,
+                IsActive = submission.IsActive,
+                WorkflowStatus = MapWorkflowStatus(submission.WorkflowStatus),
+                ResultLabel = MapResultLabel(submission.ResultLabel),
+                SubmittedAt = submission.SubmittedAt,
+                UpdatedAt = submission.UpdatedAt,
+                ReviewedAt = submission.ReviewedAt,
+                ReviewedBy = submission.ReviewedBy,
+                SubmissionSummary = new StartupKYCSubmissionSummaryDto
+                {
+                    CompanyName = submission.LegalFullName ?? submission.ProjectName ?? string.Empty,
+                    SubmittedAt = submission.SubmittedAt ?? submission.CreatedAt,
+                    Version = submission.Version,
+                    StartupVerificationType = MapVerificationType(submission.StartupVerificationType),
+                    LegalFullName = submission.LegalFullName,
+                    EnterpriseCode = submission.EnterpriseCode,
+                    ProjectName = submission.ProjectName,
+                    RepresentativeFullName = submission.RepresentativeFullName,
+                    RepresentativeRole = submission.RepresentativeRole,
+                    WorkEmail = submission.WorkEmail,
+                    PublicLink = submission.PublicLink,
+                    EvidenceFiles = submission.EvidenceFiles
+                        .OrderBy(f => f.UploadedAt)
+                        .Select(f => new StartupKycEvidenceFileDto
+                        {
+                            Id = f.EvidenceFileID,
+                            FileName = f.FileName,
+                            FileType = f.ContentType,
+                            FileSize = f.FileSize,
+                            UploadedAt = f.UploadedAt,
+                            Kind = MapEvidenceKind(f.Kind),
+                            Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                            StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
+                                ? f.StorageKey
+                                : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)
+                        })
+                        .ToList()
+                },
+                RequestedAdditionalItems = submission.RequestedAdditionalItems
+                    .OrderBy(i => i.CreatedAt)
+                    .Select(i => new StartupKycRequestedItemDto
+                    {
+                        Id = i.RequestedItemID,
+                        FieldKey = i.FieldKey,
+                        Label = i.Label,
+                        Reason = i.Reason,
+                        CreatedAt = i.CreatedAt,
+                        ResolvedAt = i.ResolvedAt
+                    })
+                    .ToList(),
+                Explanation = submission.Explanation,
+                Remarks = submission.Remarks,
+                RequiresNewEvidence = submission.RequiresNewEvidence
+            };
+        }
+
+        private static string MapWorkflowStatus(StartupKycWorkflowStatus status)
+        {
+            return status switch
+            {
+                StartupKycWorkflowStatus.NotSubmitted => "NOT_SUBMITTED",
+                StartupKycWorkflowStatus.Draft => "DRAFT",
+                StartupKycWorkflowStatus.UnderReview => "UNDER_REVIEW",
+                StartupKycWorkflowStatus.PendingMoreInfo => "PENDING_MORE_INFO",
+                StartupKycWorkflowStatus.Approved => "APPROVED",
+                StartupKycWorkflowStatus.Rejected => "REJECTED",
+                StartupKycWorkflowStatus.Superseded => "SUPERSEDED",
+                _ => "NOT_SUBMITTED"
+            };
+        }
+
+        private static string MapResultLabel(StartupKycResultLabel label)
+        {
+            return label switch
+            {
+                StartupKycResultLabel.None => "NONE",
+                StartupKycResultLabel.PendingMoreInfo => "PENDING_MORE_INFO",
+                StartupKycResultLabel.BasicVerified => "BASIC_VERIFIED",
+                StartupKycResultLabel.VerifiedCompany => "VERIFIED_COMPANY",
+                StartupKycResultLabel.VerificationFailed => "VERIFICATION_FAILED",
+                _ => "NONE"
+            };
+        }
+
+        private static string MapVerificationType(StartupVerificationType verificationType)
+        {
+            return verificationType switch
+            {
+                StartupVerificationType.WithLegalEntity => "WITH_LEGAL_ENTITY",
+                StartupVerificationType.WithoutLegalEntity => "WITHOUT_LEGAL_ENTITY",
+                _ => "WITHOUT_LEGAL_ENTITY"
+            };
+        }
+
+        private static string MapEvidenceKind(StartupKycEvidenceKind kind)
+        {
+            return kind switch
+            {
+                StartupKycEvidenceKind.BusinessRegistrationCertificate => "BUSINESS_REGISTRATION_CERTIFICATE",
+                StartupKycEvidenceKind.ProofOfOperation => "PROOF_OF_OPERATION",
+                StartupKycEvidenceKind.ProductMaterials => "PRODUCT_MATERIALS",
+                _ => "OTHER"
+            };
         }
     }
 }

@@ -26,6 +26,9 @@ public class ApplicationDbContext : DbContext
 
     // Startup
     public DbSet<Startup> Startups => Set<Startup>();
+    public DbSet<StartupKycSubmission> StartupKycSubmissions => Set<StartupKycSubmission>();
+    public DbSet<StartupKycEvidenceFile> StartupKycEvidenceFiles => Set<StartupKycEvidenceFile>();
+    public DbSet<StartupKycRequestedItem> StartupKycRequestedItems => Set<StartupKycRequestedItem>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentBlockchainProof> DocumentBlockchainProofs => Set<DocumentBlockchainProof>();
@@ -70,6 +73,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Industry> Industries => Set<Industry>();
     public DbSet<IndustryTrend> IndustryTrends => Set<IndustryTrend>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
@@ -103,7 +107,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Conversation>().Property(e => e.ConversationStatus).HasConversion<short>().HasDefaultValue(ConversationStatus.Active);
 
         // Blockchain
-        modelBuilder.Entity<DocumentBlockchainProof>().Property(e => e.ProofStatus).HasConversion<short>().HasDefaultValue(ProofStatus.Anchored);
+        modelBuilder.Entity<DocumentBlockchainProof>().Property(e => e.ProofStatus).HasConversion<short>().HasDefaultValue(ProofStatus.HashComputed);
 
         // Moderation
         modelBuilder.Entity<FlaggedContent>().Property(e => e.ModerationStatus).HasConversion<short>().HasDefaultValue(ModerationStatus.None);
@@ -124,6 +128,10 @@ public class ApplicationDbContext : DbContext
 
         // Startup
         modelBuilder.Entity<Startup>().Property(e => e.Stage).HasConversion<short?>();
+        modelBuilder.Entity<StartupKycSubmission>().Property(e => e.WorkflowStatus).HasConversion<short>().HasDefaultValue(StartupKycWorkflowStatus.Draft);
+        modelBuilder.Entity<StartupKycSubmission>().Property(e => e.ResultLabel).HasConversion<short>().HasDefaultValue(StartupKycResultLabel.None);
+        modelBuilder.Entity<StartupKycSubmission>().Property(e => e.StartupVerificationType).HasConversion<short>();
+        modelBuilder.Entity<StartupKycEvidenceFile>().Property(e => e.Kind).HasConversion<short>().HasDefaultValue(StartupKycEvidenceKind.Other);
 
         // Report
         modelBuilder.Entity<SavedReport>().Property(e => e.ReportType).HasConversion<short>();
@@ -164,6 +172,9 @@ public class ApplicationDbContext : DbContext
 
         // Startup
         modelBuilder.Entity<Startup>().HasKey(s => s.StartupID);
+        modelBuilder.Entity<StartupKycSubmission>().HasKey(s => s.SubmissionID);
+        modelBuilder.Entity<StartupKycEvidenceFile>().HasKey(e => e.EvidenceFileID);
+        modelBuilder.Entity<StartupKycRequestedItem>().HasKey(r => r.RequestedItemID);
         modelBuilder.Entity<TeamMember>().HasKey(tm => tm.TeamMemberID);
         modelBuilder.Entity<Document>().HasKey(d => d.DocumentID);
         modelBuilder.Entity<DocumentBlockchainProof>().HasKey(p => p.ProofID);
@@ -208,6 +219,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
         modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
         modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
+        modelBuilder.Entity<Incident>().HasKey(i => i.IncidentID);
         modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
         modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
     }
@@ -244,12 +256,44 @@ public class ApplicationDbContext : DbContext
             .HasIndex(s => s.UserID)
             .IsUnique();
 
+        modelBuilder.Entity<StartupKycSubmission>()
+            .HasIndex(s => new { s.StartupID, s.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<StartupKycSubmission>()
+            .HasIndex(s => new { s.StartupID, s.IsActive })
+            .HasFilter("\"IsActive\" = true");
+
         // Startup → Industry FK
         modelBuilder.Entity<Startup>()
             .HasOne(s => s.Industry)
             .WithMany()
             .HasForeignKey(s => s.IndustryID)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<StartupKycSubmission>()
+            .HasOne(s => s.Startup)
+            .WithMany(s => s.KycSubmissions)
+            .HasForeignKey(s => s.StartupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<StartupKycSubmission>()
+            .HasOne(s => s.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(s => s.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<StartupKycEvidenceFile>()
+            .HasOne(e => e.Submission)
+            .WithMany(s => s.EvidenceFiles)
+            .HasForeignKey(e => e.SubmissionID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<StartupKycRequestedItem>()
+            .HasOne(r => r.Submission)
+            .WithMany(s => s.RequestedAdditionalItems)
+            .HasForeignKey(r => r.SubmissionID)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // DocumentBlockchainProof - one-to-one with Document
         modelBuilder.Entity<DocumentBlockchainProof>()
@@ -358,6 +402,24 @@ public class ApplicationDbContext : DbContext
             .HasOne(t => t.Mentorship)
             .WithMany()
             .HasForeignKey(t => t.MentorshipID)
+        // Incident relationships
+        modelBuilder.Entity<Incident>()
+            .HasOne(i => i.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Incident>()
+            .HasOne(i => i.ResolvedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.ResolvedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Document review relationship
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -140,4 +140,35 @@ public class DocumentsController : ControllerBase
         var result = await _documentService.ArchiveAsync(documentId, userId, ct);
         return result.ToDeletedEnvelope("Document archived");
     }
+
+    // ================================================================
+    // Staff review endpoints
+    // ================================================================
+
+    /// <summary>Staff verifies a document.</summary>
+    [HttpPost("/api/staff/documents/{documentId:int}/verify")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    public async Task<IActionResult> StaffVerify(int documentId, [FromBody] StaffReviewDocumentRequest request, CancellationToken ct = default)
+    {
+        var result = await _documentService.StaffVerifyAsync(documentId, GetCurrentUserId(), request.Notes, ct);
+        return result.ToActionResult();
+    }
+
+    /// <summary>Staff approves a document.</summary>
+    [HttpPost("/api/staff/documents/{documentId:int}/approve")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    public async Task<IActionResult> StaffApprove(int documentId, [FromBody] StaffReviewDocumentRequest request, CancellationToken ct = default)
+    {
+        var result = await _documentService.StaffApproveAsync(documentId, GetCurrentUserId(), request.Notes, ct);
+        return result.ToActionResult();
+    }
+
+    /// <summary>Staff rejects a document.</summary>
+    [HttpPost("/api/staff/documents/{documentId:int}/reject")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    public async Task<IActionResult> StaffReject(int documentId, [FromBody] StaffReviewDocumentRequest request, CancellationToken ct = default)
+    {
+        var result = await _documentService.StaffRejectAsync(documentId, GetCurrentUserId(), request.Notes, ct);
+        return result.ToActionResult();
+    }
 }

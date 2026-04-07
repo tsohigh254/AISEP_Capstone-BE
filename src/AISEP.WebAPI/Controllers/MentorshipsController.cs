@@ -76,6 +76,22 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // GET /api/mentorships/sessions — List my sessions (Startup/Advisor/Staff/Admin)
+    // ================================================================
+    [HttpGet("sessions")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<object>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySessions(
+        [FromQuery] string? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetMySessionsAsync(userId, userType, status, page, pageSize);
+        return result.ToPagedEnvelope();
+    }
+
+    // ================================================================
     // 3) GET /api/mentorships/{id} — Get mentorship detail
     // ================================================================
 
@@ -264,5 +280,31 @@ public class MentorshipsController : ControllerBase
         var result = await _mentorshipService.CreateFeedbackAsync(userId, id, request);
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
+    }
+
+    // ================================================================
+    // 12) GET /api/mentorships/{id}/sessions — List sessions
+    // ================================================================
+
+    /// <summary>List sessions for a specific mentorship.</summary>
+    [HttpGet("{id:int}/sessions")]
+    public async Task<IActionResult> GetSessions(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipSessionsAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
+    }
+
+    // ================================================================
+    // 13) GET /api/mentorships/{id}/feedbacks — List feedbacks
+    // ================================================================
+
+    /// <summary>List feedbacks for a specific mentorship.</summary>
+    [HttpGet("{id:int}/feedbacks")]
+    public async Task<IActionResult> GetFeedbacks(int id)
+    {
+        var result = await _mentorshipService.GetMentorshipFeedbacksAsync(
+            GetCurrentUserId(), GetCurrentUserType(), id);
+        return result.ToEnvelope();
     }
 }

@@ -50,6 +50,9 @@ public class DocumentUpdateMetadataRequest
     /// <summary>New title (optional).</summary>
     public string? Title { get; set; }
 
+    /// <summary>Change document type (optional).</summary>
+    public DocumentType? DocumentType { get; set; }
+
     /// <summary>Set archived state (optional).</summary>
     public bool? IsArchived { get; set; }
 }
@@ -76,5 +79,18 @@ public class DocumentDto
     public string? ProofStatus { get; set; }
     public string? FileHash { get; set; }
     public string? TransactionHash { get; set; }
+    public string? ReviewStatus { get; set; }
+    public int? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewNotes { get; set; }
+}
+
+// ──────────────────────────────────────────────
+// Staff Review DTOs
+// ──────────────────────────────────────────────
+
+public class StaffReviewDocumentRequest
+{
+    public string? Notes { get; set; }
 }
 
