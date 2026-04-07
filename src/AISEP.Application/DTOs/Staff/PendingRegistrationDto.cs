@@ -44,6 +44,7 @@ namespace AISEP.Application.DTOs.Staff
     {
         public int AdvisorId { get; set; }
         public int Score { get; set; }
+        public string? Remarks { get; set; }
     }
 
     public class ApproveInvestorRegistrationRequest
@@ -51,6 +52,7 @@ namespace AISEP.Application.DTOs.Staff
         public int InvestorId { get; set; }
         public int Score { get; set; }
         public bool IsInstitutional { get; set; }
+        public string? Remarks { get; set; }
     }
 
     public class RejectRegistrationRequest

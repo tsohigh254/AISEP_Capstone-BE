@@ -104,6 +104,19 @@ namespace AISEP.WebAPI.Controllers
         }
 
         /// <summary>
+        /// Get active KYC submission for a pending investor (mirrors /pending/startups/:id/kyc)
+        /// </summary>
+        [HttpGet("pending/investors/{investorId}/kyc")]
+        [ProducesResponseType(typeof(ApiResponse<InvestorKycSubmissionDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetPendingInvestorKycById(int investorId)
+        {
+            var response = await _registrationService.GetPendingRegistrationInvestorKycByIdAsync(investorId);
+            return Ok(response);
+        }
+
+        /// <summary>
         /// Get pending advisor registration by ID
         /// </summary>
         [HttpGet("pending/advisors/{advisorId}")]

@@ -158,11 +158,13 @@ namespace AISEP.Infrastructure.Services
             {
                 advisor.AdvisorTag = AdvisorTag.PendingMoreInfo;
                 advisor.ProfileStatus = ProfileStatus.Pending; // Stay pending for more info
+                advisor.RejectionRemarks = request.Remarks;
             }
             else
             {
                 advisor.AdvisorTag = AdvisorTag.VerificationFailed;
                 advisor.ProfileStatus = ProfileStatus.Rejected;
+                advisor.RejectionRemarks = request.Remarks;
             }
 
             _context.Advisors.Update(advisor);
@@ -173,50 +175,63 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<ApiResponse<Investor>> ApproveInvestorRegistrationAsync(int staffId, ApproveInvestorRegistrationRequest request)
         {
-            var investor = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
-            if (investor == null)
+            var submission = await _context.InvestorKycSubmissions
+                .Include(s => s.Investor)
+                .Include(s => s.EvidenceFiles)
+                .FirstOrDefaultAsync(s => s.InvestorID == request.InvestorId && s.IsActive);
+
+            if (submission == null)
             {
-                return ApiResponse<Investor>.ErrorResponse("INVESTOR_PROFILE_DOES_NOT_EXISTS", "Investor profile does not exist");
+                // Fallback: find the investor even without an active submission
+                var inv = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
+                if (inv == null)
+                    return ApiResponse<Investor>.ErrorResponse("INVESTOR_PROFILE_DOES_NOT_EXISTS", "Investor profile does not exist");
+                return ApiResponse<Investor>.ErrorResponse("INVESTOR_KYC_SUBMISSION_NOT_FOUND", "No active KYC submission found for this investor.");
             }
 
-            investor.ProfileStatus = ProfileStatus.Approved;
-            investor.ApprovedAt = DateTime.UtcNow;
-            investor.ApprovedBy = staffId;
+            var investor = submission.Investor;
+            var reviewedAt = DateTime.UtcNow;
+
+            InvestorTag awardedTag;
+            InvestorKycResultLabel resultLabel;
+            InvestorKycWorkflowStatus workflowStatus;
+            ProfileStatus profileStatus;
 
             if (request.IsInstitutional)
             {
-                if (request.Score >= 10) investor.InvestorTag = InvestorTag.VerifiedInvestorEntity;
-                else if (request.Score >= 6) investor.InvestorTag = InvestorTag.BasicVerified;
-                else if (request.Score >= 2) 
-                {
-                    investor.InvestorTag = InvestorTag.PendingMoreInfo;
-                    investor.ProfileStatus = ProfileStatus.Pending;
-                }
-                else
-                {
-                    investor.InvestorTag = InvestorTag.VerificationFailed;
-                    investor.ProfileStatus = ProfileStatus.Rejected;
-                }
+                if (request.Score >= 10)      { awardedTag = InvestorTag.VerifiedInvestorEntity; resultLabel = InvestorKycResultLabel.VerifiedInvestorEntity; workflowStatus = InvestorKycWorkflowStatus.Approved; profileStatus = ProfileStatus.Approved; }
+                else if (request.Score >= 6)  { awardedTag = InvestorTag.BasicVerified;          resultLabel = InvestorKycResultLabel.BasicVerified;          workflowStatus = InvestorKycWorkflowStatus.Approved; profileStatus = ProfileStatus.Approved; }
+                else if (request.Score >= 2)  { awardedTag = InvestorTag.None;                   resultLabel = InvestorKycResultLabel.PendingMoreInfo;         workflowStatus = InvestorKycWorkflowStatus.PendingMoreInfo; profileStatus = ProfileStatus.PendingKYC; }
+                else                          { awardedTag = InvestorTag.None;                   resultLabel = InvestorKycResultLabel.VerificationFailed;     workflowStatus = InvestorKycWorkflowStatus.Rejected; profileStatus = ProfileStatus.Rejected; }
             }
             else
             {
-                if (request.Score >= 8) investor.InvestorTag = InvestorTag.VerifiedAngelInvestor;
-                else if (request.Score >= 5) investor.InvestorTag = InvestorTag.BasicVerified;
-                else if (request.Score >= 2)
-                {
-                    investor.InvestorTag = InvestorTag.PendingMoreInfo;
-                    investor.ProfileStatus = ProfileStatus.Pending;
-                }
-                else
-                {
-                    investor.InvestorTag = InvestorTag.VerificationFailed;
-                    investor.ProfileStatus = ProfileStatus.Rejected;
-                }
+                if (request.Score >= 8)      { awardedTag = InvestorTag.VerifiedAngelInvestor; resultLabel = InvestorKycResultLabel.VerifiedAngelInvestor; workflowStatus = InvestorKycWorkflowStatus.Approved; profileStatus = ProfileStatus.Approved; }
+                else if (request.Score >= 5) { awardedTag = InvestorTag.BasicVerified;         resultLabel = InvestorKycResultLabel.BasicVerified;         workflowStatus = InvestorKycWorkflowStatus.Approved; profileStatus = ProfileStatus.Approved; }
+                else if (request.Score >= 2) { awardedTag = InvestorTag.None;                  resultLabel = InvestorKycResultLabel.PendingMoreInfo;       workflowStatus = InvestorKycWorkflowStatus.PendingMoreInfo; profileStatus = ProfileStatus.PendingKYC; }
+                else                         { awardedTag = InvestorTag.None;                  resultLabel = InvestorKycResultLabel.VerificationFailed;    workflowStatus = InvestorKycWorkflowStatus.Rejected; profileStatus = ProfileStatus.Rejected; }
             }
 
-            _context.Investors.Update(investor);
-            await _context.SaveChangesAsync();
+            submission.WorkflowStatus = workflowStatus;
+            submission.ResultLabel = resultLabel;
+            submission.ReviewedAt = reviewedAt;
+            submission.ReviewedBy = staffId;
+            submission.UpdatedAt = reviewedAt;
+            submission.Explanation = workflowStatus == InvestorKycWorkflowStatus.Approved
+                ? "KYC has been approved."
+                : workflowStatus == InvestorKycWorkflowStatus.PendingMoreInfo
+                    ? "Additional information is required."
+                    : "KYC has been rejected.";
+            if (workflowStatus != InvestorKycWorkflowStatus.Approved)
+                submission.Remarks = request.Remarks;
 
+            investor.InvestorTag = awardedTag;
+            investor.ProfileStatus = profileStatus;
+            investor.ApprovedAt = workflowStatus == InvestorKycWorkflowStatus.Approved ? reviewedAt : null;
+            investor.ApprovedBy = workflowStatus == InvestorKycWorkflowStatus.Approved ? staffId : null;
+            investor.UpdatedAt = reviewedAt;
+
+            await _context.SaveChangesAsync();
             return ApiResponse<Investor>.SuccessResponse(investor, "Investor reviewed successfully");
         }
 
@@ -271,7 +286,13 @@ namespace AISEP.Infrastructure.Services
             if (advisor == null)
                 return ApiResponse<Advisor>.ErrorResponse("NOT_FOUND", "Profile not found");
 
+            var rejectedAt = DateTime.UtcNow;
             advisor.ProfileStatus = ProfileStatus.Rejected;
+            advisor.AdvisorTag = AdvisorTag.VerificationFailed;
+            advisor.RequiresNewEvidence = request.RequiresNewEvidence ?? false;
+            advisor.RejectionRemarks = request.Reason;
+            advisor.UpdatedAt = rejectedAt;
+
             _context.Advisors.Update(advisor);
             await _context.SaveChangesAsync();
             return ApiResponse<Advisor>.SuccessResponse(advisor, "Rejected successfully");
@@ -279,12 +300,28 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<ApiResponse<Investor>> RejectInvestorRegistrationAsync(int staffId, RejectRegistrationRequest request)
         {
-            var investor = await _context.Investors.FirstOrDefaultAsync(i => i.InvestorID == request.Id);
-            if (investor == null)
-                return ApiResponse<Investor>.ErrorResponse("NOT_FOUND", "Profile not found");
+            var submission = await _context.InvestorKycSubmissions
+                .Include(s => s.Investor)
+                .FirstOrDefaultAsync(s => s.InvestorID == request.Id && s.IsActive);
 
+            if (submission == null)
+                return ApiResponse<Investor>.ErrorResponse("INVESTOR_KYC_SUBMISSION_NOT_FOUND", "No active KYC submission found for this investor.");
+
+            var rejectedAt = DateTime.UtcNow;
+            submission.WorkflowStatus = InvestorKycWorkflowStatus.Rejected;
+            submission.ResultLabel = InvestorKycResultLabel.VerificationFailed;
+            submission.Explanation = "Investor KYC has been rejected.";
+            submission.Remarks = request.Reason;
+            submission.RequiresNewEvidence = request.RequiresNewEvidence ?? false;
+            submission.ReviewedAt = rejectedAt;
+            submission.ReviewedBy = staffId;
+            submission.UpdatedAt = rejectedAt;
+
+            var investor = submission.Investor;
             investor.ProfileStatus = ProfileStatus.Rejected;
-            _context.Investors.Update(investor);
+            investor.InvestorTag = InvestorTag.None;
+            investor.UpdatedAt = rejectedAt;
+
             await _context.SaveChangesAsync();
             return ApiResponse<Investor>.SuccessResponse(investor, "Rejected successfully");
         }
@@ -313,6 +350,7 @@ namespace AISEP.Infrastructure.Services
                 AverageRating = r.AverageRating,
                 Expertise = r.Expertise,
                 YearsOfExperience = r.YearsOfExperience,
+                ContactEmail = r.ContactEmail,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
                 IndustryFocus = r.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
@@ -339,44 +377,52 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<ApiResponse<PagedResponse<InvestorDto>>> GetPendingRegistrationsInvestorAsync(RegistrationQueryParams registrationQuery)
         {
-            var registrations = _context.Investors
-                .Where(s => s.ProfileStatus == ProfileStatus.Pending || s.ProfileStatus == ProfileStatus.PendingKYC)
+            var submissionQuery = _context.InvestorKycSubmissions
                 .AsNoTracking()
+                .Include(s => s.Investor)
+                    .ThenInclude(i => i.User)
+                .Where(s => s.IsActive
+                    && (s.WorkflowStatus == InvestorKycWorkflowStatus.UnderReview
+                        || s.WorkflowStatus == InvestorKycWorkflowStatus.PendingMoreInfo))
                 .AsQueryable();
 
-            var registrationsToDto = registrations.Select(r => new InvestorDto
-            {
-                InvestorID = r.InvestorID,
-                UserID = r.UserID,
-                Email = r.User.Email,
-                FullName = r.FullName,
-                FirmName = r.FirmName,
-                Title = r.Title,
-                Bio = r.Bio,
-                ProfilePhotoURL = r.ProfilePhotoURL,
-                InvestmentThesis = r.InvestmentThesis,
-                Location = r.Location,
-                Country = r.Country,
-                LinkedInURL = r.LinkedInURL,
-                Website = r.Website,
-                ProfileStatus = r.ProfileStatus.ToString(),
-                CreatedAt = r.CreatedAt,
-                UpdatedAt = r.UpdatedAt,
-            }).Paging(registrationQuery.Page, registrationQuery.PageSize);
+            var items = submissionQuery
+                .OrderByDescending(s => s.UpdatedAt)
+                .Select(s => new InvestorDto
+                {
+                    InvestorID = s.InvestorID,
+                    UserID = s.Investor.UserID,
+                    Email = s.Investor.User.Email,
+                    FullName = s.Investor.FullName,
+                    FirmName = s.Investor.FirmName,
+                    Title = s.Investor.Title,
+                    Bio = s.Investor.Bio,
+                    ProfilePhotoURL = s.Investor.ProfilePhotoURL,
+                    InvestmentThesis = s.Investor.InvestmentThesis,
+                    Location = s.Investor.Location,
+                    Country = s.Investor.Country,
+                    LinkedInURL = s.Investor.LinkedInURL,
+                    Website = s.Investor.Website,
+                    ProfileStatus = s.Investor.ProfileStatus.ToString(),
+                    CreatedAt = s.Investor.CreatedAt,
+                    UpdatedAt = s.UpdatedAt,
+                    InvestorType = s.InvestorCategory,
+                    ContactEmail = s.ContactEmail,
+                    CurrentOrganization = s.OrganizationName,
+                    CurrentRoleTitle = s.CurrentRoleTitle
+                }).Paging(registrationQuery.Page, registrationQuery.PageSize);
 
-            return ApiResponse<PagedResponse<InvestorDto>>.SuccessResponse
-                (
-                     new PagedResponse<InvestorDto>
-                     {
-                         Items = await registrationsToDto.ToListAsync(),
-                         Paging = new PagingInfo
-                         {
-                             Page = registrationQuery.Page,
-                             PageSize = registrationQuery.PageSize,
-                             TotalItems = await registrations.CountAsync()
-                         }
-                     }
-                );
+            return ApiResponse<PagedResponse<InvestorDto>>.SuccessResponse(
+                new PagedResponse<InvestorDto>
+                {
+                    Items = await items.ToListAsync(),
+                    Paging = new PagingInfo
+                    {
+                        Page = registrationQuery.Page,
+                        PageSize = registrationQuery.PageSize,
+                        TotalItems = await submissionQuery.CountAsync()
+                    }
+                });
         }
 
         public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> GetPendingRegistrationsStartupAsync(RegistrationQueryParams registrationQuery)
@@ -454,6 +500,13 @@ namespace AISEP.Infrastructure.Services
                 .Include(i => i.User)
                 .FirstOrDefaultAsync(i => i.InvestorID == investorId);
 
+            if (investor == null)
+                return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found");
+
+            var activeSubmission = await _context.InvestorKycSubmissions
+                .Include(s => s.EvidenceFiles)
+                .FirstOrDefaultAsync(s => s.InvestorID == investorId && s.IsActive);
+
             var investorToDto = new InvestorDto
             {
                 InvestorID = investor.InvestorID,
@@ -473,25 +526,106 @@ namespace AISEP.Infrastructure.Services
                 CreatedAt = investor.CreatedAt,
                 UpdatedAt = investor.UpdatedAt,
 
-                // KYC Information
-                InvestorType = investor.InvestorType?.ToString(),
-                ContactEmail = investor.ContactEmail,
-                CurrentOrganization = investor.CurrentOrganization,
-                CurrentRoleTitle = investor.CurrentRoleTitle,
-                BusinessCode = investor.BusinessCode,
-                SubmitterRole = investor.SubmitterRole,
-                IDProofFileURL = investor.IDProofFileURL,
-                InvestmentProofFileURL = investor.InvestmentProofFileURL,
-                Remarks = investor.Remarks
+                // KYC Information from active submission
+                InvestorType = activeSubmission?.InvestorCategory,
+                ContactEmail = activeSubmission?.ContactEmail,
+                CurrentOrganization = activeSubmission?.OrganizationName,
+                CurrentRoleTitle = activeSubmission?.CurrentRoleTitle ?? investor.Title,
+                BusinessCode = activeSubmission?.TaxIdOrBusinessCode,
+                SubmitterRole = activeSubmission?.SubmitterRole,
+                IDProofFileURL = activeSubmission?.EvidenceFiles
+                    .Where(f => f.Kind == InvestorKycEvidenceKind.IDProof)
+                    .Select(f => _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName))
+                    .FirstOrDefault(),
+                InvestmentProofFileURL = activeSubmission?.EvidenceFiles
+                    .Where(f => f.Kind == InvestorKycEvidenceKind.InvestmentProof)
+                    .Select(f => _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName))
+                    .FirstOrDefault(),
+                Remarks = activeSubmission?.Remarks
             };
 
             return ApiResponse<InvestorDto>.SuccessResponse(investorToDto);
+        }
+
+        public async Task<ApiResponse<InvestorKycSubmissionDto>> GetPendingRegistrationInvestorKycByIdAsync(int investorId)
+        {
+            var investor = await _context.Investors
+                .Include(i => i.User)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+
+            if (investor == null)
+                return ApiResponse<InvestorKycSubmissionDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found");
+
+            var submission = await _context.InvestorKycSubmissions
+                .Include(s => s.EvidenceFiles)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.InvestorID == investorId && s.IsActive);
+
+            if (submission == null)
+                return ApiResponse<InvestorKycSubmissionDto>.ErrorResponse("INVESTOR_KYC_SUBMISSION_NOT_FOUND",
+                    "No active investor KYC submission was found for this investor.");
+
+            return ApiResponse<InvestorKycSubmissionDto>.SuccessResponse(new InvestorKycSubmissionDto
+            {
+                Id = submission.SubmissionID,
+                InvestorId = investorId,
+                Version = submission.Version,
+                IsActive = submission.IsActive,
+                WorkflowStatus = MapInvestorWorkflowStatus(submission.WorkflowStatus),
+                ResultLabel = MapInvestorResultLabel(submission.ResultLabel),
+                SubmittedAt = submission.SubmittedAt,
+                UpdatedAt = submission.UpdatedAt,
+                ReviewedAt = submission.ReviewedAt,
+                ReviewedBy = submission.ReviewedBy,
+                Remarks = submission.Remarks,
+                RequiresNewEvidence = submission.RequiresNewEvidence,
+
+                // Investor profile context
+                FullName = investor.FullName,
+                Email = investor.User.Email,
+                ProfileStatus = investor.ProfileStatus.ToString(),
+                ProfilePhotoURL = investor.ProfilePhotoURL,
+
+                SubmissionSummary = new InvestorKYCSubmissionSummaryDto
+                {
+                    FullName = submission.FullName,
+                    InvestorCategory = submission.InvestorCategory,
+                    ContactEmail = submission.ContactEmail,
+                    OrganizationName = submission.OrganizationName,
+                    CurrentRoleTitle = submission.CurrentRoleTitle,
+                    Location = submission.Location,
+                    Website = submission.Website,
+                    LinkedInURL = submission.LinkedInURL,
+                    SubmitterRole = submission.SubmitterRole,
+                    TaxIdOrBusinessCode = submission.TaxIdOrBusinessCode,
+                    SubmittedAt = submission.SubmittedAt,
+                    Version = submission.Version,
+                    EvidenceFiles = submission.EvidenceFiles
+                        .OrderBy(f => f.UploadedAt)
+                        .Select(f => new InvestorKYCEvidenceFileDto
+                        {
+                            Id = f.EvidenceFileID,
+                            FileName = f.FileName,
+                            FileType = f.ContentType,
+                            FileSize = f.FileSize,
+                            UploadedAt = f.UploadedAt,
+                            Kind = MapInvestorEvidenceKind(f.Kind),
+                            Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                            StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
+                                ? f.StorageKey
+                                : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)
+                        })
+                        .ToList()
+                }
+            });
         }
 
         public async Task<ApiResponse<AdvisorDto>> GetPendingRegistrationAdvisorByIdAsync(int advisorId)
         {
             var advisor = await _context.Advisors
                 .Include(a => a.IndustryFocus)
+                    .ThenInclude(i => i.Industry)
                 .Include(a => a.User)
                 .FirstOrDefaultAsync(i => i.AdvisorID == advisorId);
 
@@ -512,13 +646,40 @@ namespace AISEP.Infrastructure.Services
                 AverageRating = advisor.AverageRating,
                 Expertise = advisor.Expertise,
                 YearsOfExperience = advisor.YearsOfExperience,
+                CurrentOrganization = advisor.CurrentOrganization,
+                BasicExpertiseProofFileURL = advisor.BasicExpertiseProofFileURL,
+                ContactEmail = advisor.ContactEmail,
                 CreatedAt = advisor.CreatedAt,
                 UpdatedAt = advisor.UpdatedAt,
                 IndustryFocus = advisor.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
                 {
                     IndustryId = i.IndustryID,
                     Industry = i.Industry.IndustryName
-                }).ToList()
+                }).ToList(),
+                SubmissionSummary = advisor.BasicExpertiseProofFileURL != null
+                    ? new AdvisorDocumentSummaryDto
+                    {
+                        EvidenceFiles = new List<AdvisorEvidenceFileDto>
+                        {
+                            new AdvisorEvidenceFileDto
+                            {
+                                Id = 1,
+                                Url = _cloudinaryService.GenerateSignedDocumentUrl(null, advisor.BasicExpertiseProofFileURL),
+                                FileName = advisor.BasicExpertiseProofFileName
+                                    ?? System.IO.Path.GetFileName(advisor.BasicExpertiseProofFileURL),
+                                FileType = System.IO.Path.GetExtension(advisor.BasicExpertiseProofFileURL)?.ToLowerInvariant() switch
+                                {
+                                    ".pdf"  => "application/pdf",
+                                    ".png"  => "image/png",
+                                    ".jpg" or ".jpeg" => "image/jpeg",
+                                    ".gif"  => "image/gif",
+                                    ".webp" => "image/webp",
+                                    _       => "application/octet-stream"
+                                }
+                            }
+                        }
+                    }
+                    : null
             };
 
             return ApiResponse<AdvisorDto>.SuccessResponse(advisorToDto);
@@ -730,5 +891,33 @@ namespace AISEP.Infrastructure.Services
                 _ => "OTHER"
             };
         }
+
+        private static string MapInvestorWorkflowStatus(InvestorKycWorkflowStatus status) => status switch
+        {
+            InvestorKycWorkflowStatus.NotSubmitted    => "NOT_STARTED",
+            InvestorKycWorkflowStatus.Draft           => "DRAFT",
+            InvestorKycWorkflowStatus.UnderReview     => "PENDING_REVIEW",
+            InvestorKycWorkflowStatus.PendingMoreInfo => "PENDING_MORE_INFO",
+            InvestorKycWorkflowStatus.Approved        => "VERIFIED",
+            InvestorKycWorkflowStatus.Rejected        => "VERIFICATION_FAILED",
+            _ => "UNKNOWN"
+        };
+
+        private static string MapInvestorResultLabel(InvestorKycResultLabel label) => label switch
+        {
+            InvestorKycResultLabel.VerifiedInvestorEntity => "VERIFIED_INVESTOR_ENTITY",
+            InvestorKycResultLabel.VerifiedAngelInvestor  => "VERIFIED_ANGEL_INVESTOR",
+            InvestorKycResultLabel.BasicVerified          => "BASIC_VERIFIED",
+            InvestorKycResultLabel.PendingMoreInfo        => "PENDING_MORE_INFO",
+            InvestorKycResultLabel.VerificationFailed     => "VERIFICATION_FAILED",
+            _ => "NONE"
+        };
+
+        private static string MapInvestorEvidenceKind(InvestorKycEvidenceKind kind) => kind switch
+        {
+            InvestorKycEvidenceKind.IDProof         => "ID_PROOF",
+            InvestorKycEvidenceKind.InvestmentProof => "INVESTMENT_PROOF",
+            _ => "OTHER"
+        };
     }
 }

@@ -275,7 +275,33 @@ public enum InvestorTag : short
     PendingMoreInfo = 4,
     VerificationFailed = 5
 }
+public enum InvestorKycWorkflowStatus : short
+{
+    NotSubmitted = 0,
+    Draft = 1,
+    UnderReview = 2,
+    PendingMoreInfo = 3,
+    Approved = 4,
+    Rejected = 5,
+    Superseded = 6
+}
 
+public enum InvestorKycResultLabel : short
+{
+    None = 0,
+    PendingMoreInfo = 1,
+    BasicVerified = 2,
+    VerifiedInvestorEntity = 3,
+    VerifiedAngelInvestor = 4,
+    VerificationFailed = 5
+}
+
+public enum InvestorKycEvidenceKind : short
+{
+    IDProof = 0,
+    InvestmentProof = 1,
+    Other = 2
+}
 // ───────────────────────── Document Review ───────────────────
 
 public enum DocumentReviewStatus : short

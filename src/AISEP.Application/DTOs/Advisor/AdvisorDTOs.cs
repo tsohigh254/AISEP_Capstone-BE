@@ -68,11 +68,15 @@ public class SubmitAdvisorKYCRequest
     public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? ContactEmail { get; set; }
+    public string? CurrentOrganization { get; set; }
+    public IFormFile? BasicExpertiseProofFile { get; set; }
 }
 
 public class SaveAdvisorKYCDraftRequest : SubmitAdvisorKYCRequest
 {
-    // All fields are optional on the frontend for drafts
+    // All fields are optional for drafts — shadow FullName as nullable to override
+    // the non-nullable declaration in SubmitAdvisorKYCRequest.
+    public new string? FullName { get; set; }
     public int? YearsOfExperience { get; set; }
     public decimal? HourlyRate { get; set; }
     public string? Expertise { get; set; }
@@ -128,6 +132,9 @@ public class AdvisorMeDto
     public List<string> SupportedDurations { get; set; } = new();
     public string? ExperiencesJson { get; set; }
     public List<string> Skills { get; set; } = new();
+    public string? CurrentOrganization { get; set; }
+    public string? BasicExpertiseProofFile { get; set; }
+    public string? ContactEmail { get; set; }
     public int TotalMentees { get; set; }
     public float TotalSessionHours { get; set; }
     public float? AverageRating { get; set; }
@@ -216,7 +223,24 @@ public class AdvisorDto
     public float? AverageRating { get; set; }
     public string? Expertise { get; set; }
     public int? YearsOfExperience { get; set; }
+    public string? CurrentOrganization { get; set; }
+    public string? BasicExpertiseProofFileURL { get; set; }
+    public string? ContactEmail { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<AdvisorIndustryFocusDto> IndustryFocus { get; set; } = new();
+    public AdvisorDocumentSummaryDto? SubmissionSummary { get; set; }
+}
+
+public class AdvisorDocumentSummaryDto
+{
+    public List<AdvisorEvidenceFileDto> EvidenceFiles { get; set; } = new();
+}
+
+public class AdvisorEvidenceFileDto
+{
+    public int Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string? FileType { get; set; }
+    public string Url { get; set; } = string.Empty;
 }
