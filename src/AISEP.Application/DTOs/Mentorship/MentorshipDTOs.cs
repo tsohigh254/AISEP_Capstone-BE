@@ -16,11 +16,12 @@ public class CreateMentorshipRequest
     public string? PreferredFormat { get; set; }
     public string? ExpectedDuration { get; set; }
     public string? ExpectedScope { get; set; }
+    public string MeetingUrl { get; set; }
     public List<RequestedSlotDto>? RequestedSlots { get; set; }
 }
 
 public class RequestedSlotDto
-{
+{   
     public DateTime StartAt { get; set; }
     public DateTime EndAt { get; set; }
     public string? Timezone { get; set; }
@@ -133,8 +134,8 @@ public class MentorshipDetailDto
 {
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
-    public string StartupName { get; set; } = string.Empty;
     public int AdvisorID { get; set; }
+    public string StartupName { get; set; } = string.Empty;
     public string AdvisorName { get; set; } = string.Empty;
     public string MentorshipStatus { get; set; } = string.Empty;
     public string? ChallengeDescription { get; set; }

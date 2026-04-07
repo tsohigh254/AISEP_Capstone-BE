@@ -1,6 +1,6 @@
-﻿using AISEP.Application.DTOs.Payment;
+﻿using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Payment;
 using AISEP.Application.Interfaces;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AISEP.WebAPI.Controllers
@@ -23,20 +23,26 @@ namespace AISEP.WebAPI.Controllers
         /// <param name="orderCode">Unique order code</param>
         /// <returns>Payment link information including checkout URL</returns>
         [HttpPost("create-payment-link")]
-        [ProducesResponseType(typeof(PaymentInfoDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLink(PaymentRequestDto paymentRequest)
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLink([FromBody] PaymentRequestDto paymentRequest)
         {
+            if (paymentRequest == null || paymentRequest.MentorshipId <= 0 || paymentRequest.Amount <= 0)
+                return BadRequest("MentorshipId and amount must be greater than 0.");
+
             try
             {
                 var paymentInfo = await _paymentService.CreatePaymentLink(paymentRequest);
                 return Ok(paymentInfo);
             }
-            catch (Exception ex)
+            catch (InvalidOperationException ex)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error creating payment link", error = ex.Message });
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
         }
 
@@ -71,25 +77,15 @@ namespace AISEP.WebAPI.Controllers
         /// </summary>
         /// <returns>Webhook processing result</returns>
         [HttpPost("callback")]
-        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<string>> CallBack()
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CallBack()
         {
-            try
-            {
-                var result = await _paymentService.CallBack(Request);
-                return Ok(result);
-            }
-            catch (ArgumentNullException ex)
-            {
-                return BadRequest(new { message = "Invalid webhook payload", error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "Error processing webhook", error = ex.Message });
-            }
+            var result = await _paymentService.CallBack(Request);
+            return Ok(result);
+            //return Ok("Ok");
+
         }
     }
 }
