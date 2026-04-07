@@ -3,7 +3,6 @@ using AISEP.Application.DTOs.Wallet;
 using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
-using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -22,8 +21,6 @@ namespace AISEP.Infrastructure.Services
         {
             _context = context;
         }
-
-
         public async Task<ApiResponse<PagedResponse<TransactionDto>>> GetTransactionsAsync(int walletId, WalletTransactionQueryParams transactionQueryParams)
         {
             var transactions = _context.WalletTransactions
@@ -63,8 +60,8 @@ namespace AISEP.Infrastructure.Services
         public async Task<ApiResponse<WalletDto>> GetWalletByAdvisorAsync(int userId)
         {
             var wallet = await _context.AdvisorWallets
-                .Include(a => a.Advisor)
-                .FirstOrDefaultAsync(w => w.Advisor.UserID == userId);
+                .Include(w => w.Advisor)
+                .FirstOrDefaultAsync(a => a.Advisor.UserID == userId);
 
             if (wallet == null)
                 return ApiResponse<WalletDto>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Ví không tồn tại");
