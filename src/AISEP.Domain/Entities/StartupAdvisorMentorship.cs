@@ -1,4 +1,4 @@
-using AISEP.Domain.Enums;
+﻿using AISEP.Domain.Enums;
 
 namespace AISEP.Domain.Entities;
 
@@ -22,6 +22,15 @@ public class StartupAdvisorMentorship
     public string? ObligationSummary { get; set; }
     public bool CompletionConfirmedByStartup { get; set; }
     public bool CompletionConfirmedByAdvisor { get; set; }
+
+    // ===== PAYMENT FIELDS =====
+    public decimal SessionAmount { get; set; }           // Giá gốc của mentorship
+    public decimal PlatformFeeAmount { get; set; }       // 15% phí nền tảng
+    public decimal ActualAmount { get; set; }            // Số tiền advisor nh?n
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
+    public DateTime? PaidAt { get; set; }                
+    public int? TransactionCode { get; set; }          
+
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

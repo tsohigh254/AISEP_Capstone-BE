@@ -41,52 +41,69 @@ public class AdvisorService : IAdvisorService
             ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinaryFolderSaving.Profile)
             : null;
 
-        var advisor = new Advisor
+        try
         {
-            UserID = userId,
-            FullName = request.FullName,
-            Title = request.Title,
-            Company = request.Company,
-            Bio = request.Bio,
-            ProfilePhotoURL = profilePhotoUrl,
-            LinkedInURL = request.LinkedInURL,
-            GoogleMeetLink = request.GoogleMeetLink,
-            MsTeamsLink = request.MsTeamsLink,
-            Website = request.Website,
-            MentorshipPhilosophy = request.MentorshipPhilosophy,
-            ProfileStatus = ProfileStatus.Approved,
-            IsVerified = false,
-            YearsOfExperience = request.YearsOfExperience,
-            HourlyRate = request.HourlyRate,
-            Expertise = request.Expertise,
-            DomainTags = request.DomainTags,
-            SuitableFor = request.SuitableFor,
-            SupportedDurations = request.SupportedDurations,
-            ExperiencesJson = request.ExperiencesJson,
-            Skills = request.Skills,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        foreach(var industry in request.AdvisorIndustryFocus)
-        {
-            var industryFocus = new AdvisorIndustryFocus
+            var advisor = new Advisor
             {
-                AdvisorID = advisor.AdvisorID,
-                IndustryID = industry.IndustryId
+                UserID = userId,
+                FullName = request.FullName,
+                Title = request.Title,
+                Company = request.Company,
+                Bio = request.Bio,
+                ProfilePhotoURL = profilePhotoUrl,
+                LinkedInURL = request.LinkedInURL,
+                GoogleMeetLink = request.GoogleMeetLink,
+                MsTeamsLink = request.MsTeamsLink,
+                Website = request.Website,
+                MentorshipPhilosophy = request.MentorshipPhilosophy,
+                ProfileStatus = ProfileStatus.Approved,
+                IsVerified = false,
+                YearsOfExperience = request.YearsOfExperience,
+                HourlyRate = request.HourlyRate,
+                Expertise = request.Expertise,
+                DomainTags = request.DomainTags,
+                SuitableFor = request.SuitableFor,
+                SupportedDurations = request.SupportedDurations,
+                ExperiencesJson = request.ExperiencesJson,
+                Skills = request.Skills,
+                CreatedAt = DateTime.UtcNow
             };
 
-            advisor.IndustryFocus.Add(industryFocus);
+            if (request.AdvisorIndustryFocus != null && request.AdvisorIndustryFocus.Count > 0)
+            {
+                foreach (var industry in request.AdvisorIndustryFocus)
+                {
+                    var industryFocus = new AdvisorIndustryFocus
+                    {
+                        AdvisorID = advisor.AdvisorID,
+                        IndustryFocusID = industry.IndustryId
+                    };
+                    advisor.IndustryFocus.Add(industryFocus);
+                }
+            }
+
+            var wallet = new AdvisorWallet
+            {
+                Advisor = advisor,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _db.AdvisorWallets.AddAsync(wallet);
+            await _db.Advisors.AddAsync(advisor);
+            await _db.SaveChangesAsync();
+
+            await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
+            _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
+
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(
+                MapToMeDto(advisor, null, advisor.IndustryFocus));
         }
-
-    
-        await _db.Advisors.AddAsync(advisor);
-        await _db.SaveChangesAsync();
-
-        await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
-        _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
-
-        return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, null, Array.Empty<AdvisorIndustryFocus>()));
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating advisor profile for user {UserId}", userId);
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("CREATE_PROFILE_ERROR",
+                $"Failed to create advisor profile: {ex.InnerException?.Message ?? ex.Message}");
+        }
     }
 
     public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId)

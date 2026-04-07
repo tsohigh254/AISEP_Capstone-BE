@@ -107,7 +107,7 @@ namespace AISEP.Infrastructure.Services
             {
                 File = new FileDescription(file.FileName, stream),
                 Folder = folder,
-                UseFilename = false,
+                UseFilename = true,
                 UniqueFilename = true
             };
 
@@ -157,7 +157,7 @@ namespace AISEP.Infrastructure.Services
             {
                 File = new FileDescription(file.FileName, memoryStream),
                 Folder = folder,
-                UseFilename = false,
+                UseFilename = true,
                 UniqueFilename = true
             };
 

@@ -302,6 +302,26 @@ public enum InvestorKycEvidenceKind : short
     InvestmentProof = 1,
     Other = 2
 }
+
+public enum TransactionType : short
+{
+    Deposit = 0,    // Tiền từ session
+    Withdrawal = 1  // Rút tiền
+}
+
+public enum PaymentStatus : short
+{
+    Pending = 0,      // Đang chờ thanh toán
+    Completed = 1,    // Đã thanh toán thành công
+    Failed = 2,       // Thanh toán thất bại
+}
+
+public enum TransactionStatus : short
+{
+    Pending = 0,      // Đang chờ
+    Completed = 1,    // Hoàn thành
+    Failed = 2        // Thất bại
+}
 // ───────────────────────── Document Review ───────────────────
 
 public enum DocumentReviewStatus : short

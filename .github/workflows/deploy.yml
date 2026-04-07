@@ -4,8 +4,42 @@ on:
   push:
     branches: [main]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tsohigh254/aisep-backend
+
 jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to server
@@ -17,21 +51,27 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             set -e
-            cd /var/www/aisep/repo/AISEP_Capstone-BE
-            git fetch origin main
-            git reset --hard origin/main
+
+            # Pull pre-built image
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u tsohigh254 --password-stdin
+            docker pull ghcr.io/tsohigh254/aisep-backend:latest
+
+            # Restart backend with new image
             cd /var/www/aisep/repo
-            docker compose up -d --build --no-deps backend
-            echo "Waiting for backend to start..."
-            for i in 1 2 3 4 5 6; do
-              sleep 5
-              STATUS=$(curl -so /dev/null -w '%{http_code}' https://aisep.xyz/api/auth/login 2>/dev/null || echo "000")
+            docker compose up -d --no-deps backend
+
+            # Health check
+            echo "Checking backend health..."
+            sleep 10
+            for i in {1..6}; do
+              STATUS=$(curl -m 10 -so /dev/null -w '%{http_code}' https://aisep.xyz/api/auth/login 2>/dev/null || echo "000")
               if [ "$STATUS" != "000" ] && [ "$STATUS" != "502" ] && [ "$STATUS" != "503" ]; then
-                echo "✅ Backend is healthy (HTTP $STATUS)"
+                echo "Backend is healthy (HTTP $STATUS)"
                 exit 0
               fi
               echo "  attempt $i/6 (HTTP $STATUS)..."
+              sleep 5
             done
-            echo "❌ Backend health check failed"
+            echo "Backend health check failed"
             docker logs repo-backend-1 --tail 50
             exit 1
