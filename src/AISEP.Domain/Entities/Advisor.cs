@@ -42,7 +42,11 @@ public class Advisor
     public string? ExperiencesJson { get; set; }    // JSON array of experience objects
     public string? Skills { get; set; }             // comma-separated
 
+    public int WalletId { get; set; }
+
+
     // Navigation properties
+    public AdvisorWallet AdvisorWallet { get; set; } = null!;
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }
     public AdvisorAvailability? Availability { get; set; }

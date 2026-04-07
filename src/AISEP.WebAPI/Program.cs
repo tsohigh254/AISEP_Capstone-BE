@@ -118,6 +118,7 @@ builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IWalletService, WalletService>();
 
 builder.Services.AddSingleton<PayOSClient>(p =>
     {
