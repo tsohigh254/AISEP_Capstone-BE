@@ -50,6 +50,9 @@ public class DocumentUpdateMetadataRequest
     /// <summary>New title (optional).</summary>
     public string? Title { get; set; }
 
+    /// <summary>Change document type (optional).</summary>
+    public DocumentType? DocumentType { get; set; }
+
     /// <summary>Set archived state (optional).</summary>
     public bool? IsArchived { get; set; }
 }

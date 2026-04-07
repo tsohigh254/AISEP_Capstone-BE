@@ -75,6 +75,7 @@ public class DocumentService : IDocumentService
         {
             StartupID = startup.StartupID,
             DocumentType = request.DocumentType,
+            Title = request.Title ?? Path.GetFileNameWithoutExtension(request.File.FileName),
             FileURL = uploadResult.FileUrl,
             Version = version,
             IsAnalyzed = false,
@@ -160,6 +161,7 @@ public class DocumentService : IDocumentService
             return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found.");
 
         if (request.Title != null) doc.Title = request.Title;
+        if (request.DocumentType.HasValue) doc.DocumentType = request.DocumentType.Value;
         if (request.IsArchived.HasValue)
         {
             doc.IsArchived = request.IsArchived.Value;
