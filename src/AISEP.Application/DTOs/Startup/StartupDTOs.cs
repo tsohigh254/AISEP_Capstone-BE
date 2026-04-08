@@ -145,7 +145,7 @@ public class StartupMeDto
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BusinessCode { get; set; }
+    public string BusinessCode { get; set; } = string.Empty;
     // UI Additions
     public string? SubIndustry { get; set; }
     public string? MarketScope { get; set; }
@@ -300,7 +300,7 @@ public class StartupDto
     public string RoleOfApplicant { get; set; } = string.Empty;
     public string ContactEmail { get; set; } = string.Empty;
     public string? ContactPhone { get; set; }
-    public string BusinessCode { get; set; }
+    public string BusinessCode { get; set; } = string.Empty;
 
     // Public UI additions
     public string? SubIndustry { get; set; }

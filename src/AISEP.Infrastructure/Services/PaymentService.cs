@@ -59,10 +59,10 @@ namespace AISEP.Infrastructure.Services
             var mentorship = await _context.StartupAdvisorMentorships
                 .FirstOrDefaultAsync(m => m.TransactionCode == result.OrderCode);
 
-            _logger.LogInformation("Mentorship {id}", mentorship.MentorshipID);
-
             if (mentorship == null)
-                return ApiResponse<string>.ErrorResponse("MENTORSHIP_DOES_NOT_EXIST", "Mentorship does not exist");     
+                return ApiResponse<string>.ErrorResponse("MENTORSHIP_DOES_NOT_EXIST", "Mentorship does not exist");
+
+            _logger.LogInformation("Mentorship {id}", mentorship.MentorshipID);     
 
             if (mentorship.PaymentStatus == PaymentStatus.Completed)
                 return ApiResponse<string>.SuccessResponse("Webhook already processed");
@@ -90,9 +90,10 @@ namespace AISEP.Infrastructure.Services
 
             var wallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == mentorship.AdvisorID);
 
-            _logger.LogInformation("Wallet {id}", wallet.WalletId);
             if (wallet == null)
                 return ApiResponse<string>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Wallet does not exist");
+
+            _logger.LogInformation("Wallet {id}", wallet.WalletId);
 
             wallet.Balance += actualAmount;
             wallet.TotalEarned += actualAmount;

@@ -233,7 +233,7 @@ public class DocumentService : IDocumentService
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
-            Title = d.Title,
+            Title = d.Title ?? string.Empty,
             FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType.ToString(),
             Version = d.Version,
@@ -311,7 +311,7 @@ public class DocumentService : IDocumentService
             DocumentID = doc.DocumentID,
             StartupID = doc.StartupID,
             DocumentType = doc.DocumentType.ToString(),
-            Title = doc.Title,
+            Title = doc.Title ?? string.Empty,
             Version = doc.Version,
             FileUrl = doc.FileURL,
             IsAnalyzed = doc.IsAnalyzed,

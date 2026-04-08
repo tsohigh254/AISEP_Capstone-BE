@@ -16,7 +16,7 @@ public class CreateMentorshipRequest
     public string? PreferredFormat { get; set; }
     public string? ExpectedDuration { get; set; }
     public string? ExpectedScope { get; set; }
-    public string MeetingUrl { get; set; }
+    public string? MeetingUrl { get; set; }
     public List<RequestedSlotDto>? RequestedSlots { get; set; }
 }
 
