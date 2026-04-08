@@ -26,6 +26,7 @@ public interface IAdminService
     Task<ApiResponse<ViolationReportDto>> ResolveViolationAsync(int adminId, int flagId, ResolveViolationRequest request);
 
     // Incidents
+    Task<ApiResponse<List<IncidentDto>>> GetIncidentsAsync();
     Task<ApiResponse<IncidentDto>> CreateIncidentAsync(int adminId, CreateIncidentRequest request);
     Task<ApiResponse<IncidentDto>> RollbackIncidentAsync(int adminId, int incidentId, RollbackIncidentRequest request);
 

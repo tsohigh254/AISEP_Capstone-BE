@@ -76,10 +76,12 @@ public class DocumentsController : ControllerBase
     [HttpGet]
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<DocumentDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMyDocuments(CancellationToken ct = default)
+    public async Task<IActionResult> GetMyDocuments(
+        [FromQuery] bool? isArchived = false,
+        CancellationToken ct = default)
     {
         var userId = GetCurrentUserId();
-        var result = await _documentService.GetMyDocumentsAsync(userId, ct);
+        var result = await _documentService.GetMyDocumentsAsync(userId, isArchived, ct);
         return result.ToActionResult();
     }
 
