@@ -244,3 +244,36 @@ public class AdvisorEvidenceFileDto
     public string? FileType { get; set; }
     public string Url { get; set; } = string.Empty;
 }
+
+// ========== TIME SLOT DTOs ==========
+
+/// <summary>
+/// A single weekly recurring time slot returned by the API.
+/// </summary>
+public class TimeSlotDto
+{
+    public int TimeSlotID { get; set; }
+    /// <summary>0 = Monday … 6 = Sunday.</summary>
+    public int DayOfWeek { get; set; }
+    /// <summary>"HH:mm" e.g. "09:00"</summary>
+    public string StartTime { get; set; } = string.Empty;
+    /// <summary>"HH:mm" e.g. "17:00"</summary>
+    public string EndTime { get; set; } = string.Empty;
+}
+
+/// <summary>Input item for upserting a slot.</summary>
+public class TimeSlotInputDto
+{
+    public int DayOfWeek { get; set; }
+    public string StartTime { get; set; } = string.Empty;
+    public string EndTime { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Full replace of an advisor's weekly schedule.
+/// Any existing slots are deleted, then these slots are inserted.
+/// </summary>
+public class UpsertTimeSlotsRequest
+{
+    public List<TimeSlotInputDto> Slots { get; set; } = new();
+}

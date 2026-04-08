@@ -140,6 +140,32 @@ public class AdvisorsController : ControllerBase
     }
 
     // ================================================================
+    // TIME SLOTS
+    // ================================================================
+
+    [HttpGet("me/timeslots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TimeSlotDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTimeSlots(CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.GetTimeSlotsAsync(userId);
+        return result.ToActionResult();
+    }
+
+    [HttpPut("me/timeslots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TimeSlotDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpsertTimeSlots(
+        [FromBody] UpsertTimeSlotsRequest request,
+        CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.UpsertTimeSlotsAsync(userId, request);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
     // 6) GET /api/advisors/search — Search advisors
     // ================================================================
 

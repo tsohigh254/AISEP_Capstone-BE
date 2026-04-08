@@ -233,8 +233,71 @@ public class AdvisorService : IAdvisorService
     }
 
     // ================================================================
-    // SEARCH
+    // TIME SLOTS
     // ================================================================
+
+    public async Task<ApiResponse<List<TimeSlotDto>>> GetTimeSlotsAsync(int userId)
+    {
+        var advisor = await _db.Advisors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<List<TimeSlotDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        var slots = await _db.AdvisorTimeSlots
+            .AsNoTracking()
+            .Where(ts => ts.AdvisorID == advisor.AdvisorID)
+            .OrderBy(ts => ts.DayOfWeek).ThenBy(ts => ts.StartTime)
+            .Select(ts => new TimeSlotDto
+            {
+                TimeSlotID = ts.TimeSlotID,
+                DayOfWeek = ts.DayOfWeek,
+                StartTime = ts.StartTime,
+                EndTime = ts.EndTime
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<TimeSlotDto>>.SuccessResponse(slots);
+    }
+
+    public async Task<ApiResponse<List<TimeSlotDto>>> UpsertTimeSlotsAsync(int userId, UpsertTimeSlotsRequest request)
+    {
+        var advisor = await _db.Advisors
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<List<TimeSlotDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        // Full replace strategy: delete all existing, insert new
+        var existing = await _db.AdvisorTimeSlots
+            .Where(ts => ts.AdvisorID == advisor.AdvisorID)
+            .ToListAsync();
+        _db.AdvisorTimeSlots.RemoveRange(existing);
+
+        var newSlots = request.Slots.Select(s => new AdvisorTimeSlot
+        {
+            AdvisorID = advisor.AdvisorID,
+            DayOfWeek = s.DayOfWeek,
+            StartTime = s.StartTime,
+            EndTime = s.EndTime
+        }).ToList();
+        _db.AdvisorTimeSlots.AddRange(newSlots);
+
+        await _db.SaveChangesAsync();
+
+        var result = newSlots.Select((ts, idx) => new TimeSlotDto
+        {
+            TimeSlotID = ts.TimeSlotID,
+            DayOfWeek = ts.DayOfWeek,
+            StartTime = ts.StartTime,
+            EndTime = ts.EndTime
+        }).ToList();
+
+        return ApiResponse<List<TimeSlotDto>>.SuccessResponse(result);
+    }
 
     public async Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams)
     {
