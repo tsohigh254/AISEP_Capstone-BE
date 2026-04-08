@@ -133,17 +133,9 @@ builder.Services.AddSingleton<PayOSClient>(p =>
         return account;
     });
 
-// Blockchain — toggle between Stub and Ethereum via config
+// Blockchain — Ethereum (Sepolia) via Nethereum
 builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
-var blockchainProvider = builder.Configuration.GetValue<string>("Blockchain:Provider") ?? "Stub";
-if (string.Equals(blockchainProvider, "Ethereum", StringComparison.OrdinalIgnoreCase))
-{
-    builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
-}
-else
-{
-    builder.Services.AddSingleton<IBlockchainService, StubBlockchainService>();
-}
+builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
 
 // Storage (local file system for dev — swap to Azure Blob / S3 for production)
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
