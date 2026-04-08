@@ -59,4 +59,5 @@ public class Advisor
     public ICollection<AdvisorIndustryFocus> IndustryFocus { get; set; } = new List<AdvisorIndustryFocus>();
     public ICollection<AdvisorTestimonial> Testimonials { get; set; } = new List<AdvisorTestimonial>();
     public ICollection<StartupAdvisorMentorship> Mentorships { get; set; } = new List<StartupAdvisorMentorship>();
+    public ICollection<AdvisorTimeSlot> TimeSlots { get; set; } = new List<AdvisorTimeSlot>();
 }

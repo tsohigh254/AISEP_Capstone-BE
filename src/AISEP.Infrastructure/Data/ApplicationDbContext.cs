@@ -36,6 +36,7 @@ public class ApplicationDbContext : DbContext
     // Advisor
     public DbSet<Advisor> Advisors => Set<Advisor>();
     public DbSet<AdvisorAvailability> AdvisorAvailabilities => Set<AdvisorAvailability>();
+    public DbSet<AdvisorTimeSlot> AdvisorTimeSlots => Set<AdvisorTimeSlot>();
     public DbSet<AdvisorIndustryFocus> AdvisorIndustryFocuses => Set<AdvisorIndustryFocus>();
     public DbSet<AdvisorTestimonial> AdvisorTestimonials => Set<AdvisorTestimonial>();
     public DbSet<AdvisorWallet> AdvisorWallets => Set<AdvisorWallet>();
@@ -308,6 +309,14 @@ public class ApplicationDbContext : DbContext
             .HasOne(a => a.Advisor)
             .WithOne(adv => adv.Availability)
             .HasForeignKey<AdvisorAvailability>(a => a.AdvisorID);
+
+        // AdvisorTimeSlot - many-to-one with Advisor
+        modelBuilder.Entity<AdvisorTimeSlot>().HasKey(ts => ts.TimeSlotID);
+        modelBuilder.Entity<AdvisorTimeSlot>()
+            .HasOne(ts => ts.Advisor)
+            .WithMany(a => a.TimeSlots)
+            .HasForeignKey(ts => ts.AdvisorID)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // InvestorPreferences - one-to-one with Investor
         modelBuilder.Entity<InvestorPreferences>()
