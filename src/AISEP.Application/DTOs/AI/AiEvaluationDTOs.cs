@@ -104,7 +104,7 @@ public class PythonEvaluationStatus
     public double? OverallScore { get; set; }
 
     [JsonPropertyName("overall_confidence")]
-    public string? OverallConfidence { get; set; }
+    public double? OverallConfidence { get; set; }
 
     [JsonPropertyName("documents")]
     public List<PythonEvaluationDocStatus>? Documents { get; set; }

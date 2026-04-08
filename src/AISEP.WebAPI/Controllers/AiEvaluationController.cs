@@ -66,7 +66,8 @@ public class AiEvaluationController : ControllerBase
     [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStatus(int runId)
     {
-        var result = await _service.GetEvaluationStatusAsync(runId);
+        var userId = GetCurrentUserId();
+        var result = await _service.GetEvaluationStatusAsync(runId, userId);
         return result.ToEnvelope();
     }
 
@@ -80,7 +81,8 @@ public class AiEvaluationController : ControllerBase
     [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetReport(int runId)
     {
-        var result = await _service.GetEvaluationReportAsync(runId);
+        var userId = GetCurrentUserId();
+        var result = await _service.GetEvaluationReportAsync(runId, userId);
         return result.ToEnvelope();
     }
 
@@ -92,7 +94,8 @@ public class AiEvaluationController : ControllerBase
     [ProducesResponseType(typeof(ApiEnvelope<List<EvaluationStatusResult>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory(int startupId)
     {
-        var result = await _service.GetEvaluationHistoryAsync(startupId);
+        var userId = GetCurrentUserId();
+        var result = await _service.GetEvaluationHistoryAsync(startupId, userId);
         return result.ToEnvelope();
     }
 

@@ -14,6 +14,7 @@ public class AiEvaluationService : IAiEvaluationService
 {
     private readonly ApplicationDbContext _db;
     private readonly PythonAiClient _pythonClient;
+    private readonly ICloudinaryService _cloudinary;
     private readonly ILogger<AiEvaluationService> _logger;
 
     // Terminal statuses — no further transitions allowed
@@ -36,10 +37,12 @@ public class AiEvaluationService : IAiEvaluationService
     public AiEvaluationService(
         ApplicationDbContext db,
         PythonAiClient pythonClient,
+        ICloudinaryService cloudinary,
         ILogger<AiEvaluationService> logger)
     {
         _db = db;
         _pythonClient = pythonClient;
+        _cloudinary = cloudinary;
         _logger = logger;
     }
 
@@ -67,7 +70,7 @@ public class AiEvaluationService : IAiEvaluationService
         if (docs.Count == 0)
             return ApiResponse<EvaluationSubmitResult>.ErrorResponse("VALIDATION_ERROR", "No documents available for evaluation.");
 
-        // Build Python request
+        // Build Python request with signed URLs (time-limited, no auth needed by Python)
         var correlationId = Guid.NewGuid().ToString();
         var pythonReq = new PythonSubmitEvaluationRequest
         {
@@ -76,7 +79,12 @@ public class AiEvaluationService : IAiEvaluationService
             {
                 DocumentId = d.DocumentID.ToString(),
                 DocumentType = MapDocumentType(d.DocumentType),
-                FileUrlOrPath = d.FileURL
+                // Generate signed URL valid for 2 hours (enough for Python to download & process)
+                FileUrlOrPath = _cloudinary.GenerateSignedDocumentUrl(
+                    storageKey: null,
+                    fallbackUrl: d.FileURL,
+                    fileName: null,
+                    expiresInMinutes: 120)
             }).ToList()
         };
 
@@ -115,17 +123,28 @@ public class AiEvaluationService : IAiEvaluationService
             return ApiResponse<EvaluationSubmitResult>.ErrorResponse(
                 ex.Code, $"AI Service error: {ex.Message}");
         }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Python AI service unreachable during submit for StartupId={StartupId}", request.StartupId);
+            return ApiResponse<EvaluationSubmitResult>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "The AI evaluation service is currently unavailable. Please try again later.");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
     //  Status (with reconciliation)
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<EvaluationStatusResult>> GetEvaluationStatusAsync(int runId)
+    public async Task<ApiResponse<EvaluationStatusResult>> GetEvaluationStatusAsync(int runId, int currentUserId = 0)
     {
-        var run = await _db.AiEvaluationRuns.FindAsync(runId);
+        var run = await _db.AiEvaluationRuns
+            .Include(r => r.Startup)
+            .FirstOrDefaultAsync(r => r.Id == runId);
         if (run == null)
             return ApiResponse<EvaluationStatusResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
+
+        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+            return ApiResponse<EvaluationStatusResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
 
         // If not terminal, poll Python for fresh status
         if (!TerminalStatuses.Contains(run.Status))
@@ -150,11 +169,16 @@ public class AiEvaluationService : IAiEvaluationService
     //  Report (with validation gate)
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<EvaluationReportResult>> GetEvaluationReportAsync(int runId)
+    public async Task<ApiResponse<EvaluationReportResult>> GetEvaluationReportAsync(int runId, int currentUserId = 0)
     {
-        var run = await _db.AiEvaluationRuns.FindAsync(runId);
+        var run = await _db.AiEvaluationRuns
+            .Include(r => r.Startup)
+            .FirstOrDefaultAsync(r => r.Id == runId);
         if (run == null)
             return ApiResponse<EvaluationReportResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
+
+        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+            return ApiResponse<EvaluationReportResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
 
         // If we already have a valid cached report, return it
         if (!string.IsNullOrEmpty(run.ReportJson) && run.IsReportValid)
@@ -294,8 +318,19 @@ public class AiEvaluationService : IAiEvaluationService
     //  History
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<List<EvaluationStatusResult>>> GetEvaluationHistoryAsync(int startupId)
+    public async Task<ApiResponse<List<EvaluationStatusResult>>> GetEvaluationHistoryAsync(int startupId, int currentUserId = 0)
     {
+        if (currentUserId != 0)
+        {
+            var startup = await _db.Startups
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.StartupID == startupId);
+            if (startup == null)
+                return ApiResponse<List<EvaluationStatusResult>>.ErrorResponse("NOT_FOUND", "Startup not found.");
+            if (startup.UserID != currentUserId)
+                return ApiResponse<List<EvaluationStatusResult>>.ErrorResponse("ACCESS_DENIED", "You do not have access to this startup's evaluation history.");
+        }
+
         var runs = await _db.AiEvaluationRuns
             .Where(r => r.StartupId == startupId)
             .OrderByDescending(r => r.SubmittedAt)
@@ -391,18 +426,25 @@ public class AiEvaluationService : IAiEvaluationService
             || report.CriteriaResults.Value.GetArrayLength() == 0)
             return (false, "Report criteria_results is empty or missing.");
 
-        // Check 3: verify at least one criterion has a non-null score
-        bool anyScore = false;
+        // Check 3: verify at least one SCORED criterion has a non-null final_score.
+        // Criteria with status "not_applicable" legitimately have null scores — exclude them.
+        bool anyScoredCriterion = false;
         foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
         {
-            if (criterion.TryGetProperty("score", out var s) && s.ValueKind == JsonValueKind.Number)
+            // Skip not_applicable criteria
+            if (criterion.TryGetProperty("status", out var statusProp)
+                && statusProp.GetString()?.Equals("not_applicable", StringComparison.OrdinalIgnoreCase) == true)
+                continue;
+
+            // Python uses 'final_score' (not 'score')
+            if (criterion.TryGetProperty("final_score", out var s) && s.ValueKind == JsonValueKind.Number)
             {
-                anyScore = true;
+                anyScoredCriterion = true;
                 break;
             }
         }
-        if (!anyScore)
-            return (false, "All criteria scores are null — report appears incomplete.");
+        if (!anyScoredCriterion)
+            return (false, "All scored criteria have null final_score — report appears incomplete.");
 
         return (true, null);
     }
