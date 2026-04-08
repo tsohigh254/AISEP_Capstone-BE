@@ -49,7 +49,8 @@ public enum ProofStatus : short
     Anchored = 0,       // Confirmed on-chain (final happy state)
     Revoked = 1,        // Explicitly revoked
     HashComputed = 2,   // Local hash created, not yet submitted
-    Pending = 3         // Submitted to chain, awaiting confirmation
+    Pending = 3,        // Submitted to chain, awaiting confirmation
+    Failed = 4          // Transaction failed on-chain
 }
 
 // ───────────────────────── Moderation ─────────────────────

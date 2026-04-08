@@ -119,6 +119,14 @@ public class AdminController : ControllerBase
     //  Incidents
     // ═══════════════════════════════════════════════════════════════
 
+    /// <summary>List all incidents.</summary>
+    [HttpGet("incidents")]
+    public async Task<IActionResult> GetIncidents()
+    {
+        var result = await _svc.GetIncidentsAsync();
+        return result.ToEnvelope();
+    }
+
     /// <summary>Create a new incident record.</summary>
     [HttpPost("incidents")]
     public async Task<IActionResult> CreateIncident([FromBody] CreateIncidentRequest request)

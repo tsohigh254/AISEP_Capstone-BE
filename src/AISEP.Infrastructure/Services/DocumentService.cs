@@ -114,7 +114,7 @@ public class DocumentService : IDocumentService
     // ================================================================
     // List my documents
     // ================================================================
-    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, CancellationToken ct = default)
+    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, bool? isArchived = false, CancellationToken ct = default)
     {
         var startup = await _context.Startups
             .AsNoTracking()
@@ -127,6 +127,9 @@ public class DocumentService : IDocumentService
         var query = _context.Documents
             .AsNoTracking()
             .Where(d => d.StartupID == startup.StartupID);
+
+        if (isArchived.HasValue)
+            query = query.Where(d => d.IsArchived == isArchived.Value);
 
         var docs = await query
             .Include(d => d.BlockchainProof)
