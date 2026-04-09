@@ -144,6 +144,49 @@ public class DocumentsController : ControllerBase
     }
 
     // ================================================================
+    // 7) POST /api/documents/{documentId}/versions — Upload new version
+    // ================================================================
+
+    /// <summary>
+    /// Upload a new version of an existing document.
+    /// The new version is linked to the original document and auto-increments the version number.
+    /// </summary>
+    [HttpPost("{documentId:int}/versions")]
+    [Authorize(Policy = "StartupOnly")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadNewVersion(
+        int documentId,
+        [FromForm] DocumentUploadNewVersionRequest request,
+        CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _documentService.UploadNewVersionAsync(documentId, request, userId, ct);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    // ================================================================
+    // 8) GET /api/documents/{documentId}/versions — Get version history
+    // ================================================================
+
+    /// <summary>
+    /// Get all versions of a document, ordered by newest first.
+    /// Pass any version's ID to see the full history chain.
+    /// </summary>
+    [HttpGet("{documentId:int}/versions")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentVersionHistoryDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentVersionHistoryDto>>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetVersionHistory(int documentId, CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _documentService.GetVersionHistoryAsync(documentId, userId, ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
     // Staff review endpoints
     // ================================================================
 
