@@ -434,5 +434,12 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Document version history (self-referencing)
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.ParentDocument)
+            .WithMany(d => d.ChildVersions)
+            .HasForeignKey(d => d.ParentDocumentID)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
