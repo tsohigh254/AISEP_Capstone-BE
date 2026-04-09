@@ -79,6 +79,8 @@ public class DocumentDto
     public string? ProofStatus { get; set; }
     public string? FileHash { get; set; }
     public string? TransactionHash { get; set; }
+    public DateTime? AnchoredAt { get; set; }
+    public string? EtherscanUrl { get; set; }
     public string? ReviewStatus { get; set; }
     public int? ReviewedBy { get; set; }
     public DateTime? ReviewedAt { get; set; }

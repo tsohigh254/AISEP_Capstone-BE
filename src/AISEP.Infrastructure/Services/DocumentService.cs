@@ -246,7 +246,8 @@ public class DocumentService : IDocumentService
             UploadedAt = d.UploadedAt,
             ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
+            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null,
+            AnchoredAt = d.BlockchainProof?.AnchoredAt
         };
     }
 
