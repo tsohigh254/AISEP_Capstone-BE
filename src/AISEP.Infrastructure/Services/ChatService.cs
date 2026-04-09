@@ -148,14 +148,12 @@ public class ChatService : IChatService
                     "INVALID_STATUS_TRANSITION",
                     $"Cannot create conversation: connection status is '{conn.ConnectionStatus}', must be 'Accepted'.");
 
-            // Check for existing open conversation
-            var existing = await _db.Conversations
-                .AnyAsync(c => c.ConnectionID == request.ConnectionId.Value
+            // Check for existing open conversation — return it (idempotent)
+            var existingConv = await _db.Conversations
+                .FirstOrDefaultAsync(c => c.ConnectionID == request.ConnectionId.Value
                             && c.ConversationStatus == ConversationStatus.Active);
-            if (existing)
-                return ApiResponse<ConversationDto>.ErrorResponse(
-                    "CONVERSATION_ALREADY_EXISTS",
-                    "An open conversation already exists for this connection.");
+            if (existingConv != null)
+                return ApiResponse<ConversationDto>.SuccessResponse(MapToDto(existingConv));
         }
         else if (request.MentorshipId.HasValue)
         {
@@ -177,13 +175,11 @@ public class ChatService : IChatService
                     "INVALID_STATUS_TRANSITION",
                     $"Cannot create conversation: mentorship status is '{mentorship.MentorshipStatus}', must be 'Accepted' or 'InProgress'.");
 
-            var existing = await _db.Conversations
-                .AnyAsync(c => c.MentorshipID == request.MentorshipId.Value
+            var existingMentorConv = await _db.Conversations
+                .FirstOrDefaultAsync(c => c.MentorshipID == request.MentorshipId.Value
                             && c.ConversationStatus == ConversationStatus.Active);
-            if (existing)
-                return ApiResponse<ConversationDto>.ErrorResponse(
-                    "CONVERSATION_ALREADY_EXISTS",
-                    "An open conversation already exists for this mentorship.");
+            if (existingMentorConv != null)
+                return ApiResponse<ConversationDto>.SuccessResponse(MapToDto(existingMentorConv));
         }
         else
         {
