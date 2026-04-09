@@ -70,9 +70,13 @@ public class InvestorService : IInvestorService
             .FirstOrDefaultAsync(i => i.UserID == userId);
 
         if (investor == null)
-            return ApiResponse<InvestorDto>.SuccessResponse(null, "Profile has not been created yet.");
+            return ApiResponse<InvestorDto>.SuccessResponse(null!, "Profile has not been created yet.");
 
-        return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+        var activeSubmission = await _db.InvestorKycSubmissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.InvestorID == investor.InvestorID && s.IsActive);
+
+        return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor, activeSubmission));
     }
 
     public async Task<ApiResponse<InvestorDto>> UpdateProfileAsync(int userId, UpdateInvestorRequest request)
@@ -98,7 +102,11 @@ public class InvestorService : IInvestorService
         await _audit.LogAsync("UPDATE_INVESTOR_PROFILE", "Investor", investor.InvestorID, null);
         _logger.LogInformation("Investor profile {InvestorId} updated", investor.InvestorID);
 
-        return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+        var activeSubmission = await _db.InvestorKycSubmissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.InvestorID == investor.InvestorID && s.IsActive);
+
+        return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor, activeSubmission));
     }
 
     // ================================================================
@@ -157,6 +165,12 @@ public class InvestorService : IInvestorService
             : null;
         investor.Preferences.PreferredIndustries = request.PreferredIndustries != null
             ? string.Join(",", request.PreferredIndustries)
+            : null;
+        investor.Preferences.PreferredMarketScopes = request.PreferredMarketScopes != null
+            ? string.Join(",", request.PreferredMarketScopes)
+            : null;
+        investor.Preferences.SupportOffered = request.SupportOffered != null
+            ? string.Join(",", request.SupportOffered)
             : null;
 
         // Sync InvestorStageFocus table
@@ -448,7 +462,11 @@ public class InvestorService : IInvestorService
             await _audit.LogAsync("UPLOAD_INVESTOR_PHOTO", "Investor", investor.InvestorID, null);
             _logger.LogInformation("Investor {InvestorId} uploaded new profile photo", investor.InvestorID);
 
-            return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
+            var activeSubmission = await _db.InvestorKycSubmissions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.InvestorID == investor.InvestorID && s.IsActive);
+
+            return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor, activeSubmission));
         }
         catch (Exception ex)
         {
@@ -854,6 +872,20 @@ public class InvestorService : IInvestorService
         UpdatedAt = i.UpdatedAt
     };
 
+    private static InvestorDto MapToDto(Investor i, InvestorKycSubmission? submission)
+    {
+        var dto = MapToDto(i);
+        if (submission == null) return dto;
+        dto.InvestorType = submission.InvestorCategory;
+        dto.ContactEmail = submission.ContactEmail;
+        dto.CurrentOrganization = submission.OrganizationName;
+        dto.CurrentRoleTitle = submission.CurrentRoleTitle;
+        dto.BusinessCode = submission.TaxIdOrBusinessCode;
+        dto.SubmitterRole = submission.SubmitterRole;
+        dto.Remarks = submission.Remarks;
+        return dto;
+    }
+
     private static PreferencesDto MapPreferencesDto(Investor investor)
     {
         var pref = investor.Preferences;
@@ -865,6 +897,12 @@ public class InvestorService : IInvestorService
             PreferredIndustries = investor.IndustryFocus.Select(inf => inf.Industry).ToList(),
             PreferredGeographies = pref?.PreferredGeographies,
             MinPotentialScore = pref?.MinPotentialScore,
+            PreferredMarketScopes = pref?.PreferredMarketScopes != null
+                ? pref.PreferredMarketScopes.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                : new(),
+            SupportOffered = pref?.SupportOffered != null
+                ? pref.SupportOffered.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                : new(),
             UpdatedAt = pref?.UpdatedAt
         };
     }
@@ -1010,7 +1048,7 @@ public class InvestorService : IInvestorService
                 CompanyName = s.CompanyName,
                 OneLiner = s.OneLiner,
                 Stage = s.Stage.ToString(),
-                IndustryName = s.Industry.IndustryName,
+                IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
                 FundingAmountSought = s.FundingAmountSought,
                 CurrentFundingRaised = s.CurrentFundingRaised,
                 Valuation = s.Valuation,

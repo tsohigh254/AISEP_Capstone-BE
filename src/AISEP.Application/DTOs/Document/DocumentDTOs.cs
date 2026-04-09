@@ -79,6 +79,8 @@ public class DocumentDto
     public string? ProofStatus { get; set; }
     public string? FileHash { get; set; }
     public string? TransactionHash { get; set; }
+    public DateTime? AnchoredAt { get; set; }
+    public string? EtherscanUrl { get; set; }
     public string? ReviewStatus { get; set; }
     public int? ReviewedBy { get; set; }
     public DateTime? ReviewedAt { get; set; }
@@ -92,5 +94,29 @@ public class DocumentDto
 public class StaffReviewDocumentRequest
 {
     public string? Notes { get; set; }
+}
+
+// ──────────────────────────────────────────────
+// Version History DTOs
+// ──────────────────────────────────────────────
+
+public class DocumentUploadNewVersionRequest
+{
+    public IFormFile File { get; set; } = null!;
+    public string? Title { get; set; }
+}
+
+public class DocumentVersionHistoryDto
+{
+    public int DocumentID { get; set; }
+    public string? Version { get; set; }
+    public string Title { get; set; } = null!;
+    public string? FileUrl { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public string? ReviewStatus { get; set; }
+    public string? ProofStatus { get; set; }
+    public string? FileHash { get; set; }
+    public bool IsArchived { get; set; }
+    public bool IsCurrent { get; set; }
 }
 

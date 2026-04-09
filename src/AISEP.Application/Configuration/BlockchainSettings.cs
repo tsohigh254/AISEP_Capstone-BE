@@ -2,9 +2,6 @@ namespace AISEP.Application.Configuration;
 
 public class BlockchainSettings
 {
-    /// <summary>"Stub" for mock, "Ethereum" for real Sepolia testnet.</summary>
-    public string Provider { get; set; } = "Stub";
-
     /// <summary>Network display name stored in DocumentBlockchainProof.</summary>
     public string NetworkName { get; set; } = "Sepolia";
 

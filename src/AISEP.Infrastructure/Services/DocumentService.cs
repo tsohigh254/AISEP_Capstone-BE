@@ -48,8 +48,23 @@ public class DocumentService : IDocumentService
 
         // 2. Upload document với hash tính sẵn
         var uploadResult = await _cloudinaryService.UploadDocumentWithHashAsync(
-            request.File, 
+            request.File,
             CloudinaryFolderSaving.DocumentStorage);
+
+        // 2b. Check duplicate hash across all documents of this startup (including archived)
+        var startupDocIds = await _context.Documents
+            .Where(d => d.StartupID == startup.StartupID)
+            .Select(d => d.DocumentID)
+            .ToListAsync(ct);
+
+        var existingHashes = await _context.DocumentBlockchainProofs
+            .Where(p => startupDocIds.Contains(p.DocumentID) && p.FileHash != null)
+            .Select(p => p.FileHash!)
+            .ToListAsync(ct);
+
+        if (existingHashes.Any(h => string.Equals(h, uploadResult.FileHash, StringComparison.OrdinalIgnoreCase)))
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_DUPLICATE",
+                "File này đã tồn tại trong hệ thống. Vui lòng upload file khác hoặc sử dụng chức năng upload phiên bản mới.");
 
         // 3. Auto-version if not provided
         var version = request.Version;
@@ -63,7 +78,11 @@ public class DocumentService : IDocumentService
                 .ToListAsync(ct);
 
             var maxNum = maxVersion
-                .Select(v => int.TryParse(v, out var n) ? n : 0)
+                .Select(v =>
+                {
+                    var clean = (v ?? "").TrimStart('v', 'V');
+                    return int.TryParse(clean, out var n) ? n : 0;
+                })
                 .DefaultIfEmpty(0)
                 .Max();
 
@@ -114,7 +133,7 @@ public class DocumentService : IDocumentService
     // ================================================================
     // List my documents
     // ================================================================
-    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, CancellationToken ct = default)
+    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, bool? isArchived = false, CancellationToken ct = default)
     {
         var startup = await _context.Startups
             .AsNoTracking()
@@ -127,6 +146,9 @@ public class DocumentService : IDocumentService
         var query = _context.Documents
             .AsNoTracking()
             .Where(d => d.StartupID == startup.StartupID);
+
+        if (isArchived.HasValue)
+            query = query.Where(d => d.IsArchived == isArchived.Value);
 
         var docs = await query
             .Include(d => d.BlockchainProof)
@@ -233,7 +255,7 @@ public class DocumentService : IDocumentService
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
-            Title = d.Title,
+            Title = d.Title ?? string.Empty,
             FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType.ToString(),
             Version = d.Version,
@@ -243,7 +265,8 @@ public class DocumentService : IDocumentService
             UploadedAt = d.UploadedAt,
             ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
+            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null,
+            AnchoredAt = d.BlockchainProof?.AnchoredAt
         };
     }
 
@@ -268,6 +291,135 @@ public class DocumentService : IDocumentService
                     TotalItems = totalItems
                 }
             });
+    }
+
+    // ================================================================
+    // Upload new version
+    // ================================================================
+    public async Task<ApiResponse<DocumentDto>> UploadNewVersionAsync(
+        int documentId, DocumentUploadNewVersionRequest request, int userId, CancellationToken ct = default)
+    {
+        var existingDoc = await GetOwnedDocumentAsync(documentId, userId, ct);
+        if (existingDoc == null)
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found.");
+
+        // Find the root document (top of the version chain)
+        var rootId = existingDoc.ParentDocumentID ?? existingDoc.DocumentID;
+
+        // Upload file first to get hash
+        var uploadResult = await _cloudinaryService.UploadDocumentWithHashAsync(
+            request.File,
+            CloudinaryFolderSaving.DocumentStorage);
+
+        // Check duplicate: compare hash with all versions in this chain
+        var versionDocIds = await _context.Documents
+            .Where(d => d.DocumentID == rootId || d.ParentDocumentID == rootId)
+            .Select(d => d.DocumentID)
+            .ToListAsync(ct);
+
+        var existingHashes = await _context.DocumentBlockchainProofs
+            .Where(p => versionDocIds.Contains(p.DocumentID) && p.FileHash != null)
+            .Select(p => p.FileHash!)
+            .ToListAsync(ct);
+
+        if (existingHashes.Any(h => string.Equals(h, uploadResult.FileHash, StringComparison.OrdinalIgnoreCase)))
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_DUPLICATE",
+                "File này trùng nội dung với một phiên bản đã có. Vui lòng upload file khác.");
+
+        // Count all versions in this chain to determine next version number
+        var allVersions = await _context.Documents
+            .Where(d => d.DocumentID == rootId || d.ParentDocumentID == rootId)
+            .Select(d => d.Version)
+            .ToListAsync(ct);
+
+        var maxNum = allVersions
+            .Select(v =>
+            {
+                var clean = (v ?? "").TrimStart('v', 'V');
+                return int.TryParse(clean, out var n) ? n : 0;
+            })
+            .DefaultIfEmpty(0)
+            .Max();
+
+        var newVersion = (maxNum + 1).ToString();
+
+        // Create new document linked to root
+        var newDoc = new Document
+        {
+            StartupID = existingDoc.StartupID,
+            DocumentType = existingDoc.DocumentType,
+            Title = request.Title ?? existingDoc.Title ?? Path.GetFileNameWithoutExtension(request.File.FileName),
+            FileURL = uploadResult.FileUrl,
+            Version = newVersion,
+            IsAnalyzed = false,
+            IsArchived = false,
+            UploadedAt = DateTime.UtcNow,
+            ParentDocumentID = rootId
+        };
+
+        _context.Documents.Add(newDoc);
+        await _context.SaveChangesAsync(ct);
+
+        // Create blockchain proof
+        var proof = new DocumentBlockchainProof
+        {
+            DocumentID = newDoc.DocumentID,
+            FileHash = uploadResult.FileHash,
+            HashAlgorithm = uploadResult.HashAlgorithm,
+            ProofStatus = ProofStatus.HashComputed
+        };
+
+        _context.DocumentBlockchainProofs.Add(proof);
+        newDoc.BlockchainProof = proof;
+        await _context.SaveChangesAsync(ct);
+
+        await _audit.LogAsync("UPLOAD_DOCUMENT_VERSION", "Document", newDoc.DocumentID,
+            $"Uploaded new version v{newVersion} for document {rootId}");
+
+        return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(newDoc), $"Version {newVersion} uploaded successfully");
+    }
+
+    // ================================================================
+    // Get version history
+    // ================================================================
+    public async Task<ApiResponse<IEnumerable<DocumentVersionHistoryDto>>> GetVersionHistoryAsync(
+        int documentId, int userId, CancellationToken ct = default)
+    {
+        var doc = await GetOwnedDocumentAsync(documentId, userId, ct);
+        if (doc == null)
+            return ApiResponse<IEnumerable<DocumentVersionHistoryDto>>.ErrorResponse(
+                "DOCUMENT_NOT_FOUND", "Document not found.");
+
+        // Find the root document
+        var rootId = doc.ParentDocumentID ?? doc.DocumentID;
+
+        // Get all versions: root + all children of root (exclude archived)
+        var allVersions = await _context.Documents
+            .AsNoTracking()
+            .Include(d => d.BlockchainProof)
+            .Where(d => (d.DocumentID == rootId || d.ParentDocumentID == rootId) && !d.IsArchived)
+            .OrderByDescending(d => d.UploadedAt)
+            .ToListAsync(ct);
+
+        // The latest version is the most recent one
+        var latestId = allVersions.First().DocumentID;
+
+        var history = allVersions.Select(d => new DocumentVersionHistoryDto
+        {
+            DocumentID = d.DocumentID,
+            Version = d.Version,
+            Title = d.Title ?? string.Empty,
+            FileUrl = d.FileURL,
+            UploadedAt = d.UploadedAt,
+            ReviewStatus = d.ReviewStatus.ToString(),
+            ProofStatus = d.BlockchainProof?.ProofStatus.ToString(),
+            FileHash = d.BlockchainProof?.FileHash,
+            IsArchived = d.IsArchived,
+            IsCurrent = d.DocumentID == latestId
+        }).ToList();
+
+        return ApiResponse<IEnumerable<DocumentVersionHistoryDto>>.SuccessResponse(
+            history, $"Found {history.Count} version(s)");
     }
 
     // ================================================================
@@ -311,7 +463,7 @@ public class DocumentService : IDocumentService
             DocumentID = doc.DocumentID,
             StartupID = doc.StartupID,
             DocumentType = doc.DocumentType.ToString(),
-            Title = doc.Title,
+            Title = doc.Title ?? string.Empty,
             Version = doc.Version,
             FileUrl = doc.FileURL,
             IsAnalyzed = doc.IsAnalyzed,

@@ -23,8 +23,13 @@ public class Document
     public DateTime? ReviewedAt { get; set; }
     public string? ReviewNotes { get; set; }
 
+    // Version history
+    public int? ParentDocumentID { get; set; }
+
     // Navigation properties
     public User? ReviewedByUser { get; set; }
     public Startup Startup { get; set; } = null!;
     public DocumentBlockchainProof? BlockchainProof { get; set; }
+    public Document? ParentDocument { get; set; }
+    public ICollection<Document> ChildVersions { get; set; } = new List<Document>();
 }

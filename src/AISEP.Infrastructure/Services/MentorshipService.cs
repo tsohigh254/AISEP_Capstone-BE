@@ -265,7 +265,7 @@ public class MentorshipService : IMentorshipService
 
         var mentorship = await _db.StartupAdvisorMentorships
             .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && 
-            (startup != null ? m.StartupID == startup.StartupID : m.AdvisorID == advisor.AdvisorID));
+            (startup != null ? m.StartupID == startup.StartupID : m.AdvisorID == advisor!.AdvisorID));
 
         if (mentorship == null) return ApiResponse<MentorshipDto>.ErrorResponse("NOT_FOUND", "Mentorship not found.");
 

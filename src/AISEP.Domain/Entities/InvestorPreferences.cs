@@ -8,6 +8,8 @@ public class InvestorPreferences
     public string? PreferredStages { get; set; }
     public string? PreferredIndustries { get; set; }
     public string? PreferredGeographies { get; set; }
+    public string? PreferredMarketScopes { get; set; } // JSON array
+    public string? SupportOffered { get; set; }         // JSON array
     public decimal? MinInvestmentSize { get; set; }
     public decimal? MaxInvestmentSize { get; set; }
     public DateTime? UpdatedAt { get; set; }

@@ -11,7 +11,7 @@ public interface IDocumentService
     Task<ApiResponse<DocumentDto>> UploadAsync(DocumentCreateRequest request, int userId, CancellationToken ct = default);
 
     /// <summary>List documents belonging to the current startup owner.</summary>
-    Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId,  CancellationToken ct = default);
+    Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, bool? isArchived = false, CancellationToken ct = default);
 
     /// <summary>Get full metadata for a single document (owner only).</summary>
     Task<ApiResponse<DocumentDto>> GetMyDocumentAsync(int documentId, int userId, CancellationToken ct = default);
@@ -23,6 +23,10 @@ public interface IDocumentService
     Task<ApiResponse<string>> ArchiveAsync(int documentId, int userId, CancellationToken ct = default);
 
     Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery);
+
+    // Version history
+    Task<ApiResponse<DocumentDto>> UploadNewVersionAsync(int documentId, DocumentUploadNewVersionRequest request, int userId, CancellationToken ct = default);
+    Task<ApiResponse<IEnumerable<DocumentVersionHistoryDto>>> GetVersionHistoryAsync(int documentId, int userId, CancellationToken ct = default);
 
     // Staff review
     Task<ApiResponse<DocumentDto>> StaffVerifyAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
