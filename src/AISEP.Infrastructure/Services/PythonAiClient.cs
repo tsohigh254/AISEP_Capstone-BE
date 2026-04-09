@@ -190,25 +190,79 @@ public class PythonAiClient
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  Investor Agent — Chat (non-stream)
+    //  Investor Agent — Chat non-stream (consumes SSE internally)
+    //  Python only exposes /chat/stream — this method opens the
+    //  stream, reads all SSE events, and assembles a single response.
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<PythonAgentChatResponse> InvestorAgentChatAsync(
+    /// <summary>
+    /// Calls Python /api/v1/investor-agent/chat/stream, consumes all SSE events,
+    /// and returns an assembled <see cref="PythonAgentChatResponse"/>.
+    /// Uses LongTimeoutSeconds as the overall deadline.
+    /// </summary>
+    public async Task<PythonAgentChatResponse> ConsumeStreamToResponseAsync(
         PythonAgentChatRequest request, string? correlationId = null, CancellationToken ct = default)
     {
-        // Apply LongTimeoutSeconds — chat can take a while on first cold-start
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(_options.LongTimeoutSeconds));
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/investor-agent/chat");
-        req.Content = JsonContent.Create(request, options: JsonOpts);
-        AttachHeaders(req, correlationId);
+        using var httpResp = await InvestorAgentChatStreamRawAsync(request, correlationId, cts.Token);
 
-        using var resp = await _http.SendAsync(req, cts.Token);
-        await EnsureSuccessOrThrow(resp, cts.Token);
+        var result = new PythonAgentChatResponse();
+        var answerBuilder = new System.Text.StringBuilder();
 
-        var result = await resp.Content.ReadFromJsonAsync<PythonAgentChatResponse>(JsonOpts, cts.Token);
-        return result ?? throw new InvalidOperationException("Python returned null chat response.");
+        using var stream = await httpResp.Content.ReadAsStreamAsync(cts.Token);
+        using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8);
+
+        while (!reader.EndOfStream && !cts.Token.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(cts.Token);
+            if (line == null) break;
+            if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
+
+            var payload = line["data: ".Length..];
+            if (payload == "[DONE]") break;
+
+            SseEvent? evt = null;
+            try { evt = JsonSerializer.Deserialize<SseEvent>(payload, JsonOpts); }
+            catch { /* ignore malformed event */ }
+            if (evt == null) continue;
+
+            switch (evt.Type)
+            {
+                case "answer_chunk":
+                    answerBuilder.Append(evt.Content);
+                    break;
+
+                case "final_answer":
+                    // Prefer full final_answer over concatenated chunks if present
+                    if (!string.IsNullOrEmpty(evt.Content))
+                        result.FinalAnswer = evt.Content;
+                    break;
+
+                case "final_metadata":
+                    result.References = evt.References;
+                    result.Caveats = evt.Caveats;
+                    result.WriterNotes = evt.WriterNotes;
+                    result.ProcessingWarnings = evt.ProcessingWarnings;
+                    result.GroundingSummary = evt.GroundingSummary;
+                    break;
+
+                case "error":
+                    throw new PythonAiException(
+                        "AGENT_STREAM_ERROR",
+                        evt.Content ?? "Unknown agent error",
+                        System.Net.HttpStatusCode.InternalServerError,
+                        false,
+                        correlationId);
+            }
+        }
+
+        // Fall back to concatenated chunks if final_answer event had no content
+        if (string.IsNullOrEmpty(result.FinalAnswer))
+            result.FinalAnswer = answerBuilder.ToString();
+
+        return result;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -249,27 +303,8 @@ public class PythonAiClient
         return resp; // caller owns disposal
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  Investor Agent — Research (one-shot, long-running)
-    // ═══════════════════════════════════════════════════════════
-
-    public async Task<PythonAgentResearchResponse> InvestorAgentResearchAsync(
-        PythonAgentResearchRequest request, string? correlationId = null, CancellationToken ct = default)
-    {
-        // Research is long-running — use LongTimeoutSeconds
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(_options.LongTimeoutSeconds));
-
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/investor-agent/research");
-        req.Content = JsonContent.Create(request, options: JsonOpts);
-        AttachHeaders(req, correlationId);
-
-        using var resp = await _http.SendAsync(req, cts.Token);
-        await EnsureSuccessOrThrow(resp, cts.Token);
-
-        var result = await resp.Content.ReadFromJsonAsync<PythonAgentResearchResponse>(JsonOpts, cts.Token);
-        return result ?? throw new InvalidOperationException("Python returned null research response.");
-    }
+    // Research is not a separate Python endpoint — ResearchAsync in the service
+    // delegates to ConsumeStreamToResponseAsync with a fresh thread_id.
 
     // ═══════════════════════════════════════════════════════════
     //  Helpers

@@ -8,7 +8,7 @@ namespace AISEP.Application.DTOs.Payment
 {
     public class PaymentInfoDto
     {
-        public string CheckoutUrl { get; set; }
+        public string CheckoutUrl { get; set; } = string.Empty;
         public int OrderCode { get; set; }
     }
 }

@@ -36,8 +36,11 @@ public class ApplicationDbContext : DbContext
     // Advisor
     public DbSet<Advisor> Advisors => Set<Advisor>();
     public DbSet<AdvisorAvailability> AdvisorAvailabilities => Set<AdvisorAvailability>();
+    public DbSet<AdvisorTimeSlot> AdvisorTimeSlots => Set<AdvisorTimeSlot>();
     public DbSet<AdvisorIndustryFocus> AdvisorIndustryFocuses => Set<AdvisorIndustryFocus>();
     public DbSet<AdvisorTestimonial> AdvisorTestimonials => Set<AdvisorTestimonial>();
+    public DbSet<AdvisorWallet> AdvisorWallets => Set<AdvisorWallet>();
+    public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
 
     // Investor
     public DbSet<Investor> Investors => Set<Investor>();
@@ -46,6 +49,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<InvestorIndustryFocus> InvestorIndustryFocuses => Set<InvestorIndustryFocus>();
     public DbSet<InvestorStageFocus> InvestorStageFocuses => Set<InvestorStageFocus>();
     public DbSet<PortfolioCompany> PortfolioCompanies => Set<PortfolioCompany>();
+    public DbSet<InvestorKycSubmission> InvestorKycSubmissions => Set<InvestorKycSubmission>();
+    public DbSet<InvestorKycEvidenceFile> InvestorKycEvidenceFiles => Set<InvestorKycEvidenceFile>();
 
     // AI & Scoring
     public DbSet<StartupPotentialScore> StartupPotentialScores => Set<StartupPotentialScore>();
@@ -146,6 +151,19 @@ public class ApplicationDbContext : DbContext
 
         // Mentorship
         modelBuilder.Entity<StartupAdvisorMentorship>().Property(e => e.MentorshipStatus).HasConversion<short>().HasDefaultValue(MentorshipStatus.Requested);
+
+        modelBuilder.Entity<StartupAdvisorMentorship>()
+            .Property(e => e.PaymentStatus)
+            .HasConversion<short>()
+            .HasDefaultValue(PaymentStatus.Pending);
+
+        modelBuilder.Entity<WalletTransaction>()
+            .Property(e => e.Type)
+            .HasConversion<short>();
+
+        modelBuilder.Entity<WalletTransaction>()
+            .Property(e => e.Status)
+            .HasConversion<short>();
     }
 
     private void ConfigurePrimaryKeys(ModelBuilder modelBuilder)
@@ -173,6 +191,8 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AdvisorAvailability>().HasKey(aa => aa.AvailabilityID);
         modelBuilder.Entity<AdvisorIndustryFocus>().HasKey(aif => aif.IndustryFocusID);
         modelBuilder.Entity<AdvisorTestimonial>().HasKey(at => at.TestimonialID);
+        modelBuilder.Entity<AdvisorWallet>().HasKey(aw => aw.WalletId);
+        modelBuilder.Entity<WalletTransaction>().HasKey(t => t.TransactionID);
 
         // Investor
         modelBuilder.Entity<Investor>().HasKey(i => i.InvestorID);
@@ -298,6 +318,14 @@ public class ApplicationDbContext : DbContext
             .WithOne(adv => adv.Availability)
             .HasForeignKey<AdvisorAvailability>(a => a.AdvisorID);
 
+        // AdvisorTimeSlot - many-to-one with Advisor
+        modelBuilder.Entity<AdvisorTimeSlot>().HasKey(ts => ts.TimeSlotID);
+        modelBuilder.Entity<AdvisorTimeSlot>()
+            .HasOne(ts => ts.Advisor)
+            .WithMany(a => a.TimeSlots)
+            .HasForeignKey(ts => ts.AdvisorID)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // InvestorPreferences - one-to-one with Investor
         modelBuilder.Entity<InvestorPreferences>()
             .HasOne(p => p.Investor)
@@ -372,6 +400,27 @@ public class ApplicationDbContext : DbContext
             .HasOne(ir => ir.Connection)
             .WithMany(c => c.InformationRequests)
             .HasForeignKey(ir => ir.ConnectionID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Advisor - AdvisorWallet (1-1)
+        modelBuilder.Entity<Advisor>()
+            .HasOne(a => a.AdvisorWallet)
+            .WithOne(w => w.Advisor)
+            .HasForeignKey<Advisor>(a => a.WalletId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // AdvisorWallet - WalletTransaction (1-many)
+        modelBuilder.Entity<WalletTransaction>()
+            .HasOne(t => t.Wallet)
+            .WithMany(w => w.Transactions)
+            .HasForeignKey(t => t.WalletId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // StartupAdvisorMentorship - WalletTransaction (1-many)
+        modelBuilder.Entity<WalletTransaction>()
+            .HasOne(t => t.Mentorship)
+            .WithMany()
+            .HasForeignKey(t => t.MentorshipID)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Incident relationships

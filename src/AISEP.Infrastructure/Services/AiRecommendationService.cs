@@ -95,6 +95,7 @@ public class AiRecommendationService : IAiRecommendationService
                 .Include(i => i.Preferences)
                 .Include(i => i.StageFocus)
                 .Include(i => i.IndustryFocus)
+                .Include(i => i.KycSubmissions)
                 .FirstOrDefaultAsync(i => i.InvestorID == investorId);
 
             if (investor == null)
@@ -374,26 +375,38 @@ public class AiRecommendationService : IAiRecommendationService
             ? investor.IndustryFocus.Select(i => i.Industry).ToList()
             : SplitCsv(investor.Preferences?.PreferredIndustries);
 
+        // Get active KYC submission for fields that moved from Investor to InvestorKycSubmission
+        var activeKyc = investor.KycSubmissions?.FirstOrDefault(s => s.IsActive);
+
         return new PythonReindexInvestorRequest
         {
             InvestorName      = investor.FullName,
-            InvestorType      = investor.InvestorType?.ToString()?.ToLowerInvariant(),
+            InvestorType      = activeKyc?.InvestorCategory?.ToLowerInvariant(),
             Organization      = investor.FirmName,
-            RoleTitle         = investor.CurrentRoleTitle ?? investor.Title,
+            RoleTitle         = activeKyc?.CurrentRoleTitle ?? investor.Title,
             Location          = investor.Location,
+            Website           = investor.Website,
+            VerificationLabel = investor.InvestorTag.ToString().ToLowerInvariant(),
+            LogoUrl           = investor.ProfilePhotoURL,
             ShortThesisSummary = investor.InvestmentThesis,
-            PreferredIndustries  = preferredIndustries,
-            PreferredStages      = preferredStages,
-            PreferredGeographies = SplitCsv(investor.Preferences?.PreferredGeographies),
-            // Fields not yet stored in DB — omitted (null = Python uses its defaults)
-            PreferredMarketScopes    = null,
-            PreferredProductMaturity = null,
-            PreferredValidationLevel = null,
-            PreferredStrengths       = null,
-            SupportOffered           = null,
-            RequireVerifiedStartups  = null,
-            RequireVisibleProfiles   = null,
-            Tags                     = null,
+            PreferredIndustries      = preferredIndustries,
+            PreferredStages          = preferredStages,
+            PreferredGeographies     = SplitCsv(investor.Preferences?.PreferredGeographies),
+            PreferredMarketScopes    = SplitCsv(investor.Preferences?.PreferredMarketScopes),
+            PreferredProductMaturity = SplitCsv(investor.Preferences?.PreferredProductMaturity),
+            PreferredValidationLevel = SplitCsv(investor.Preferences?.PreferredValidationLevel),
+            PreferredStrengths       = SplitCsv(investor.Preferences?.PreferredStrengths),
+            SupportOffered           = SplitCsv(investor.Preferences?.SupportOffered),
+            RequireVerifiedStartups  = investor.Preferences?.RequireVerifiedStartups,
+            RequireVisibleProfiles   = investor.Preferences?.RequireVisibleProfiles,
+            Tags                     = SplitCsv(investor.Preferences?.Tags),
+            PreferredAiScoreRange    = (investor.Preferences?.PreferredAiScoreMin != null || investor.Preferences?.PreferredAiScoreMax != null)
+                ? new PythonAiScoreRange { Min = investor.Preferences?.PreferredAiScoreMin, Max = investor.Preferences?.PreferredAiScoreMax }
+                : null,
+            AiScoreImportance            = investor.Preferences?.AiScoreImportance,
+            AcceptingConnectionsStatus   = investor.Preferences?.AcceptingConnectionsStatus,
+            RecentlyActiveBadge          = investor.Preferences?.RecentlyActiveBadge,
+            AvoidText                    = investor.Preferences?.AvoidText,
         };
     }
 }

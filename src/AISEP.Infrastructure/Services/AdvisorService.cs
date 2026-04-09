@@ -41,52 +41,69 @@ public class AdvisorService : IAdvisorService
             ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinaryFolderSaving.Profile)
             : null;
 
-        var advisor = new Advisor
+        try
         {
-            UserID = userId,
-            FullName = request.FullName,
-            Title = request.Title,
-            Company = request.Company,
-            Bio = request.Bio,
-            ProfilePhotoURL = profilePhotoUrl,
-            LinkedInURL = request.LinkedInURL,
-            GoogleMeetLink = request.GoogleMeetLink,
-            MsTeamsLink = request.MsTeamsLink,
-            Website = request.Website,
-            MentorshipPhilosophy = request.MentorshipPhilosophy,
-            ProfileStatus = ProfileStatus.Approved,
-            IsVerified = false,
-            YearsOfExperience = request.YearsOfExperience,
-            HourlyRate = request.HourlyRate,
-            Expertise = request.Expertise,
-            DomainTags = request.DomainTags,
-            SuitableFor = request.SuitableFor,
-            SupportedDurations = request.SupportedDurations,
-            ExperiencesJson = request.ExperiencesJson,
-            Skills = request.Skills,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        foreach(var industry in request.AdvisorIndustryFocus)
-        {
-            var industryFocus = new AdvisorIndustryFocus
+            var advisor = new Advisor
             {
-                AdvisorID = advisor.AdvisorID,
-                IndustryFocusID = industry.IndustryId
+                UserID = userId,
+                FullName = request.FullName,
+                Title = request.Title,
+                Company = request.Company,
+                Bio = request.Bio,
+                ProfilePhotoURL = profilePhotoUrl,
+                LinkedInURL = request.LinkedInURL,
+                GoogleMeetLink = request.GoogleMeetLink,
+                MsTeamsLink = request.MsTeamsLink,
+                Website = request.Website,
+                MentorshipPhilosophy = request.MentorshipPhilosophy,
+                ProfileStatus = ProfileStatus.Approved,
+                IsVerified = false,
+                YearsOfExperience = request.YearsOfExperience,
+                HourlyRate = request.HourlyRate,
+                Expertise = request.Expertise,
+                DomainTags = request.DomainTags,
+                SuitableFor = request.SuitableFor,
+                SupportedDurations = request.SupportedDurations,
+                ExperiencesJson = request.ExperiencesJson,
+                Skills = request.Skills,
+                CreatedAt = DateTime.UtcNow
             };
 
-            advisor.IndustryFocus.Add(industryFocus);
+            if (request.AdvisorIndustryFocus != null && request.AdvisorIndustryFocus.Count > 0)
+            {
+                foreach (var industry in request.AdvisorIndustryFocus)
+                {
+                    var industryFocus = new AdvisorIndustryFocus
+                    {
+                        AdvisorID = advisor.AdvisorID,
+                        IndustryFocusID = industry.IndustryId
+                    };
+                    advisor.IndustryFocus.Add(industryFocus);
+                }
+            }
+
+            var wallet = new AdvisorWallet
+            {
+                Advisor = advisor,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _db.AdvisorWallets.AddAsync(wallet);
+            await _db.Advisors.AddAsync(advisor);
+            await _db.SaveChangesAsync();
+
+            await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
+            _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
+
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(
+                MapToMeDto(advisor, null, advisor.IndustryFocus));
         }
-
-    
-        await _db.Advisors.AddAsync(advisor);
-        await _db.SaveChangesAsync();
-
-        await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
-        _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
-
-        return ApiResponse<AdvisorMeDto>.SuccessResponse(
-            MapToMeDto(advisor, null, Array.Empty<AdvisorIndustryFocus>()));
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating advisor profile for user {UserId}", userId);
+            return ApiResponse<AdvisorMeDto>.ErrorResponse("CREATE_PROFILE_ERROR",
+                $"Failed to create advisor profile: {ex.InnerException?.Message ?? ex.Message}");
+        }
     }
 
     public async Task<ApiResponse<AdvisorMeDto>> GetMyProfileAsync(int userId)
@@ -96,10 +113,11 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
+                .ThenInclude(i => i.Industry)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorMeDto>.SuccessResponse(null, "Profile has not been created yet.");
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(null!, "Profile has not been created yet.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
             MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));
@@ -111,6 +129,7 @@ public class AdvisorService : IAdvisorService
             .AsSplitQuery()
             .Include(a => a.Availability)
             .Include(a => a.IndustryFocus)
+                .ThenInclude(i => i.Industry)
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
@@ -153,7 +172,7 @@ public class AdvisorService : IAdvisorService
                 advisor.IndustryFocus.Add(new AdvisorIndustryFocus
                 {
                     AdvisorID = advisor.AdvisorID,
-                    IndustryFocusID = industry.IndustryId
+                    IndustryID = industry.IndustryId
                 });
             }
         }
@@ -214,8 +233,71 @@ public class AdvisorService : IAdvisorService
     }
 
     // ================================================================
-    // SEARCH
+    // TIME SLOTS
     // ================================================================
+
+    public async Task<ApiResponse<List<TimeSlotDto>>> GetTimeSlotsAsync(int userId)
+    {
+        var advisor = await _db.Advisors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<List<TimeSlotDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        var slots = await _db.AdvisorTimeSlots
+            .AsNoTracking()
+            .Where(ts => ts.AdvisorID == advisor.AdvisorID)
+            .OrderBy(ts => ts.DayOfWeek).ThenBy(ts => ts.StartTime)
+            .Select(ts => new TimeSlotDto
+            {
+                TimeSlotID = ts.TimeSlotID,
+                DayOfWeek = ts.DayOfWeek,
+                StartTime = ts.StartTime,
+                EndTime = ts.EndTime
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<TimeSlotDto>>.SuccessResponse(slots);
+    }
+
+    public async Task<ApiResponse<List<TimeSlotDto>>> UpsertTimeSlotsAsync(int userId, UpsertTimeSlotsRequest request)
+    {
+        var advisor = await _db.Advisors
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+
+        if (advisor == null)
+            return ApiResponse<List<TimeSlotDto>>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
+                "Advisor profile not found.");
+
+        // Full replace strategy: delete all existing, insert new
+        var existing = await _db.AdvisorTimeSlots
+            .Where(ts => ts.AdvisorID == advisor.AdvisorID)
+            .ToListAsync();
+        _db.AdvisorTimeSlots.RemoveRange(existing);
+
+        var newSlots = request.Slots.Select(s => new AdvisorTimeSlot
+        {
+            AdvisorID = advisor.AdvisorID,
+            DayOfWeek = s.DayOfWeek,
+            StartTime = s.StartTime,
+            EndTime = s.EndTime
+        }).ToList();
+        _db.AdvisorTimeSlots.AddRange(newSlots);
+
+        await _db.SaveChangesAsync();
+
+        var result = newSlots.Select((ts, idx) => new TimeSlotDto
+        {
+            TimeSlotID = ts.TimeSlotID,
+            DayOfWeek = ts.DayOfWeek,
+            StartTime = ts.StartTime,
+            EndTime = ts.EndTime
+        }).ToList();
+
+        return ApiResponse<List<TimeSlotDto>>.SuccessResponse(result);
+    }
 
     public async Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams)
     {
@@ -352,6 +434,9 @@ public class AdvisorService : IAdvisorService
         SupportedDurations = SplitCsv(a.SupportedDurations),
         ExperiencesJson = a.ExperiencesJson,
         Skills = SplitCsv(a.Skills),
+        CurrentOrganization = a.CurrentOrganization,
+        BasicExpertiseProofFile = a.BasicExpertiseProofFileURL,
+        ContactEmail = a.ContactEmail,
         TotalMentees = a.TotalMentees,
         TotalSessionHours = a.TotalSessionHours,
         AverageRating = a.AverageRating,
@@ -361,7 +446,7 @@ public class AdvisorService : IAdvisorService
         IndustryFocus = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
         {
             IndustryId = i.IndustryID,
-            Industry = i.Industry.IndustryName
+            Industry = i.Industry?.IndustryName ?? string.Empty
         }).ToList()
     };
 
@@ -425,21 +510,42 @@ public class AdvisorService : IAdvisorService
             LastUpdated = advisor.UpdatedAt ?? advisor.CreatedAt
         };
 
-        if (advisor.AdvisorTag != AdvisorTag.None)
+        // Priority order:
+        // 1. Staff flagged for more info (PendingMoreInfo tag) — must beat generic Pending check
+        // 2. Actively under review (PendingKYC / Pending with no special tag)
+        // 3. Advisor is saving/editing a draft
+        // 4. Truly verified tags
+        // 5. Failed / Rejected
+        // 6. Not started (fresh account, never touched KYC form)
+        if (advisor.AdvisorTag == AdvisorTag.PendingMoreInfo)
+        {
+            dto.WorkflowStatus = "PENDING_MORE_INFO";
+            dto.Explanation = "Hồ sơ cần bổ sung thêm thông tin. Vui lòng xem ghi chú từ Staff và nộp lại.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.PendingKYC || advisor.ProfileStatus == ProfileStatus.Pending)
+        {
+            dto.WorkflowStatus = "PENDING_REVIEW";
+            dto.Explanation = "Hồ sơ của bạn đang được đội ngũ AISEP xem xét. Thường mất 1–3 ngày làm việc.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.Draft)
+        {
+            dto.WorkflowStatus = "DRAFT";
+            dto.Explanation = "Bạn đang lưu nháp hồ sơ xác thực. Hãy hoàn thiện và gửi để được xem xét.";
+        }
+        else if (advisor.AdvisorTag == AdvisorTag.VerifiedAdvisor || advisor.AdvisorTag == AdvisorTag.BasicVerified)
         {
             dto.WorkflowStatus = "VERIFIED";
             dto.VerificationLabel = advisor.AdvisorTag.ToString();
             dto.Explanation = "Chúc mừng! Hồ sơ của bạn đã được xác thực đầy đủ. Huy hiệu VERIFIED ADVISOR đã được kích hoạt trên profile.";
         }
-        else if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
-        {
-            dto.WorkflowStatus = "PENDING_REVIEW";
-            dto.Explanation = "Hồ sơ của bạn đang được đội ngũ AISEP xem xét. Thường mất 1–3 ngày làm việc.";
-        }
-        else if (advisor.ProfileStatus == ProfileStatus.Rejected)
+        else if (advisor.AdvisorTag == AdvisorTag.VerificationFailed || advisor.ProfileStatus == ProfileStatus.Rejected)
         {
             dto.WorkflowStatus = "VERIFICATION_FAILED";
-            dto.Explanation = "Hồ sơ không đáp ứng tiêu chuẩn xác thực. Vui lòng xem lại ghi chú và gửi lại.";
+            dto.RequiresNewEvidence = advisor.RequiresNewEvidence;
+            dto.Remarks = advisor.RejectionRemarks;
+            dto.Explanation = string.IsNullOrEmpty(advisor.RejectionRemarks)
+                ? "Hồ sơ không đáp ứng tiêu chuẩn xác thực. Vui lòng xem lại ghi chú và gửi lại."
+                : advisor.RejectionRemarks;
         }
         else
         {
@@ -451,11 +557,32 @@ public class AdvisorService : IAdvisorService
         {
             FullName = advisor.FullName,
             SubmittedAt = advisor.UpdatedAt ?? advisor.CreatedAt,
-            Version = 1
+            Version = 1,
+            EvidenceFiles = advisor.BasicExpertiseProofFileURL != null
+                ? new List<AdvisorKYCEvidenceFileDto>
+                  {
+                      new AdvisorKYCEvidenceFileDto
+                      {
+                          Id = 1,
+                          Url = _cloudinaryService.GenerateSignedDocumentUrl(null, advisor.BasicExpertiseProofFileURL),
+                          FileName = advisor.BasicExpertiseProofFileName
+                              ?? System.IO.Path.GetFileName(advisor.BasicExpertiseProofFileURL),
+                          FileType = System.IO.Path.GetExtension(advisor.BasicExpertiseProofFileURL)?.ToLowerInvariant() switch
+                          {
+                              ".pdf"  => "application/pdf",
+                              ".png"  => "image/png",
+                              ".jpg" or ".jpeg" => "image/jpeg",
+                              ".gif"  => "image/gif",
+                              ".webp" => "image/webp",
+                              _       => "application/octet-stream"
+                          }
+                      }
+                  }
+                : new List<AdvisorKYCEvidenceFileDto>()
         };
 
         dto.History = new List<AdvisorKYCHistoryDto>();
-        if (advisor.ProfileStatus == ProfileStatus.PendingKYC)
+        if (advisor.ProfileStatus == ProfileStatus.PendingKYC || advisor.ProfileStatus == ProfileStatus.Pending)
         {
             dto.History.Add(new AdvisorKYCHistoryDto 
             { 
@@ -464,6 +591,43 @@ public class AdvisorService : IAdvisorService
                 Status = "PENDING_REVIEW" 
             });
         }
+        else if ((advisor.AdvisorTag == AdvisorTag.VerificationFailed || advisor.ProfileStatus == ProfileStatus.Rejected)
+                 && !string.IsNullOrEmpty(advisor.RejectionRemarks))
+        {
+            dto.History.Add(new AdvisorKYCHistoryDto
+            {
+                Action = "Hồ sơ bị từ chối",
+                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"),
+                Status = "VERIFICATION_FAILED",
+                Remark = advisor.RejectionRemarks
+            });
+        }
+        else if (advisor.AdvisorTag == AdvisorTag.PendingMoreInfo
+                 && !string.IsNullOrEmpty(advisor.RejectionRemarks))
+        {
+            dto.History.Add(new AdvisorKYCHistoryDto
+            {
+                Action = "Yêu cầu bổ sung thông tin",
+                Date = (advisor.UpdatedAt ?? advisor.CreatedAt).ToString("dd/MM/yyyy HH:mm"),
+                Status = "PENDING_MORE_INFO",
+                Remark = advisor.RejectionRemarks
+            });
+        }
+
+        dto.CurrentSubmission = new AdvisorKYCCurrentSubmissionDto
+        {
+            FullName = advisor.FullName,
+            ContactEmail = advisor.ContactEmail,
+            CurrentRoleTitle = advisor.Title,
+            CurrentOrganization = advisor.CurrentOrganization,
+            PrimaryExpertise = advisor.Expertise,
+            Bio = advisor.Bio,
+            ProfessionalProfileLink = advisor.LinkedInURL,
+            BasicExpertiseProofFileURL = advisor.BasicExpertiseProofFileURL,
+            BasicExpertiseProofFileName = advisor.BasicExpertiseProofFileName,
+            YearsOfExperience = advisor.YearsOfExperience,
+            MentorshipPhilosophy = advisor.MentorshipPhilosophy
+        };
 
         return ApiResponse<AdvisorKYCStatusDto>.SuccessResponse(dto);
     }
@@ -473,13 +637,41 @@ public class AdvisorService : IAdvisorService
         var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
         if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
 
+        // Validate file requirement
+        if (request.BasicExpertiseProofFile == null)
+        {
+            if (string.IsNullOrEmpty(advisor.BasicExpertiseProofFileURL))
+            {
+                return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("EVIDENCE_FILES_REQUIRED",
+                    "A proof document is required when submitting KYC.");
+            }
+
+            if (advisor.RequiresNewEvidence)
+            {
+                return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("EVIDENCE_FILES_REQUIRED",
+                    "New proof document is required before you can resubmit this KYC case.");
+            }
+        }
+
         advisor.FullName = request.FullName;
         advisor.Title = request.Title ?? advisor.Title;
         advisor.Bio = request.Bio ?? advisor.Bio;
         advisor.LinkedInURL = request.LinkedInURL ?? advisor.LinkedInURL;
         advisor.MentorshipPhilosophy = request.MentorshipPhilosophy ?? advisor.MentorshipPhilosophy;
+        if (!string.IsNullOrEmpty(request.CurrentOrganization))
+            advisor.CurrentOrganization = request.CurrentOrganization;
+        if (!string.IsNullOrEmpty(request.ContactEmail))
+            advisor.ContactEmail = request.ContactEmail;
+        if (request.BasicExpertiseProofFile != null)
+        {
+            advisor.BasicExpertiseProofFileURL = await _cloudinaryService.UploadDocument(request.BasicExpertiseProofFile, CloudinaryFolderSaving.DocumentStorage);
+            advisor.BasicExpertiseProofFileName = request.BasicExpertiseProofFile.FileName;
+        }
 
         advisor.ProfileStatus = ProfileStatus.PendingKYC;
+        advisor.AdvisorTag = AdvisorTag.None;
+        advisor.RequiresNewEvidence = false;
+        advisor.RejectionRemarks = null;
         advisor.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -490,16 +682,51 @@ public class AdvisorService : IAdvisorService
 
     public async Task<ApiResponse<AdvisorKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveAdvisorKYCDraftRequest request)
     {
-        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+        var advisor = await _db.Advisors
+            .Include(a => a.IndustryFocus)
+            .FirstOrDefaultAsync(a => a.UserID == userId);
         if (advisor == null) return ApiResponse<AdvisorKYCStatusDto>.ErrorResponse("NOT_FOUND", "Profile not found.");
 
+        // Base fields (from SubmitAdvisorKYCRequest)
         if (!string.IsNullOrEmpty(request.FullName)) advisor.FullName = request.FullName;
         if (!string.IsNullOrEmpty(request.Title)) advisor.Title = request.Title;
         if (!string.IsNullOrEmpty(request.Bio)) advisor.Bio = request.Bio;
         if (!string.IsNullOrEmpty(request.LinkedInURL)) advisor.LinkedInURL = request.LinkedInURL;
         if (!string.IsNullOrEmpty(request.MentorshipPhilosophy)) advisor.MentorshipPhilosophy = request.MentorshipPhilosophy;
+        if (!string.IsNullOrEmpty(request.CurrentOrganization)) advisor.CurrentOrganization = request.CurrentOrganization;
+        if (!string.IsNullOrEmpty(request.ContactEmail)) advisor.ContactEmail = request.ContactEmail;
+        if (request.BasicExpertiseProofFile != null)
+        {
+            advisor.BasicExpertiseProofFileURL = await _cloudinaryService.UploadDocument(request.BasicExpertiseProofFile, CloudinaryFolderSaving.DocumentStorage);
+            advisor.BasicExpertiseProofFileName = request.BasicExpertiseProofFile.FileName;
+        }
 
-        // DO NOT demote Approved -> Draft
+        // Extended draft-only fields — these were previously never saved despite being in the request
+        if (request.YearsOfExperience.HasValue) advisor.YearsOfExperience = request.YearsOfExperience;
+        if (request.HourlyRate.HasValue) advisor.HourlyRate = request.HourlyRate;
+        if (!string.IsNullOrEmpty(request.Expertise)) advisor.Expertise = request.Expertise;
+        if (!string.IsNullOrEmpty(request.DomainTags)) advisor.DomainTags = request.DomainTags;
+        if (!string.IsNullOrEmpty(request.SuitableFor)) advisor.SuitableFor = request.SuitableFor;
+        if (!string.IsNullOrEmpty(request.SupportedDurations)) advisor.SupportedDurations = request.SupportedDurations;
+        if (!string.IsNullOrEmpty(request.ExperiencesJson)) advisor.ExperiencesJson = request.ExperiencesJson;
+        if (!string.IsNullOrEmpty(request.Skills)) advisor.Skills = request.Skills;
+
+        if (request.AdvisorIndustryFocus is { Count: > 0 })
+        {
+            _db.AdvisorIndustryFocuses.RemoveRange(advisor.IndustryFocus);
+            foreach (var industry in request.AdvisorIndustryFocus)
+            {
+                advisor.IndustryFocus.Add(new AdvisorIndustryFocus
+                {
+                    AdvisorID = advisor.AdvisorID,
+                    IndustryID = industry.IndustryId
+                });
+            }
+        }
+
+        // Only set Draft when the advisor has never submitted (truly in Draft state).
+        // Do NOT reset Rejected (VERIFICATION_FAILED) or Pending (PENDING_MORE_INFO) —
+        // those states must be preserved until the advisor explicitly calls /submit.
         if (advisor.ProfileStatus == ProfileStatus.Draft)
         {
             advisor.ProfileStatus = ProfileStatus.Draft;

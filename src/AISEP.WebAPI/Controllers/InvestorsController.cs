@@ -18,12 +18,10 @@ namespace AISEP.WebAPI.Controllers;
 public class InvestorsController : ControllerBase
 {
     private readonly IInvestorService _investorService;
-    private readonly ICloudinaryService _cloudinary;
 
-    public InvestorsController(IInvestorService investorService, ICloudinaryService cloudinary)
+    public InvestorsController(IInvestorService investorService)
     {
         _investorService = investorService;
-        _cloudinary = cloudinary;
     }
 
     private int GetCurrentUserId()
@@ -135,23 +133,10 @@ public class InvestorsController : ControllerBase
     [HttpPost("me/kyc/submit")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<InvestorKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubmitKYC([FromForm] SubmitInvestorKYCRequest request, IFormFile? idProof, IFormFile? investmentProof)
+    public async Task<IActionResult> SubmitKYC([FromForm] SubmitInvestorKYCRequest request)
     {
         var userId = GetCurrentUserId();
-        string? idProofUrl = null;
-        string? investmentProofUrl = null;
-
-        if (idProof != null)
-        {
-            idProofUrl = await _cloudinary.UploadDocument(idProof, "investor_kyc/id_proofs");
-        }
-
-        if (investmentProof != null)
-        {
-            investmentProofUrl = await _cloudinary.UploadDocument(investmentProof, "investor_kyc/investment_proofs");
-        }
-
-        var result = await _investorService.SubmitKYCAsync(userId, request, idProofUrl, investmentProofUrl);
+        var result = await _investorService.SubmitKYCAsync(userId, request);
         return result.ToActionResult();
     }
 
@@ -159,29 +144,20 @@ public class InvestorsController : ControllerBase
     /// Save investor KYC draft
     /// </summary>
     [HttpPost("me/kyc/draft")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<InvestorKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveInvestorKYCDraftRequest request)
+    public async Task<IActionResult> SaveKYCDraft([FromForm] SaveInvestorKYCDraftRequest request)
     {
         var userId = GetCurrentUserId();
         var result = await _investorService.SaveKYCDraftAsync(userId, request);
         return result.ToActionResult();
     }
 
-    /// <summary>
-    /// Submit investor profile for KYC approval (Legacy endpoint - redirects to status update)
-    /// </summary>
-    [HttpPost("me/kyc/submit-legacy")]
-    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubmitForApproval()
-    {
-        var userId = GetCurrentUserId();
-        var result = await _investorService.SubmitForApprovalAsync(userId);
-        return result.ToActionResult();
-    }
+    // ================================================================
+    // PREFERENCES
+    // ================================================================
 
-        // ================================================================     
-        // ================================================================
-    [HttpGet("preferences")]
+    [HttpGet("me/preferences")]
     [ProducesResponseType(typeof(ApiResponse<PreferencesDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPreferences()
     {
@@ -311,7 +287,7 @@ public class InvestorsController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("debug-investor")]
-    public async Task<IActionResult> DebugInvestor([FromServices] AISEP.Infrastructure.Data.ApplicationDbContext db, [FromQuery] string email = "investor@aisep.local")
+    public IActionResult DebugInvestor([FromServices] AISEP.Infrastructure.Data.ApplicationDbContext db, [FromQuery] string email = "investor@aisep.local")
     {
         var user = db.Users.FirstOrDefault(u => u.Email == email);
         if (user == null) return NotFound($"User {email} not found");
@@ -328,10 +304,7 @@ public class InvestorsController : ControllerBase
                 investor.Title,
                 investor.Bio,
                 investor.ProfileStatus,
-                investor.InvestorType,
                 investor.Location,
-                investor.ContactEmail,
-                investor.BusinessCode,
                 investor.CreatedAt,
                 investor.UpdatedAt
             }

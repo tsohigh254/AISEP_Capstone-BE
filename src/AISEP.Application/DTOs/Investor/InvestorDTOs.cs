@@ -1,5 +1,31 @@
 namespace AISEP.Application.DTOs.Investor;
 
+// ========== STAFF: INVESTOR KYC SUBMISSION DTO (mirrors StartupKycSubmissionDto) ==========
+
+public class InvestorKycSubmissionDto
+{
+    public int Id { get; set; }
+    public int InvestorId { get; set; }
+    public int Version { get; set; }
+    public bool IsActive { get; set; }
+    public string WorkflowStatus { get; set; } = string.Empty;
+    public string ResultLabel { get; set; } = string.Empty;
+    public DateTime? SubmittedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public int? ReviewedBy { get; set; }
+    public string? Remarks { get; set; }
+    public bool RequiresNewEvidence { get; set; }
+
+    // Basic investor profile context for staff display
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? ProfileStatus { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+
+    public InvestorKYCSubmissionSummaryDto? SubmissionSummary { get; set; }
+}
+
 // ========== REQUEST DTOs ==========
 
 public class CreateInvestorRequest
@@ -27,11 +53,25 @@ public class SubmitInvestorKYCRequest
     public string? LinkedInURL { get; set; }
     public string? SubmitterRole { get; set; }
     public string? TaxIdOrBusinessCode { get; set; }
+    public List<Microsoft.AspNetCore.Http.IFormFile> EvidenceFiles { get; set; } = new();
+    public List<string> EvidenceFileKinds { get; set; } = new();
 }
 
-public class SaveInvestorKYCDraftRequest : SubmitInvestorKYCRequest
+public class SaveInvestorKYCDraftRequest
 {
-    // Inherits all fields, but they are optional on the frontend
+    // All fields nullable — draft allows partial save
+    public string? InvestorCategory { get; set; }
+    public string? FullName { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? OrganizationName { get; set; }
+    public string? CurrentRoleTitle { get; set; }
+    public string? Location { get; set; }
+    public string? Website { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? SubmitterRole { get; set; }
+    public string? TaxIdOrBusinessCode { get; set; }
+    public List<Microsoft.AspNetCore.Http.IFormFile>? EvidenceFiles { get; set; }
+    public List<string>? EvidenceFileKinds { get; set; }
 }
 
 public class UpdateInvestorRequest
@@ -57,6 +97,36 @@ public class UpdatePreferencesRequest
     public List<string>? PreferredIndustries { get; set; }
     public string? PreferredGeographies { get; set; }
     public float? MinPotentialScore { get; set; }
+    public List<string>? PreferredMarketScopes { get; set; }
+    public List<string>? SupportOffered { get; set; }
+
+    // ── New fields (API spec 2026-04-09) ──
+    public List<string>? PreferredProductMaturity { get; set; }
+    public List<string>? PreferredValidationLevel { get; set; }
+    public List<string>? PreferredStrengths { get; set; }
+
+    /// <summary>AI score filter range, e.g. { "min": 40, "max": 100 }</summary>
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    /// <summary>low | medium | high</summary>
+    public string? AiScoreImportance { get; set; }
+
+    /// <summary>active | paused | closed</summary>
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool? RecentlyActiveBadge { get; set; }
+
+    public bool? RequireVerifiedStartups { get; set; }
+    public bool? RequireVisibleProfiles { get; set; }
+
+    /// <summary>Free-text describing what the investor does NOT want</summary>
+    public string? AvoidText { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+/// <summary>Nested AI score range filter.</summary>
+public class AiScoreRangeDto
+{
+    public float? Min { get; set; }
+    public float? Max { get; set; }
 }
 
 public class WatchlistAddRequest
@@ -83,11 +153,11 @@ public class InvestorDto
     public string? Country { get; set; }
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
-    public string ProfileStatus { get; set; }
+    public string ProfileStatus { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
-    // KYC Information
+    // KYC Information (populated from active submission when available)
     public string? InvestorType { get; set; }
     public string? ContactEmail { get; set; }
     public string? CurrentOrganization { get; set; }
@@ -106,31 +176,55 @@ public class InvestorKYCStatusDto
     public string Explanation { get; set; } = string.Empty;
     public DateTime? LastUpdated { get; set; }
     public string? Remarks { get; set; }
-    public List<string>? FlaggedFields { get; set; }
-    public SubmitInvestorKYCRequest? SubmittedData { get; set; }
-}
-
-public class PreferencesDto
-{
-    public decimal? TicketMin { get; set; }
-    public decimal? TicketMax { get; set; }
-    public List<string> PreferredStages { get; set; } = new();
-    public List<string> PreferredIndustries { get; set; } = new();
-    public string? PreferredGeographies { get; set; }
-    public float? MinPotentialScore { get; set; }
+    public bool RequiresNewEvidence { get; set; }
+    public int? SubmissionId { get; set; }
+    public int? Version { get; set; }
+    public DateTime? SubmittedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<string>? FlaggedFields { get; set; }
+    public InvestorKYCSubmissionSummaryDto? SubmissionSummary { get; set; }
+    public List<InvestorKYCHistoryItemDto> History { get; set; } = new();
 }
 
-public class WatchlistItemDto
+public class InvestorKYCHistoryItemDto
 {
-    public int WatchlistID { get; set; }
-    public int StartupID { get; set; }
-    public string CompanyName { get; set; } = string.Empty;
-    public string? Industry { get; set; }
-    public string? Stage { get; set; }
-    public string? LogoURL { get; set; }
-    public string Priority { get; set; } = "Medium";
-    public DateTime AddedAt { get; set; }
+    public int SubmissionId { get; set; }
+    public int Version { get; set; }
+    public string WorkflowStatus { get; set; } = string.Empty;
+    public string ResultLabel { get; set; } = string.Empty;
+    public DateTime? SubmittedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? Remarks { get; set; }
+    public bool RequiresNewEvidence { get; set; }
+}
+
+public class InvestorKYCSubmissionSummaryDto
+{
+    public string? FullName { get; set; }
+    public string? InvestorCategory { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? OrganizationName { get; set; }
+    public string? CurrentRoleTitle { get; set; }
+    public string? Location { get; set; }
+    public string? Website { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? SubmitterRole { get; set; }
+    public string? TaxIdOrBusinessCode { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public int Version { get; set; }
+    public List<InvestorKYCEvidenceFileDto> EvidenceFiles { get; set; } = new();
+}
+
+public class InvestorKYCEvidenceFileDto
+{
+    public int Id { get; set; }
+    public string Url { get; set; } = string.Empty;
+    public string? FileName { get; set; }
+    public string? FileType { get; set; }
+    public long FileSize { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public string? StorageKey { get; set; }
 }
 
 /// <summary>Investor search result DTO — used by Startup role to browse investors</summary>
@@ -209,4 +303,47 @@ public class StartupCompareDto
     public string? LogoURL { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? ProfileStatus { get; set; }
+}
+
+// ========== PREFERENCES DTO ==========
+
+public class PreferencesDto
+{
+    public decimal? TicketMin { get; set; }
+    public decimal? TicketMax { get; set; }
+    public List<string> PreferredStages { get; set; } = new();
+    public List<string> PreferredIndustries { get; set; } = new();
+    public string? PreferredGeographies { get; set; }
+    public float? MinPotentialScore { get; set; }
+    public List<string> PreferredMarketScopes { get; set; } = new();
+    public List<string> SupportOffered { get; set; } = new();
+
+    // ── New fields ──
+    public List<string> PreferredProductMaturity { get; set; } = new();
+    public List<string> PreferredValidationLevel { get; set; } = new();
+    public List<string> PreferredStrengths { get; set; } = new();
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    public string? AiScoreImportance { get; set; }
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool RecentlyActiveBadge { get; set; }
+    public bool RequireVerifiedStartups { get; set; }
+    public bool RequireVisibleProfiles { get; set; }
+    public string? AvoidText { get; set; }
+    public List<string> Tags { get; set; } = new();
+
+    public DateTime? UpdatedAt { get; set; }
+}
+
+// ========== WATCHLIST DTO ==========
+
+public class WatchlistItemDto
+{
+    public int WatchlistID { get; set; }
+    public int StartupID { get; set; }
+    public string CompanyName { get; set; } = string.Empty;
+    public string? Industry { get; set; }
+    public string? Stage { get; set; }
+    public string? LogoURL { get; set; }
+    public string Priority { get; set; } = "Medium";
+    public DateTime AddedAt { get; set; }
 }

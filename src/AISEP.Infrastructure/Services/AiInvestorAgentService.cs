@@ -45,7 +45,7 @@ public class AiInvestorAgentService : IAiInvestorAgentService
                 ThreadId = threadId
             };
 
-            var pythonResp = await _pythonClient.InvestorAgentChatAsync(request, correlationId);
+            var pythonResp = await _pythonClient.ConsumeStreamToResponseAsync(request, correlationId);
 
             var result = MapChatResponseToResult(pythonResp);
 
@@ -241,11 +241,17 @@ public class AiInvestorAgentService : IAiInvestorAgentService
 
         try
         {
-            var request = new PythonAgentResearchRequest { Query = query };
+            // Research is one-shot: use a unique thread_id so it never inherits
+            // prior conversation context from a real chat thread.
+            var request = new PythonAgentChatRequest
+            {
+                Query = query,
+                ThreadId = $"research-{Guid.NewGuid():N}"
+            };
 
-            var pythonResp = await _pythonClient.InvestorAgentResearchAsync(request, correlationId);
+            var pythonResp = await _pythonClient.ConsumeStreamToResponseAsync(request, correlationId);
 
-            var result = MapResearchResponseToResult(pythonResp);
+            var result = MapChatResponseToResult(pythonResp);
 
             return ApiResponse<InvestorAgentChatResult>.Ok(result, "Research completed.");
         }
@@ -292,11 +298,6 @@ public class AiInvestorAgentService : IAiInvestorAgentService
         result.ResolvedQuery = py.ResolvedQuery;
         result.FallbackTriggered = py.FallbackTriggered;
         return result;
-    }
-
-    private static InvestorAgentChatResult MapResearchResponseToResult(PythonAgentResearchResponse py)
-    {
-        return MapBaseResponseToResult(py);
     }
 
     private static InvestorAgentChatResult MapBaseResponseToResult(PythonAgentResearchResponse py)

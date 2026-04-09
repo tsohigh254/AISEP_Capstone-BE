@@ -21,6 +21,10 @@ public interface IAdvisorService
     // Availability
     Task<ApiResponse<AvailabilityDto>> UpdateAvailabilityAsync(int userId, UpdateAvailabilityRequest request);
 
+    // Time slots
+    Task<ApiResponse<List<TimeSlotDto>>> GetTimeSlotsAsync(int userId);
+    Task<ApiResponse<List<TimeSlotDto>>> UpsertTimeSlotsAsync(int userId, UpsertTimeSlotsRequest request);
+
     // Search & Public info
     Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams);
     Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId);

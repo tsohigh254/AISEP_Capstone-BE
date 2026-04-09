@@ -24,6 +24,7 @@ public class SubmitChainResponseDto
     public string TransactionHash { get; set; } = null!;
     public string Status { get; set; } = null!;
     public DateTime SubmittedAt { get; set; }
+    public string? EtherscanUrl { get; set; }
 }
 
 /// <summary>
@@ -35,6 +36,8 @@ public class VerifyChainResponseDto
     public string ComputedHash { get; set; } = null!;
     public bool OnChainVerified { get; set; }
     public string Status { get; set; } = null!; // Verified | Mismatch | NotFound
+    public DateTime? AnchoredAt { get; set; }
+    public string? EtherscanUrl { get; set; }
 }
 
 /// <summary>
@@ -47,4 +50,5 @@ public class TxStatusResponseDto
     public string Status { get; set; } = null!; // Pending | Confirmed | Failed
     public string? BlockNumber { get; set; }
     public DateTime? ConfirmedAt { get; set; }
+    public string? EtherscanUrl { get; set; }
 }

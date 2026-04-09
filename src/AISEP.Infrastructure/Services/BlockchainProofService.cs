@@ -49,6 +49,10 @@ public class BlockchainProofService : IBlockchainProofService
         if (doc == null)
             return ApiResponse<HashResponseDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found or not owned by you.");
 
+        if (doc.IsArchived)
+            return ApiResponse<HashResponseDto>.ErrorResponse("DOCUMENT_ARCHIVED",
+                "Cannot compute hash for an archived document.");
+
         // Kiểm tra xem hash đã được tính khi upload chưa
         var existingProof = await _context.DocumentBlockchainProofs
             .FirstOrDefaultAsync(p => p.DocumentID == documentId, ct);
@@ -112,8 +116,15 @@ public class BlockchainProofService : IBlockchainProofService
         if (doc == null)
             return ApiResponse<SubmitChainResponseDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found or not owned by you.");
 
-        // Ensure hash exists — compute if not
+        if (doc.IsArchived)
+            return ApiResponse<SubmitChainResponseDto>.ErrorResponse("DOCUMENT_ARCHIVED",
+                "Cannot submit an archived document to blockchain.");
+
+        // Prevent double-submit
         var proof = doc.BlockchainProof;
+        if (proof != null && (proof.ProofStatus == ProofStatus.Pending || proof.ProofStatus == ProofStatus.Anchored))
+            return ApiResponse<SubmitChainResponseDto>.ErrorResponse("PROOF_ALREADY_SUBMITTED",
+                $"This document has already been submitted to blockchain (status: {proof.ProofStatus}).");
         string fileHash;
 
         if (proof == null || string.IsNullOrWhiteSpace(proof.FileHash))
@@ -159,6 +170,12 @@ public class BlockchainProofService : IBlockchainProofService
         {
             txHash = await _blockchain.SubmitHashAsync(fileHash, metadata, ct);
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already registered"))
+        {
+            _logger.LogWarning(ex, "Hash already on-chain for document {DocumentID}", documentId);
+            return ApiResponse<SubmitChainResponseDto>.ErrorResponse("HASH_ALREADY_EXISTS",
+                "This document's hash is already registered on the blockchain.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Blockchain submit failed for document {DocumentID}", documentId);
@@ -170,6 +187,7 @@ public class BlockchainProofService : IBlockchainProofService
         proof.TransactionHash = txHash;
         proof.ProofStatus = ProofStatus.Pending;
         proof.AnchoredAt = DateTime.UtcNow;
+        proof.AnchoredBy = userId;
         proof.BlockchainNetwork = _blockchainSettings.NetworkName;
 
         await _context.SaveChangesAsync(ct);
@@ -183,7 +201,8 @@ public class BlockchainProofService : IBlockchainProofService
             FileHash = fileHash,
             TransactionHash = txHash,
             Status = "Pending",
-            SubmittedAt = proof.AnchoredAt!.Value
+            SubmittedAt = proof.AnchoredAt!.Value,
+            EtherscanUrl = BuildEtherscanUrl(txHash)
         });
     }
 
@@ -232,7 +251,7 @@ public class BlockchainProofService : IBlockchainProofService
         {
             "confirmed" => ProofStatus.Anchored,
             "pending"   => ProofStatus.Pending,
-            "failed"    => proof.ProofStatus, // keep current status on failure
+            "failed"    => ProofStatus.Failed,
             _           => proof.ProofStatus  // unknown status — no change
         };
         if (txStatus.BlockNumber != null) proof.BlockNumber = txStatus.BlockNumber;
@@ -245,7 +264,8 @@ public class BlockchainProofService : IBlockchainProofService
             TransactionHash = proof.TransactionHash,
             Status = txStatus.Status ?? "Unknown",
             BlockNumber = txStatus.BlockNumber,
-            ConfirmedAt = txStatus.ConfirmedAt
+            ConfirmedAt = txStatus.ConfirmedAt,
+            EtherscanUrl = BuildEtherscanUrl(proof.TransactionHash)
         });
     }
 
@@ -302,35 +322,30 @@ public class BlockchainProofService : IBlockchainProofService
 
     private async Task<ApiResponse<VerifyChainResponseDto>> VerifyHashInternalAsync(Document doc, CancellationToken ct)
     {
-        // Recompute hash from stored file
-        string computedHash;
-        try
-        {
-            computedHash = await ComputeFileHashAsync(doc.FileURL, ct);
-        }
-        catch (FileNotFoundException)
-        {
-            return ApiResponse<VerifyChainResponseDto>.ErrorResponse("FILE_MISSING",
-                "The physical file could not be found. Cannot verify.");
-        }
-
         var proof = doc.BlockchainProof;
         if (proof == null || string.IsNullOrWhiteSpace(proof.FileHash))
         {
             return ApiResponse<VerifyChainResponseDto>.SuccessResponse(new VerifyChainResponseDto
             {
                 DocumentID = doc.DocumentID,
-                ComputedHash = computedHash,
+                ComputedHash = null!,
                 OnChainVerified = false,
-                Status = "NotFound"
+                Status = "NotFound",
+                AnchoredAt = null,
+                EtherscanUrl = null
             });
         }
 
-        // Verify on-chain
+        // Use stored hash from DB (computed at upload time) instead of re-downloading from Cloudinary.
+        // This avoids DoS via repeated verify calls and ensures we verify against the original file hash,
+        // not a potentially tampered file on Cloudinary.
+        var storedHash = proof.FileHash;
+
+        // Verify on-chain using the stored hash
         bool onChain;
         try
         {
-            onChain = await _blockchain.VerifyHashAsync(computedHash, ct);
+            onChain = await _blockchain.VerifyHashAsync(storedHash, ct);
         }
         catch (Exception ex)
         {
@@ -339,20 +354,10 @@ public class BlockchainProofService : IBlockchainProofService
                 "Failed to verify hash on blockchain.");
         }
 
-        // Compare computed hash with stored hash
-        var hashMatch = string.Equals(computedHash, proof.FileHash, StringComparison.OrdinalIgnoreCase);
-        var verified = onChain && hashMatch;
-
-        string status;
-        if (verified)
-            status = "Verified";
-        else if (!hashMatch)
-            status = "Mismatch"; // file was modified after anchoring
-        else
-            status = "NotFound"; // not on chain
+        string status = onChain ? "Verified" : "NotFound";
 
         // Update proof status if verified
-        if (verified && proof.ProofStatus != ProofStatus.Anchored)
+        if (onChain && proof.ProofStatus != ProofStatus.Anchored)
         {
             proof.ProofStatus = ProofStatus.Anchored;
             await _context.SaveChangesAsync(ct);
@@ -361,9 +366,11 @@ public class BlockchainProofService : IBlockchainProofService
         return ApiResponse<VerifyChainResponseDto>.SuccessResponse(new VerifyChainResponseDto
         {
             DocumentID = doc.DocumentID,
-            ComputedHash = computedHash,
-            OnChainVerified = verified,
-            Status = status
+            ComputedHash = storedHash,
+            OnChainVerified = onChain,
+            Status = status,
+            AnchoredAt = proof.AnchoredAt,
+            EtherscanUrl = BuildEtherscanUrl(proof.TransactionHash)
         });
     }
 
@@ -386,6 +393,12 @@ public class BlockchainProofService : IBlockchainProofService
             .FirstOrDefaultAsync(ct);
     }
 
+
+    private string? BuildEtherscanUrl(string? txHash)
+    {
+        if (string.IsNullOrWhiteSpace(txHash)) return null;
+        return $"{_blockchainSettings.EtherscanBaseUrl.TrimEnd('/')}/tx/{txHash}";
+    }
 
     /// <summary>Extract filename from Cloudinary URL.</summary>
     /// <example>

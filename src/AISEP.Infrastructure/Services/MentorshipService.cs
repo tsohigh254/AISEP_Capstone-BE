@@ -70,7 +70,7 @@ public class MentorshipService : IMentorshipService
             foreach (var slot in request.RequestedSlots)
             {
                 mentorship.Sessions.Add(new MentorshipSession
-                {
+                {   
                     ScheduledStartAt = slot.StartAt.ToUniversalTime(),
                     DurationMinutes = (int)(slot.EndAt - slot.StartAt).TotalMinutes,
                     SessionStatus = "ProposedByStartup",
@@ -209,7 +209,7 @@ public class MentorshipService : IMentorshipService
     {
         var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
         if (mentorship == null) return error!;
-
+        
         if (mentorship.MentorshipStatus != MentorshipStatus.Requested)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot accept mentorship with status '{mentorship.MentorshipStatus}'. Only 'Requested' can be accepted.");
@@ -265,7 +265,7 @@ public class MentorshipService : IMentorshipService
 
         var mentorship = await _db.StartupAdvisorMentorships
             .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && 
-            (startup != null ? m.StartupID == startup.StartupID : m.AdvisorID == advisor.AdvisorID));
+            (startup != null ? m.StartupID == startup.StartupID : m.AdvisorID == advisor!.AdvisorID));
 
         if (mentorship == null) return ApiResponse<MentorshipDto>.ErrorResponse("NOT_FOUND", "Mentorship not found.");
 

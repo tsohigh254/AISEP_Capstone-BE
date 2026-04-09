@@ -357,6 +357,16 @@ public class AdminService : IAdminService
     //  Incidents
     // ═══════════════════════════════════════════════════════════════
 
+    public async Task<ApiResponse<List<IncidentDto>>> GetIncidentsAsync()
+    {
+        var incidents = await _context.Incidents
+            .OrderByDescending(i => i.CreatedAt)
+            .ToListAsync();
+
+        var dtos = incidents.Select(MapToDto).ToList();
+        return ApiResponse<List<IncidentDto>>.SuccessResponse(dtos);
+    }
+
     public async Task<ApiResponse<IncidentDto>> CreateIncidentAsync(int adminId, CreateIncidentRequest request)
     {
         var incident = new Incident

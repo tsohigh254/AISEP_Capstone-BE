@@ -115,6 +115,15 @@ public class PythonReindexInvestorRequest
     [JsonPropertyName("location")]
     public string? Location { get; set; }
 
+    [JsonPropertyName("website")]
+    public string? Website { get; set; }
+
+    [JsonPropertyName("verification_label")]
+    public string? VerificationLabel { get; set; }
+
+    [JsonPropertyName("logo_url")]
+    public string? LogoUrl { get; set; }
+
     // ── Thesis ────────────────────────────────────────────────
     [JsonPropertyName("short_thesis_summary")]
     public string? ShortThesisSummary { get; set; }
@@ -151,14 +160,41 @@ public class PythonReindexInvestorRequest
     [JsonPropertyName("require_visible_profiles")]
     public bool? RequireVisibleProfiles { get; set; }
 
-    // ── Tags ──────────────────────────────────────────────────
+    // ── Tags ─────────────────────────────────────────────────
     [JsonPropertyName("tags")]
     public List<string>? Tags { get; set; }
+
+    // ── AI evaluation filter ─────────────────────────────────────
+    [JsonPropertyName("preferred_ai_score_range")]
+    public PythonAiScoreRange? PreferredAiScoreRange { get; set; }
+
+    [JsonPropertyName("ai_score_importance")]
+    public string? AiScoreImportance { get; set; }
+
+    // ── Connection & activity ────────────────────────────────────
+    [JsonPropertyName("accepting_connections_status")]
+    public string? AcceptingConnectionsStatus { get; set; }
+
+    [JsonPropertyName("recently_active_badge")]
+    public bool? RecentlyActiveBadge { get; set; }
+
+    // ── Exclusion ───────────────────────────────────────────────
+    [JsonPropertyName("avoid_text")]
+    public string? AvoidText { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Reindex — Common Response from Python
 // ═══════════════════════════════════════════════════════════════
+
+public class PythonAiScoreRange
+{
+    [JsonPropertyName("min")]
+    public float? Min { get; set; }
+
+    [JsonPropertyName("max")]
+    public float? Max { get; set; }
+}
 
 public class PythonReindexResponse
 {

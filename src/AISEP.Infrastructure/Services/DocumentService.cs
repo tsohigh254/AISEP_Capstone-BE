@@ -75,6 +75,7 @@ public class DocumentService : IDocumentService
         {
             StartupID = startup.StartupID,
             DocumentType = request.DocumentType,
+            Title = request.Title ?? Path.GetFileNameWithoutExtension(request.File.FileName),
             FileURL = uploadResult.FileUrl,
             Version = version,
             IsAnalyzed = false,
@@ -113,7 +114,7 @@ public class DocumentService : IDocumentService
     // ================================================================
     // List my documents
     // ================================================================
-    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, CancellationToken ct = default)
+    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetMyDocumentsAsync(int userId, bool? isArchived = false, CancellationToken ct = default)
     {
         var startup = await _context.Startups
             .AsNoTracking()
@@ -126,6 +127,9 @@ public class DocumentService : IDocumentService
         var query = _context.Documents
             .AsNoTracking()
             .Where(d => d.StartupID == startup.StartupID);
+
+        if (isArchived.HasValue)
+            query = query.Where(d => d.IsArchived == isArchived.Value);
 
         var docs = await query
             .Include(d => d.BlockchainProof)
@@ -160,6 +164,7 @@ public class DocumentService : IDocumentService
             return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found.");
 
         if (request.Title != null) doc.Title = request.Title;
+        if (request.DocumentType.HasValue) doc.DocumentType = request.DocumentType.Value;
         if (request.IsArchived.HasValue)
         {
             doc.IsArchived = request.IsArchived.Value;
@@ -231,7 +236,7 @@ public class DocumentService : IDocumentService
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
-            Title = d.Title,
+            Title = d.Title ?? string.Empty,
             FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType.ToString(),
             Version = d.Version,
@@ -241,7 +246,8 @@ public class DocumentService : IDocumentService
             UploadedAt = d.UploadedAt,
             ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
-            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null
+            TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null,
+            AnchoredAt = d.BlockchainProof?.AnchoredAt
         };
     }
 
@@ -309,7 +315,7 @@ public class DocumentService : IDocumentService
             DocumentID = doc.DocumentID,
             StartupID = doc.StartupID,
             DocumentType = doc.DocumentType.ToString(),
-            Title = doc.Title,
+            Title = doc.Title ?? string.Empty,
             Version = doc.Version,
             FileUrl = doc.FileURL,
             IsAnalyzed = doc.IsAnalyzed,

@@ -12,7 +12,7 @@ namespace AISEP.Infrastructure.Services
     public class CloudinaryService : ICloudinaryService
     {
         private static readonly string[] AllowedExtensionsImage = { ".jpeg", ".gif", ".png", ".jpg" };
-        private static readonly string[] AllowedExtensionsDocument = { ".pdf", ".ppt", ".pptx", ".doc", ".docx" };
+        private static readonly string[] AllowedExtensionsDocument = { ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".jpg", ".jpeg", ".png" };
 
         private readonly Cloudinary _cloudinary;
         private readonly CloudinaryOptions _options;
@@ -107,7 +107,7 @@ namespace AISEP.Infrastructure.Services
             {
                 File = new FileDescription(file.FileName, stream),
                 Folder = folder,
-                UseFilename = false,
+                UseFilename = true,
                 UniqueFilename = true
             };
 
@@ -157,7 +157,7 @@ namespace AISEP.Infrastructure.Services
             {
                 File = new FileDescription(file.FileName, memoryStream),
                 Folder = folder,
-                UseFilename = false,
+                UseFilename = true,
                 UniqueFilename = true
             };
 

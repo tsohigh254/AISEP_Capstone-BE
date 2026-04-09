@@ -76,6 +76,22 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // GET /api/mentorships/sessions — List my sessions (Startup/Advisor/Staff/Admin)
+    // ================================================================
+    [HttpGet("sessions")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<object>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMySessions(
+        [FromQuery] string? status,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetMySessionsAsync(userId, userType, status, page, pageSize);
+        return result.ToPagedEnvelope();
+    }
+
+    // ================================================================
     // 3) GET /api/mentorships/{id} — Get mentorship detail
     // ================================================================
 

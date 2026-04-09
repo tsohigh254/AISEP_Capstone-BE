@@ -49,7 +49,8 @@ public enum ProofStatus : short
     Anchored = 0,       // Confirmed on-chain (final happy state)
     Revoked = 1,        // Explicitly revoked
     HashComputed = 2,   // Local hash created, not yet submitted
-    Pending = 3         // Submitted to chain, awaiting confirmation
+    Pending = 3,        // Submitted to chain, awaiting confirmation
+    Failed = 4          // Transaction failed on-chain
 }
 
 // ───────────────────────── Moderation ─────────────────────
@@ -275,7 +276,53 @@ public enum InvestorTag : short
     PendingMoreInfo = 4,
     VerificationFailed = 5
 }
+public enum InvestorKycWorkflowStatus : short
+{
+    NotSubmitted = 0,
+    Draft = 1,
+    UnderReview = 2,
+    PendingMoreInfo = 3,
+    Approved = 4,
+    Rejected = 5,
+    Superseded = 6
+}
 
+public enum InvestorKycResultLabel : short
+{
+    None = 0,
+    PendingMoreInfo = 1,
+    BasicVerified = 2,
+    VerifiedInvestorEntity = 3,
+    VerifiedAngelInvestor = 4,
+    VerificationFailed = 5
+}
+
+public enum InvestorKycEvidenceKind : short
+{
+    IDProof = 0,
+    InvestmentProof = 1,
+    Other = 2
+}
+
+public enum TransactionType : short
+{
+    Deposit = 0,    // Tiền từ session
+    Withdrawal = 1  // Rút tiền
+}
+
+public enum PaymentStatus : short
+{
+    Pending = 0,      // Đang chờ thanh toán
+    Completed = 1,    // Đã thanh toán thành công
+    Failed = 2,       // Thanh toán thất bại
+}
+
+public enum TransactionStatus : short
+{
+    Pending = 0,      // Đang chờ
+    Completed = 1,    // Hoàn thành
+    Failed = 2        // Thất bại
+}
 // ───────────────────────── Document Review ───────────────────
 
 public enum DocumentReviewStatus : short

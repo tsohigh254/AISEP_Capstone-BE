@@ -9,25 +9,25 @@ namespace AISEP.Application.DTOs.Staff
     public class PendingRegistrationDto
     {
         public int UserId { get; set; }
-        public string Email { get; set; }
-        public string FullName { get; set; }
-        public string UserType { get; set; } // Startup, Advisor, etc.
+        public string Email { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string UserType { get; set; } = string.Empty; // Startup, Advisor, etc.
         public DateTime RegistrationDate { get; set; }
-        public string CompanyName { get; set; }
-        public string Status { get; set; } // Pending, Approved, Rejected
+        public string CompanyName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty; // Pending, Approved, Rejected
     }
 
     public class RegistrationApprovalRequest
     {
         public Guid UserId { get; set; }
         public bool IsApproved { get; set; }
-        public string Reason { get; set; } // Optional: reason for rejection
+        public string Reason { get; set; } = string.Empty; // Optional: reason for rejection
     }
 
     public class RegistrationApprovalResponse
     {
         public bool Success { get; set; }
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
         public Guid UserId { get; set; }
         public DateTime ApprovedDate { get; set; }
     }
@@ -44,6 +44,7 @@ namespace AISEP.Application.DTOs.Staff
     {
         public int AdvisorId { get; set; }
         public int Score { get; set; }
+        public string? Remarks { get; set; }
     }
 
     public class ApproveInvestorRegistrationRequest
@@ -51,6 +52,7 @@ namespace AISEP.Application.DTOs.Staff
         public int InvestorId { get; set; }
         public int Score { get; set; }
         public bool IsInstitutional { get; set; }
+        public string? Remarks { get; set; }
     }
 
     public class RejectRegistrationRequest

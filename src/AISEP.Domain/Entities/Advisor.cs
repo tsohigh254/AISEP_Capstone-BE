@@ -41,12 +41,23 @@ public class Advisor
     
     public string? ExperiencesJson { get; set; }    // JSON array of experience objects
     public string? Skills { get; set; }             // comma-separated
+    public string? CurrentOrganization { get; set; }
+    public string? BasicExpertiseProofFileURL { get; set; }
+    public string? BasicExpertiseProofFileName { get; set; }
+    public string? ContactEmail { get; set; }
+    public bool RequiresNewEvidence { get; set; }
+    public string? RejectionRemarks { get; set; }
+
+    public int WalletId { get; set; }
+
 
     // Navigation properties
+    public AdvisorWallet AdvisorWallet { get; set; } = null!;
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }
     public AdvisorAvailability? Availability { get; set; }
     public ICollection<AdvisorIndustryFocus> IndustryFocus { get; set; } = new List<AdvisorIndustryFocus>();
     public ICollection<AdvisorTestimonial> Testimonials { get; set; } = new List<AdvisorTestimonial>();
     public ICollection<StartupAdvisorMentorship> Mentorships { get; set; } = new List<StartupAdvisorMentorship>();
+    public ICollection<AdvisorTimeSlot> TimeSlots { get; set; } = new List<AdvisorTimeSlot>();
 }

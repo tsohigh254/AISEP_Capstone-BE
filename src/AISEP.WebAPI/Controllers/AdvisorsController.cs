@@ -96,7 +96,7 @@ public class AdvisorsController : ControllerBase
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SubmitKYC([FromBody] SubmitAdvisorKYCRequest request)
+    public async Task<IActionResult> SubmitKYC([FromForm] SubmitAdvisorKYCRequest request)
     {
         var userId = GetCurrentUserId();
         var result = await _advisorService.SubmitKYCAsync(userId, request);
@@ -109,7 +109,7 @@ public class AdvisorsController : ControllerBase
     [HttpPatch("me/kyc/draft")]
     [Authorize(Policy = "AdvisorOnly")]
     [ProducesResponseType(typeof(ApiResponse<AdvisorKYCStatusDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SaveKYCDraft([FromBody] SaveAdvisorKYCDraftRequest request)
+    public async Task<IActionResult> SaveKYCDraft([FromForm] SaveAdvisorKYCDraftRequest request)
     {
         var userId = GetCurrentUserId();
         var result = await _advisorService.SaveKYCDraftAsync(userId, request);
@@ -136,6 +136,32 @@ public class AdvisorsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _advisorService.UpdateAvailabilityAsync(userId, request);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // TIME SLOTS
+    // ================================================================
+
+    [HttpGet("me/timeslots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TimeSlotDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTimeSlots(CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.GetTimeSlotsAsync(userId);
+        return result.ToActionResult();
+    }
+
+    [HttpPut("me/timeslots")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<List<TimeSlotDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpsertTimeSlots(
+        [FromBody] UpsertTimeSlotsRequest request,
+        CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.UpsertTimeSlotsAsync(userId, request);
         return result.ToActionResult();
     }
 
