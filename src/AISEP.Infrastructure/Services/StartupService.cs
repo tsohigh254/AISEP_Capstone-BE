@@ -124,7 +124,7 @@ public class StartupService : IStartupService
 
         if (startup == null)
         {
-            return ApiResponse<StartupMeDto>.SuccessResponse(null, "Profile has not been created yet.");
+            return ApiResponse<StartupMeDto>.SuccessResponse(null!, "Profile has not been created yet.");
         }
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));

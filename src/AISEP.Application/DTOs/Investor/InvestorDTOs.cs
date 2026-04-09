@@ -97,6 +97,8 @@ public class UpdatePreferencesRequest
     public List<string>? PreferredIndustries { get; set; }
     public string? PreferredGeographies { get; set; }
     public float? MinPotentialScore { get; set; }
+    public List<string>? PreferredMarketScopes { get; set; }
+    public List<string>? SupportOffered { get; set; }
 }
 
 public class WatchlistAddRequest
@@ -285,6 +287,8 @@ public class PreferencesDto
     public List<string> PreferredIndustries { get; set; } = new();
     public string? PreferredGeographies { get; set; }
     public float? MinPotentialScore { get; set; }
+    public List<string> PreferredMarketScopes { get; set; } = new();
+    public List<string> SupportOffered { get; set; } = new();
     public DateTime? UpdatedAt { get; set; }
 }
 

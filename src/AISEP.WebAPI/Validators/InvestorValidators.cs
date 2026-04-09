@@ -92,7 +92,7 @@ public class UpdatePreferencesRequestValidator : AbstractValidator<UpdatePrefere
 {
     private static readonly string[] AllowedStages =
     {
-        "Idea", "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "IPO Ready"
+        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
     };
 
     public UpdatePreferencesRequestValidator()

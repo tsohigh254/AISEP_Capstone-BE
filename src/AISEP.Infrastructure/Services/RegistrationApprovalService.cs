@@ -629,6 +629,9 @@ namespace AISEP.Infrastructure.Services
                 .Include(a => a.User)
                 .FirstOrDefaultAsync(i => i.AdvisorID == advisorId);
 
+            if (advisor == null)
+                return ApiResponse<AdvisorDto>.ErrorResponse("ADVISOR_NOT_FOUND", "Advisor not found");
+
             var advisorToDto = new AdvisorDto
             {
                 AdvisorID = advisorId,
@@ -692,6 +695,9 @@ namespace AISEP.Infrastructure.Services
                .Include(s => s.Industry)
                .FirstOrDefaultAsync(i => i.StartupID == startupId);
 
+            if (startup == null)
+                return ApiResponse<StartupDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found");
+
             var startupToDto = new StartupDto
             {
                 StartupID = startupId,
@@ -700,7 +706,7 @@ namespace AISEP.Infrastructure.Services
                 OneLiner = startup.OneLiner,
                 Description = startup.Description,
                 IndustryID = startup.IndustryID,
-                IndustryName = startup.Industry.IndustryName,
+                IndustryName = startup.Industry?.IndustryName ?? string.Empty,
                 Stage = startup.Stage.ToString(),
                 FoundedDate = startup.FoundedDate,
                 Website = startup.Website,

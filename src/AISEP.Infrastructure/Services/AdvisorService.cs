@@ -117,7 +117,7 @@ public class AdvisorService : IAdvisorService
             .FirstOrDefaultAsync(a => a.UserID == userId);
 
         if (advisor == null)
-            return ApiResponse<AdvisorMeDto>.SuccessResponse(null, "Profile has not been created yet.");
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(null!, "Profile has not been created yet.");
 
         return ApiResponse<AdvisorMeDto>.SuccessResponse(
             MapToMeDto(advisor, advisor.Availability, advisor.IndustryFocus));

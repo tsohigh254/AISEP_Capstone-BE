@@ -157,7 +157,7 @@ public class InvestorsController : ControllerBase
     // PREFERENCES
     // ================================================================
 
-    [HttpGet("preferences")]
+    [HttpGet("me/preferences")]
     [ProducesResponseType(typeof(ApiResponse<PreferencesDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPreferences()
     {
@@ -287,7 +287,7 @@ public class InvestorsController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("debug-investor")]
-    public async Task<IActionResult> DebugInvestor([FromServices] AISEP.Infrastructure.Data.ApplicationDbContext db, [FromQuery] string email = "investor@aisep.local")
+    public IActionResult DebugInvestor([FromServices] AISEP.Infrastructure.Data.ApplicationDbContext db, [FromQuery] string email = "investor@aisep.local")
     {
         var user = db.Users.FirstOrDefault(u => u.Email == email);
         if (user == null) return NotFound($"User {email} not found");

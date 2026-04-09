@@ -14,7 +14,7 @@ namespace AISEP.Domain.Entities
         public decimal TotalEarned { get; set; } = 0M;
         public decimal TotalWithdrawn { get; set; } = 0M;
         public DateTime CreatedAt { get; set; }
-        public Advisor Advisor { get; set; }
+        public Advisor Advisor { get; set; } = null!;
         public ICollection<WalletTransaction> Transactions { get; set; } = new List<WalletTransaction>();
     }
 }

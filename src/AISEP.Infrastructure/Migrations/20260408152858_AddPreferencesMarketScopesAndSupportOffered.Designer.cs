@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260408152858_AddPreferencesMarketScopesAndSupportOffered")]
+    partial class AddPreferencesMarketScopesAndSupportOffered
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -270,35 +273,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("StartupID");
 
                     b.ToTable("AdvisorTestimonials");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorTimeSlot", b =>
-                {
-                    b.Property<int>("TimeSlotID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TimeSlotID"));
-
-                    b.Property<int>("AdvisorID")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("EndTime")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("StartTime")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("TimeSlotID");
-
-                    b.HasIndex("AdvisorID");
-
-                    b.ToTable("AdvisorTimeSlots");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWallet", b =>
@@ -2586,17 +2560,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Startup");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.AdvisorTimeSlot", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Advisor", "Advisor")
-                        .WithMany("TimeSlots")
-                        .HasForeignKey("AdvisorID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Advisor");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "User")
@@ -3228,8 +3191,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Mentorships");
 
                     b.Navigation("Testimonials");
-
-                    b.Navigation("TimeSlots");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.AdvisorWallet", b =>
