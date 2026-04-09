@@ -3,11 +3,12 @@ namespace AISEP.Application.DTOs.Connection;
 // ============================= REQUEST DTOs =============================
 
 /// <summary>
-/// Create a connection/offer from Investor to Startup.
+/// Create a connection request. Investor provides StartupId; Startup provides InvestorId.
 /// </summary>
 public class CreateConnectionRequest
 {
-    public int StartupId { get; set; }
+    public int? StartupId { get; set; }   // used when investor initiates
+    public int? InvestorId { get; set; }  // used when startup initiates
     public string? Message { get; set; }
 }
 

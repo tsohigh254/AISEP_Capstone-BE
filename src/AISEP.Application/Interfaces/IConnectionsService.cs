@@ -6,9 +6,9 @@ namespace AISEP.Application.Interfaces;
 public interface IConnectionsService
 {
     // ---- Connections ----
-    Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, CreateConnectionRequest request);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string? status, int page, int pageSize);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string? status, int? investorId, int page, int pageSize);
+    Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, string userType, CreateConnectionRequest request);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string userType, string? status, int page, int pageSize);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string userType, string? status, int page, int pageSize);
     Task<ApiResponse<ConnectionDetailDto>> GetDetailAsync(int userId, string userType, int connectionId);
     Task<ApiResponse<ConnectionDto>> UpdateAsync(int userId, int connectionId, UpdateConnectionRequest request);
     Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, int connectionId);
