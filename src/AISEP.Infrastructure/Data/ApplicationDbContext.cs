@@ -443,6 +443,7 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
+
         // ── AI Integration ────────────────────────────────────
         modelBuilder.Entity<AiEvaluationRun>()
             .HasOne(r => r.Startup)
@@ -460,5 +461,13 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AiWebhookDelivery>()
             .HasIndex(d => d.DeliveryId)
             .IsUnique();
+
+        // Document version history (self-referencing)
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.ParentDocument)
+            .WithMany(d => d.ChildVersions)
+            .HasForeignKey(d => d.ParentDocumentID)
+            .OnDelete(DeleteBehavior.Restrict);
+
     }
 }
