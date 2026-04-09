@@ -25,7 +25,7 @@ public interface IStartupService
 
     // Browse investors (Startup role)
     Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery);
-    Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId);
+    Task<ApiResponse<InvestorDetailForStartupDto>> GetInvestorByIdAsync(int investorId);
 
     // Team members (owner)
     Task<ApiResponse<List<TeamMemberDto>>> GetTeamMembersAsync(int userId);

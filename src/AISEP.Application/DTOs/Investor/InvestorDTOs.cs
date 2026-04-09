@@ -217,7 +217,40 @@ public class InvestorSearchItemDto
     public string? PreferredGeographies { get; set; }
     public decimal? TicketSizeMin { get; set; }
     public decimal? TicketSizeMax { get; set; }
+    public int? PortfolioCount { get; set; }
+    public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
+    public bool AcceptingConnections { get; set; }
     public DateTime? UpdatedAt { get; set; }
+}
+
+/// <summary>Investor detail DTO for Startup role — includes visibility semantics</summary>
+public class InvestorDetailForStartupDto
+{
+    public int InvestorID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? FirmName { get; set; }
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+    public string? InvestmentThesis { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? Website { get; set; }
+    public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
+    public List<string> PreferredIndustries { get; set; } = new();
+    public List<string> PreferredStages { get; set; } = new();
+    public decimal? TicketSizeMin { get; set; }
+    public decimal? TicketSizeMax { get; set; }
+    public int? PortfolioCount { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+
+    // Visibility semantics — FE uses these to decide render mode
+    // OPEN: discoverable=true, canRequestConnection=true
+    // INVESTOR_PAUSED_DISCOVERY: discoverable=false, canRequestConnection=false, detail still accessible read-only
+    public bool DiscoverableForStartups { get; set; }
+    public bool CanRequestConnection { get; set; }
+    public string ProfileAvailabilityReason { get; set; } = "OPEN";
 }
 
 /// <summary>Startup search result DTO (no sensitive data exposed)</summary>

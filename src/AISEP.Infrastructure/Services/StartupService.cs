@@ -1263,10 +1263,13 @@ public class StartupService : IStartupService
     {
         var query = _context.Investors
             .AsNoTracking()
-            .Where(i => i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
+            .Where(i => (i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
+                     && i.AcceptingConnections)
             .Include(i => i.Preferences)
             .Include(i => i.StageFocus)
             .Include(i => i.IndustryFocus)
+            .Include(i => i.PortfolioCompanies)
+            .Include(i => i.KycSubmissions)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(investorQuery.Key))
@@ -1292,6 +1295,11 @@ public class StartupService : IStartupService
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
+            TicketSizeMin = i.Preferences != null ? i.Preferences.MinInvestmentSize : null,
+            TicketSizeMax = i.Preferences != null ? i.Preferences.MaxInvestmentSize : null,
+            PortfolioCount = i.PortfolioCompanies.Count(),
+            InvestorType = i.KycSubmissions.Where(s => s.IsActive).Select(s => s.InvestorCategory).FirstOrDefault(),
+            AcceptingConnections = i.AcceptingConnections,
             UpdatedAt = i.UpdatedAt
         }).Paging(investorQuery.Page, investorQuery.PageSize);
 
@@ -1308,16 +1316,25 @@ public class StartupService : IStartupService
         });
     }
 
-    public async Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId)
+    public async Task<ApiResponse<InvestorDetailForStartupDto>> GetInvestorByIdAsync(int investorId)
     {
         var investor = await _context.Investors
             .AsNoTracking()
-            .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+            .Include(i => i.Preferences)
+            .Include(i => i.IndustryFocus)
+            .Include(i => i.StageFocus)
+            .Include(i => i.PortfolioCompanies)
+            .Include(i => i.KycSubmissions)
+            .FirstOrDefaultAsync(i => i.InvestorID == investorId
+                && (i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC));
 
         if (investor == null)
-            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
+            return ApiResponse<InvestorDetailForStartupDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
 
-        return ApiResponse<InvestorDto>.SuccessResponse(new InvestorDto
+        var discoverable = investor.AcceptingConnections;
+        var activeKyc = investor.KycSubmissions.FirstOrDefault(s => s.IsActive);
+
+        return ApiResponse<InvestorDetailForStartupDto>.SuccessResponse(new InvestorDetailForStartupDto
         {
             InvestorID = investor.InvestorID,
             FullName = investor.FullName,
@@ -1330,8 +1347,16 @@ public class StartupService : IStartupService
             Country = investor.Country,
             LinkedInURL = investor.LinkedInURL,
             Website = investor.Website,
-            CreatedAt = investor.CreatedAt,
-            UpdatedAt = investor.UpdatedAt
+            InvestorType = activeKyc?.InvestorCategory,
+            PreferredIndustries = investor.IndustryFocus.Select(f => f.Industry).ToList(),
+            PreferredStages = investor.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            TicketSizeMin = investor.Preferences?.MinInvestmentSize,
+            TicketSizeMax = investor.Preferences?.MaxInvestmentSize,
+            PortfolioCount = investor.PortfolioCompanies.Count,
+            UpdatedAt = investor.UpdatedAt,
+            DiscoverableForStartups = discoverable,
+            CanRequestConnection = discoverable,
+            ProfileAvailabilityReason = discoverable ? "OPEN" : "INVESTOR_PAUSED_DISCOVERY"
         });
     }
 }

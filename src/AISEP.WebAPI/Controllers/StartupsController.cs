@@ -246,8 +246,8 @@ public class StartupsController : ControllerBase
     /// </summary>
     [HttpGet("investors/{investorId:int}")]
     [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDetailForStartupDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDetailForStartupDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetInvestorById(int investorId)
     {
         var result = await _startupService.GetInvestorByIdAsync(investorId);
