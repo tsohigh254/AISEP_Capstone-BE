@@ -126,10 +126,14 @@ var pythonAiOpts = builder.Configuration.GetSection(PythonAiOptions.SectionName)
 builder.Services.AddHttpClient<PythonAiClient>(client =>
 {
     client.BaseAddress = new Uri(pythonAiOpts.BaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(pythonAiOpts.TimeoutSeconds);
+    // Set Infinite so HttpClient never cuts the connection globally.
+    // Each method in PythonAiClient controls its own per-call timeout via CancellationToken.
+    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 builder.Services.AddScoped<IAiEvaluationService, AiEvaluationService>();
+builder.Services.AddScoped<IAiRecommendationService, AiRecommendationService>();
+builder.Services.AddScoped<IAiInvestorAgentService, AiInvestorAgentService>();
 
 builder.Services.AddSingleton<PayOSClient>(p =>
     {

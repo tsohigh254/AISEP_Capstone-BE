@@ -1,12 +1,28 @@
+using AISEP.Application.DTOs.AI;
+using AISEP.Application.DTOs.Common;
+using Microsoft.AspNetCore.Http;
+
 namespace AISEP.Application.Interfaces;
 
 /// <summary>
-/// Placeholder interface for AI Investor Agent integration (Step C).
+/// Service interface for AI Investor Agent integration (Step C).
+/// Covers non-stream chat, SSE streaming chat, and one-shot research.
 /// </summary>
 public interface IAiInvestorAgentService
 {
-    // TODO: Step C - implement these:
-    // Task<ResearchResult> ResearchAsync(string query);
-    // Task<ChatResult> ChatAsync(string query, string threadId);
-    // IAsyncEnumerable<string> ChatStreamAsync(string query, string threadId, CancellationToken ct);
+    /// <summary>
+    /// Send a query to the investor agent and receive a full response (non-streaming).
+    /// </summary>
+    Task<ApiResponse<InvestorAgentChatResult>> ChatAsync(int investorId, string query, string? threadId);
+
+    /// <summary>
+    /// Open an SSE stream from the investor agent and proxy all events
+    /// directly to the client's <see cref="HttpResponse"/>.
+    /// </summary>
+    Task StreamChatAsync(int investorId, string query, string? threadId, HttpResponse response, CancellationToken ct);
+
+    /// <summary>
+    /// One-shot research pipeline (no thread memory).
+    /// </summary>
+    Task<ApiResponse<InvestorAgentChatResult>> ResearchAsync(int investorId, string query);
 }

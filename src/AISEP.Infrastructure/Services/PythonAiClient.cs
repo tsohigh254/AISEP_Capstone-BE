@@ -50,6 +50,9 @@ public class PythonAiClient
         _logger = logger;
     }
 
+    /// <summary>Exposes the resolved options so callers can read timeout values (e.g. StreamTimeoutSeconds).</summary>
+    public PythonAiOptions Options => _options;
+
     // ═══════════════════════════════════════════════════════════
     //  Evaluation endpoints
     // ═══════════════════════════════════════════════════════════
@@ -120,6 +123,152 @@ public class PythonAiClient
             _logger.LogWarning(ex, "Python AI health check failed");
             return false;
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Recommendation — Internal Reindex
+    // ═══════════════════════════════════════════════════════════
+
+    public async Task<PythonReindexResponse> ReindexStartupAsync(
+        int startupId, PythonReindexStartupRequest payload, string? correlationId = null, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/internal/recommendations/reindex/startup/{startupId}");
+        req.Content = JsonContent.Create(payload, options: JsonOpts);
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessOrThrow(resp, ct);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonReindexResponse>(JsonOpts, ct);
+        return result ?? new PythonReindexResponse { Status = "ok" };
+    }
+
+    public async Task<PythonReindexResponse> ReindexInvestorAsync(
+        int investorId, PythonReindexInvestorRequest payload, string? correlationId = null, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/internal/recommendations/reindex/investor/{investorId}");
+        req.Content = JsonContent.Create(payload, options: JsonOpts);
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessOrThrow(resp, ct);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonReindexResponse>(JsonOpts, ct);
+        return result ?? new PythonReindexResponse { Status = "ok" };
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Recommendation — Public Read
+    // ═══════════════════════════════════════════════════════════
+
+    public async Task<PythonRecommendationListResponse> GetStartupRecommendationsAsync(
+        int investorId, int topN = 5, string? correlationId = null, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get,
+            $"/api/v1/recommendations/startups?investor_id={investorId}&top_n={topN}");
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessOrThrow(resp, ct);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonRecommendationListResponse>(JsonOpts, ct);
+        return result ?? throw new InvalidOperationException("Python returned null recommendation list.");
+    }
+
+    public async Task<PythonRecommendationExplanation> GetMatchExplanationAsync(
+        int investorId, int startupId, string? correlationId = null, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get,
+            $"/api/v1/recommendations/startups/{startupId}/explanation?investor_id={investorId}");
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, ct);
+        await EnsureSuccessOrThrow(resp, ct);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonRecommendationExplanation>(JsonOpts, ct);
+        return result ?? throw new InvalidOperationException("Python returned null explanation.");
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Investor Agent — Chat (non-stream)
+    // ═══════════════════════════════════════════════════════════
+
+    public async Task<PythonAgentChatResponse> InvestorAgentChatAsync(
+        PythonAgentChatRequest request, string? correlationId = null, CancellationToken ct = default)
+    {
+        // Apply LongTimeoutSeconds — chat can take a while on first cold-start
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(_options.LongTimeoutSeconds));
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/investor-agent/chat");
+        req.Content = JsonContent.Create(request, options: JsonOpts);
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, cts.Token);
+        await EnsureSuccessOrThrow(resp, cts.Token);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonAgentChatResponse>(JsonOpts, cts.Token);
+        return result ?? throw new InvalidOperationException("Python returned null chat response.");
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Investor Agent — Chat SSE stream (raw)
+    //  Returns the HttpResponseMessage — caller owns disposal and
+    //  must read the response body as an SSE stream.
+    // ═══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Opens the SSE stream from Python. The returned <see cref="HttpResponseMessage"/>
+    /// is NOT disposed by this method — the caller must dispose it after reading the
+    /// stream to completion.  Uses <see cref="HttpCompletionOption.ResponseHeadersRead"/>
+    /// so no buffering occurs.
+    /// </summary>
+    public async Task<HttpResponseMessage> InvestorAgentChatStreamRawAsync(
+        PythonAgentChatRequest request, string? correlationId = null, CancellationToken ct = default)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/investor-agent/chat/stream");
+        req.Content = JsonContent.Create(request, options: JsonOpts);
+        req.Headers.Accept.ParseAdd("text/event-stream");
+        AttachHeaders(req, correlationId);
+
+        // ResponseHeadersRead = do NOT buffer — stream line-by-line.
+        // Timeout is controlled by the CancellationToken passed in from StreamChatAsync
+        // (which uses StreamTimeoutSeconds), NOT by HttpClient.Timeout.
+        var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        // If Python returned an error status BEFORE the stream started, parse and throw.
+        if (!resp.IsSuccessStatusCode)
+        {
+            // We must dispose resp on error since the caller won't get it.
+            using (resp)
+            {
+                await EnsureSuccessOrThrow(resp, ct);
+            }
+        }
+
+        return resp; // caller owns disposal
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Investor Agent — Research (one-shot, long-running)
+    // ═══════════════════════════════════════════════════════════
+
+    public async Task<PythonAgentResearchResponse> InvestorAgentResearchAsync(
+        PythonAgentResearchRequest request, string? correlationId = null, CancellationToken ct = default)
+    {
+        // Research is long-running — use LongTimeoutSeconds
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(_options.LongTimeoutSeconds));
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/investor-agent/research");
+        req.Content = JsonContent.Create(request, options: JsonOpts);
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, cts.Token);
+        await EnsureSuccessOrThrow(resp, cts.Token);
+
+        var result = await resp.Content.ReadFromJsonAsync<PythonAgentResearchResponse>(JsonOpts, cts.Token);
+        return result ?? throw new InvalidOperationException("Python returned null research response.");
     }
 
     // ═══════════════════════════════════════════════════════════

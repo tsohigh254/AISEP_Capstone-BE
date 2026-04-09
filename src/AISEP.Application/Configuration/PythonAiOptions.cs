@@ -20,6 +20,9 @@ public class PythonAiOptions
     /// <summary>HTTP request timeout in seconds for long-running calls (e.g. research).</summary>
     public int LongTimeoutSeconds { get; set; } = 120;
 
+    /// <summary>HTTP request timeout in seconds for SSE streaming calls (investor-agent chat/stream).</summary>
+    public int StreamTimeoutSeconds { get; set; } = 180;
+
     // ── Webhook / Callback ──────────────────────────────────────
 
     /// <summary>

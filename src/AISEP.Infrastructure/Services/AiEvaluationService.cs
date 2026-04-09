@@ -4,6 +4,7 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text.Json;
@@ -15,6 +16,7 @@ public class AiEvaluationService : IAiEvaluationService
     private readonly ApplicationDbContext _db;
     private readonly PythonAiClient _pythonClient;
     private readonly ICloudinaryService _cloudinary;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiEvaluationService> _logger;
 
     // Terminal statuses — no further transitions allowed
@@ -38,11 +40,13 @@ public class AiEvaluationService : IAiEvaluationService
         ApplicationDbContext db,
         PythonAiClient pythonClient,
         ICloudinaryService cloudinary,
+        IServiceScopeFactory scopeFactory,
         ILogger<AiEvaluationService> logger)
     {
         _db = db;
         _pythonClient = pythonClient;
         _cloudinary = cloudinary;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -308,6 +312,22 @@ public class AiEvaluationService : IAiEvaluationService
         delivery.Processed = true;
         delivery.ProcessingNote = $"Updated run {run.Id} to status={run.Status}";
         await _db.SaveChangesAsync();
+
+        // If evaluation completed, reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        if (string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase))
+        {
+            var startupIdForEvalReindex = run.StartupId;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await using var scope = _scopeFactory.CreateAsyncScope();
+                    var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                    await svc.ReindexStartupAsync(startupIdForEvalReindex);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Background reindex after evaluation failed for startup {StartupId}", startupIdForEvalReindex); }
+            });
+        }
 
         _logger.LogInformation(
             "Webhook processed: DeliveryId={DeliveryId}, RunId={RunId}, Status={Status}",

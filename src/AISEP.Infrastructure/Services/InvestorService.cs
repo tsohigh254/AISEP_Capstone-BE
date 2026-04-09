@@ -7,6 +7,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AISEP.Infrastructure.Services;
@@ -17,13 +18,15 @@ public class InvestorService : IInvestorService
     private readonly IAuditService _audit;
     private readonly ILogger<InvestorService> _logger;
     private readonly ICloudinaryService _cloudinaryService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public InvestorService(ApplicationDbContext db, IAuditService audit, ILogger<InvestorService> logger, ICloudinaryService cloudinaryService)
+    public InvestorService(ApplicationDbContext db, IAuditService audit, ILogger<InvestorService> logger, ICloudinaryService cloudinaryService, IServiceScopeFactory scopeFactory)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
         _cloudinaryService = cloudinaryService;
+        _scopeFactory = scopeFactory;
     }
 
     // ================================================================
@@ -97,6 +100,19 @@ public class InvestorService : IInvestorService
 
         await _audit.LogAsync("UPDATE_INVESTOR_PROFILE", "Investor", investor.InvestorID, null);
         _logger.LogInformation("Investor profile {InvestorId} updated", investor.InvestorID);
+
+        // Fire-and-forget: reindex investor in recommendation engine (new scope — avoids disposed DbContext)
+        var investorIdForReindex = investor.InvestorID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexInvestorAsync(investorIdForReindex);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for investor {InvestorId}", investorIdForReindex); }
+        });
 
         return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor));
     }
@@ -195,6 +211,19 @@ public class InvestorService : IInvestorService
         await _audit.LogAsync("UPDATE_INVESTOR_PREFERENCES", "InvestorPreferences",
             investor.Preferences.PreferenceID, null);
         _logger.LogInformation("Preferences updated for investor {InvestorId}", investor.InvestorID);
+
+        // Fire-and-forget: reindex investor in recommendation engine (new scope — avoids disposed DbContext)
+        var investorIdForPrefReindex = investor.InvestorID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexInvestorAsync(investorIdForPrefReindex);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for investor {InvestorId}", investorIdForPrefReindex); }
+        });
 
         // Re-read to get updated focus lists
         var updatedInvestor = await _db.Investors
