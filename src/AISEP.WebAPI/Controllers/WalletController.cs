@@ -45,6 +45,6 @@ public class WalletController : ControllerBase
     public async Task<IActionResult> GetTransactions(int walletId, [FromQuery] WalletTransactionQueryParams queryParams)
     {
         var result = await _walletService.GetTransactionsAsync(walletId, queryParams);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 }

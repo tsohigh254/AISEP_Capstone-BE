@@ -43,7 +43,7 @@ public class NotificationsController : ControllerBase
     {
         var result = await _notificationService.GetMyNotificationsAsync(
             GetCurrentUserId(), unreadOnly, type, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ── 2) GET /api/notifications/{id} ────────────────────────────

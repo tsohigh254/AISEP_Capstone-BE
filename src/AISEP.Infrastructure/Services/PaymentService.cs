@@ -159,7 +159,7 @@ namespace AISEP.Infrastructure.Services
             {
                 OrderCode = orderCode,
                 Amount = paymentRequest.Amount,
-                Description = "Thanh to�n ??n h�ng",
+                Description = "Thanh toán đơn hàng",
                 ExpiredAt = (int)DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
                 ReturnUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout/result?status=success",
                 CancelUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout"

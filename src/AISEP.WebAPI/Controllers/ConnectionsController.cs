@@ -57,7 +57,7 @@ public class ConnectionsController : ControllerBase
     public async Task<IActionResult> GetSent([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var result = await _svc.GetSentAsync(GetCurrentUserId(), status, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -99,7 +99,7 @@ public class ConnectionsController : ControllerBase
     public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int? investorId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var result = await _svc.GetReceivedAsync(GetCurrentUserId(), status, investorId, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================

@@ -46,7 +46,7 @@ public class ModerationController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         var result = await _svc.GetFlagsAsync(status, entityType, severity, q, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -163,6 +163,6 @@ public class ModerationController : ControllerBase
         if (!result.Success && result.Error?.Code == "NOT_IMPLEMENTED")
             return ApiEnvelopeExtensions.ErrorEnvelope(result.Error?.Message ?? "Not implemented", StatusCodes.Status501NotImplemented);
 
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 }
