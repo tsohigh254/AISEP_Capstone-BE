@@ -119,6 +119,11 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
+builder.Services.AddHttpClient<IAIService, AIService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://ai:8000");
+    client.Timeout = TimeSpan.FromSeconds(300);
+});
 
 builder.Services.AddSingleton<PayOSClient>(p =>
     {

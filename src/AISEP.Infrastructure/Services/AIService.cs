@@ -1,0 +1,409 @@
+using System.Net.Http.Json;
+using System.Text.Json;
+using AISEP.Application.DTOs.AI;
+using AISEP.Application.DTOs.Common;
+using AISEP.Application.Interfaces;
+using AISEP.Domain.Entities;
+using AISEP.Domain.Enums;
+using AISEP.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace AISEP.Infrastructure.Services;
+
+public class AIService : IAIService
+{
+    private readonly HttpClient _http;
+    private readonly ApplicationDbContext _db;
+    private readonly ILogger<AIService> _logger;
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNameCaseInsensitive = true
+    };
+
+    public AIService(HttpClient http, ApplicationDbContext db, ILogger<AIService> logger)
+    {
+        _http = http;
+        _db = db;
+        _logger = logger;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Evaluation — proxy to Python AI service
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<ApiResponse<EvaluationSubmitResponse>> TriggerEvaluationAsync(
+        int documentId, int userId, CancellationToken ct = default)
+    {
+        var startup = await _db.Startups.FirstOrDefaultAsync(s => s.UserID == userId, ct);
+        if (startup == null)
+            return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                "STARTUP_NOT_FOUND", "No startup profile found for this user.");
+
+        var startupId = startup.StartupID;
+        var doc = await _db.Documents
+            .FirstOrDefaultAsync(d => d.DocumentID == documentId && d.StartupID == startupId, ct);
+
+        if (doc == null)
+            return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                "DOCUMENT_NOT_FOUND", "Document not found or does not belong to this startup.");
+
+        var docType = doc.DocumentType == DocumentType.Pitch_Deck ? "pitch_deck" : "business_plan";
+
+        var payload = new
+        {
+            startup_id = startupId.ToString(),
+            documents = new[]
+            {
+                new
+                {
+                    document_id = documentId.ToString(),
+                    document_type = docType,
+                    file_url_or_path = doc.FileURL
+                }
+            }
+        };
+
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/v1/evaluations/", payload, JsonOpts, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("AI evaluation submit failed: {Status} {Body}", resp.StatusCode, body);
+                return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                    "AI_SERVICE_ERROR", $"AI service returned {(int)resp.StatusCode}.");
+            }
+
+            var aiResp = JsonSerializer.Deserialize<JsonElement>(body, JsonOpts);
+
+            var result = new EvaluationSubmitResponse
+            {
+                EvaluationRunId = aiResp.GetProperty("evaluation_run_id").GetInt32(),
+                Status = aiResp.GetProperty("status").GetString() ?? "queued",
+                Message = aiResp.TryGetProperty("message", out var msg) ? msg.GetString() ?? "" : "Evaluation queued"
+            };
+
+            // Mark document as being analyzed
+            doc.AnalysisStatus = AnalysisStatus.NOTANALYZE;
+            await _db.SaveChangesAsync(ct);
+
+            return ApiResponse<EvaluationSubmitResponse>.Ok(result, "Evaluation submitted successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to call AI evaluation service");
+            return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "AI service is currently unavailable.");
+        }
+    }
+
+    public async Task<ApiResponse<EvaluationStatusResponse>> GetEvaluationStatusAsync(
+        int evaluationRunId, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/v1/evaluations/{evaluationRunId}", ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return ApiResponse<EvaluationStatusResponse>.ErrorResponse(
+                    "EVALUATION_NOT_FOUND", "Evaluation run not found.");
+
+            if (!resp.IsSuccessStatusCode)
+                return ApiResponse<EvaluationStatusResponse>.ErrorResponse(
+                    "AI_SERVICE_ERROR", $"AI service returned {(int)resp.StatusCode}.");
+
+            var result = JsonSerializer.Deserialize<EvaluationStatusResponse>(body, JsonOpts);
+            return ApiResponse<EvaluationStatusResponse>.Ok(result!);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get evaluation status");
+            return ApiResponse<EvaluationStatusResponse>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "AI service is currently unavailable.");
+        }
+    }
+
+    public async Task<ApiResponse<EvaluationReportResponse>> GetEvaluationReportAsync(
+        int evaluationRunId, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/v1/evaluations/{evaluationRunId}/report", ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                    "EVALUATION_NOT_FOUND", "Evaluation run not found.");
+
+            if (resp.StatusCode == System.Net.HttpStatusCode.Accepted)
+                return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                    "REPORT_NOT_READY", "Report is not ready yet. Please retry shortly.");
+
+            if (!resp.IsSuccessStatusCode)
+                return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                    "AI_SERVICE_ERROR", $"AI service returned {(int)resp.StatusCode}.");
+
+            var result = JsonSerializer.Deserialize<EvaluationReportResponse>(body, JsonOpts);
+            return ApiResponse<EvaluationReportResponse>.Ok(result!);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get evaluation report");
+            return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "AI service is currently unavailable.");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Scores — from local DB
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<ApiResponse<AIScoreLatestResponse>> GetLatestScoreAsync(
+        int userId, CancellationToken ct = default)
+    {
+        var startupId = await ResolveStartupIdAsync(userId, ct);
+        if (startupId == 0)
+            return ApiResponse<AIScoreLatestResponse>.ErrorResponse(
+                "STARTUP_NOT_FOUND", "No startup profile found for this user.");
+
+        var score = await _db.StartupPotentialScores
+            .Include(s => s.SubMetrics)
+            .Include(s => s.ImprovementRecommendations)
+            .Where(s => s.StartupID == startupId && s.IsCurrentScore)
+            .FirstOrDefaultAsync(ct);
+
+        if (score == null)
+            return ApiResponse<AIScoreLatestResponse>.ErrorResponse(
+                "SCORE_NOT_FOUND", "No AI score found for this startup.");
+
+        return ApiResponse<AIScoreLatestResponse>.Ok(MapScore(score));
+    }
+
+    public async Task<ApiResponse<AIScoreHistoryResponse>> GetScoreHistoryAsync(
+        int userId, CancellationToken ct = default)
+    {
+        var startupId = await ResolveStartupIdAsync(userId, ct);
+        if (startupId == 0)
+            return ApiResponse<AIScoreHistoryResponse>.ErrorResponse(
+                "STARTUP_NOT_FOUND", "No startup profile found for this user.");
+
+        var scores = await _db.StartupPotentialScores
+            .Include(s => s.SubMetrics)
+            .Include(s => s.ImprovementRecommendations)
+            .Where(s => s.StartupID == startupId)
+            .OrderByDescending(s => s.CalculatedAt)
+            .ToListAsync(ct);
+
+        var result = new AIScoreHistoryResponse
+        {
+            Scores = scores.Select(MapScore).ToList()
+        };
+
+        return ApiResponse<AIScoreHistoryResponse>.Ok(result);
+    }
+
+    public async Task<ApiResponse<EvaluationReportResponse>> GetStartupReportAsync(
+        int startupId, CancellationToken ct = default)
+    {
+        // Find the latest completed evaluation for this startup
+        try
+        {
+            var resp = await _http.GetAsync($"/api/v1/evaluations/history?startup_id={startupId}", ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (!resp.IsSuccessStatusCode)
+                return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                    "AI_SERVICE_ERROR", $"AI service returned {(int)resp.StatusCode}.");
+
+            var history = JsonSerializer.Deserialize<List<JsonElement>>(body, JsonOpts);
+            var completed = history?
+                .Where(h => h.GetProperty("status").GetString() == "completed")
+                .OrderByDescending(h => h.GetProperty("submitted_at").GetString())
+                .FirstOrDefault();
+
+            if (completed == null || completed.Value.ValueKind == JsonValueKind.Undefined)
+                return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                    "REPORT_NOT_FOUND", "No completed evaluation found for this startup.");
+
+            var runId = completed.Value.GetProperty("id").GetInt32();
+            return await GetEvaluationReportAsync(runId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get startup report");
+            return ApiResponse<EvaluationReportResponse>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "AI service is currently unavailable.");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Recommendations — proxy to Python AI service
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<ApiResponse<RecommendationListResponse>> GetRecommendationsAsync(
+        int investorId, int topN, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.GetAsync(
+                $"/api/v1/recommendations/startups?investor_id={investorId}&top_n={topN}", ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("AI recommendations failed: {Status} {Body}", resp.StatusCode, body);
+                return ApiResponse<RecommendationListResponse>.ErrorResponse(
+                    "AI_SERVICE_ERROR", $"AI service returned {(int)resp.StatusCode}.");
+            }
+
+            var result = JsonSerializer.Deserialize<RecommendationListResponse>(body, JsonOpts);
+            return ApiResponse<RecommendationListResponse>.Ok(result!);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get AI recommendations");
+            return ApiResponse<RecommendationListResponse>.ErrorResponse(
+                "AI_SERVICE_UNAVAILABLE", "AI service is currently unavailable.");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Scoring Model Config — local DB CRUD
+    // ═══════════════════════════════════════════════════════════════
+
+    public async Task<ApiResponse<List<ScoringModelConfigDto>>> GetScoringConfigsAsync(CancellationToken ct = default)
+    {
+        var configs = await _db.ScoringModelConfigurations
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+        var dtos = configs.Select(MapConfig).ToList();
+        return ApiResponse<List<ScoringModelConfigDto>>.Ok(dtos);
+    }
+
+    public async Task<ApiResponse<ScoringModelConfigDto>> CreateScoringConfigAsync(
+        CreateScoringModelConfigRequest request, int userId, CancellationToken ct = default)
+    {
+        var config = new ScoringModelConfiguration
+        {
+            Version = request.Version,
+            TeamWeight = request.TeamWeight,
+            MarketWeight = request.MarketWeight,
+            ProductWeight = request.ProductWeight,
+            TractionWeight = request.TractionWeight,
+            FinancialWeight = request.FinancialWeight,
+            ApplicableStage = request.ApplicableStage,
+            ChangeNotes = request.ChangeNotes,
+            IsActive = false,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = userId
+        };
+
+        _db.ScoringModelConfigurations.Add(config);
+        await _db.SaveChangesAsync(ct);
+
+        return ApiResponse<ScoringModelConfigDto>.Ok(MapConfig(config), "Scoring config created.");
+    }
+
+    public async Task<ApiResponse<ScoringModelConfigDto>> UpdateScoringConfigAsync(
+        int configId, UpdateScoringModelConfigRequest request, CancellationToken ct = default)
+    {
+        var config = await _db.ScoringModelConfigurations.FindAsync(new object[] { configId }, ct);
+        if (config == null)
+            return ApiResponse<ScoringModelConfigDto>.ErrorResponse(
+                "CONFIG_NOT_FOUND", "Scoring model configuration not found.");
+
+        if (request.TeamWeight.HasValue) config.TeamWeight = request.TeamWeight.Value;
+        if (request.MarketWeight.HasValue) config.MarketWeight = request.MarketWeight.Value;
+        if (request.ProductWeight.HasValue) config.ProductWeight = request.ProductWeight.Value;
+        if (request.TractionWeight.HasValue) config.TractionWeight = request.TractionWeight.Value;
+        if (request.FinancialWeight.HasValue) config.FinancialWeight = request.FinancialWeight.Value;
+        if (request.ApplicableStage != null) config.ApplicableStage = request.ApplicableStage;
+        if (request.ChangeNotes != null) config.ChangeNotes = request.ChangeNotes;
+
+        await _db.SaveChangesAsync(ct);
+        return ApiResponse<ScoringModelConfigDto>.Ok(MapConfig(config), "Scoring config updated.");
+    }
+
+    public async Task<ApiResponse<ScoringModelConfigDto>> ActivateScoringConfigAsync(
+        int configId, CancellationToken ct = default)
+    {
+        var config = await _db.ScoringModelConfigurations.FindAsync(new object[] { configId }, ct);
+        if (config == null)
+            return ApiResponse<ScoringModelConfigDto>.ErrorResponse(
+                "CONFIG_NOT_FOUND", "Scoring model configuration not found.");
+
+        // Deactivate all others
+        var activeConfigs = await _db.ScoringModelConfigurations
+            .Where(c => c.IsActive)
+            .ToListAsync(ct);
+        foreach (var c in activeConfigs)
+            c.IsActive = false;
+
+        config.IsActive = true;
+        config.ActivatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return ApiResponse<ScoringModelConfigDto>.Ok(MapConfig(config), "Scoring config activated.");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Mapping helpers
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task<int> ResolveStartupIdAsync(int userId, CancellationToken ct)
+    {
+        var startup = await _db.Startups
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId, ct);
+        return startup?.StartupID ?? 0;
+    }
+
+    private static AIScoreLatestResponse MapScore(StartupPotentialScore s) => new()
+    {
+        ScoreId = s.ScoreID,
+        StartupId = s.StartupID,
+        OverallScore = s.OverallScore,
+        TeamScore = s.TeamScore,
+        MarketScore = s.MarketScore,
+        ProductScore = s.ProductScore,
+        TractionScore = s.TractionScore,
+        FinancialScore = s.FinancialScore,
+        CalculatedAt = s.CalculatedAt,
+        SubMetrics = s.SubMetrics.Select(m => new SubMetricDto
+        {
+            Category = m.Category,
+            MetricName = m.MetricName,
+            MetricValue = m.MetricValue,
+            MetricScore = m.MetricScore,
+            Explanation = m.Explanation
+        }).ToList(),
+        Recommendations = s.ImprovementRecommendations.Select(r => new ImprovementRecommendationDto
+        {
+            Category = r.Category,
+            Priority = r.Priority.ToString(),
+            RecommendationText = r.RecommendationText,
+            ExpectedImpact = r.ExpectedImpact
+        }).ToList()
+    };
+
+    private static ScoringModelConfigDto MapConfig(ScoringModelConfiguration c) => new()
+    {
+        ConfigId = c.ConfigID,
+        Version = c.Version,
+        TeamWeight = c.TeamWeight,
+        MarketWeight = c.MarketWeight,
+        ProductWeight = c.ProductWeight,
+        TractionWeight = c.TractionWeight,
+        FinancialWeight = c.FinancialWeight,
+        ApplicableStage = c.ApplicableStage,
+        ChangeNotes = c.ChangeNotes,
+        IsActive = c.IsActive,
+        CreatedAt = c.CreatedAt
+    };
+}
