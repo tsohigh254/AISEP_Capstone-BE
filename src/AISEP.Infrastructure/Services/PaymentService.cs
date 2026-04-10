@@ -152,14 +152,14 @@ namespace AISEP.Infrastructure.Services
         private async Task<PaymentInfoDto> PaymentLink(PaymentRequestDto paymentRequest)
         {
             Env.Load();
-            var orderCode = int.Parse(DateTimeOffset.Now.ToString("ffffff"));
+            var orderCode = (int)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 2_000_000_000);
             var url = Env.GetString("Frontend__URI");
 
             var paymentLinkRequest = new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode,
                 Amount = paymentRequest.Amount,
-                Description = "Thanh toán đơn hàng",
+                Description = "Thanh toan mentorship",
                 ExpiredAt = (int)DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds(),
                 ReturnUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout/result?status=success",
                 CancelUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout"

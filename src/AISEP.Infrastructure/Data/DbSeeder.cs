@@ -9,6 +9,7 @@ public static class DbSeeder
     {
         await SeedRolesAsync(context);
         await SeedPermissionsAsync(context);
+        await SeedRolePermissionsAsync(context);
         await SeedIndustriesAsync(context);
         await SeedUsersAsync(context);
         await FixMissingStartupDataAsync(context);
@@ -104,6 +105,74 @@ public static class DbSeeder
 
         context.Permissions.AddRange(permissions);
         await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedRolePermissionsAsync(ApplicationDbContext context)
+    {
+        var roles = await context.Roles.ToListAsync();
+        var perms = await context.Permissions.ToListAsync();
+
+        if (!roles.Any() || !perms.Any()) return;
+
+        var existing = await context.RolePermissions.ToListAsync();
+
+        // Permission mapping per role based on SRS doc
+        var rolePermMap = new Dictionary<string, string[]>
+        {
+            ["Admin"] = perms.Select(p => p.PermissionName).ToArray(), // All permissions
+            ["Staff"] = new[]
+            {
+                "users.view", "startups.view", "startups.approve",
+                "documents.view", "documents.approve",
+                "moderation.view", "moderation.action"
+            },
+            ["Startup"] = new[]
+            {
+                "startups.create", "startups.view",
+                "documents.upload", "documents.view",
+                "mentorships.create", "connections.create"
+            },
+            ["Investor"] = new[]
+            {
+                "startups.view", "documents.view",
+                "connections.create", "connections.manage"
+            },
+            ["Advisor"] = new[]
+            {
+                "startups.view", "mentorships.create",
+                "mentorships.manage", "connections.create"
+            }
+        };
+
+        var toAdd = new List<RolePermission>();
+
+        foreach (var (roleName, permNames) in rolePermMap)
+        {
+            var role = roles.FirstOrDefault(r => r.RoleName == roleName);
+            if (role == null) continue;
+
+            foreach (var permName in permNames)
+            {
+                var perm = perms.FirstOrDefault(p => p.PermissionName == permName);
+                if (perm == null) continue;
+
+                if (existing.Any(e => e.RoleID == role.RoleID && e.PermissionID == perm.PermissionID))
+                    continue;
+
+                toAdd.Add(new RolePermission
+                {
+                    RoleID = role.RoleID,
+                    PermissionID = perm.PermissionID,
+                    AssignedAt = DateTime.UtcNow
+                });
+            }
+        }
+
+        if (toAdd.Any())
+        {
+            context.RolePermissions.AddRange(toAdd);
+            await context.SaveChangesAsync();
+        }
     }
 
     private static async Task SeedIndustriesAsync(ApplicationDbContext context)
