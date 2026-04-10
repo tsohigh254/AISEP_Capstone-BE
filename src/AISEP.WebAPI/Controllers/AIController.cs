@@ -74,6 +74,24 @@ public class AIController : ControllerBase
         return result.ToEnvelope();
     }
 
+    /// <summary>Get evaluation run status.</summary>
+    [HttpGet("evaluations/{evaluationRunId}/status")]
+    [Authorize(Policy = "StartupOnly")]
+    public async Task<IActionResult> GetEvaluationStatus(int evaluationRunId, CancellationToken ct)
+    {
+        var result = await _aiService.GetEvaluationStatusAsync(evaluationRunId, ct);
+        return result.ToEnvelope();
+    }
+
+    /// <summary>Get evaluation report by run ID.</summary>
+    [HttpGet("evaluations/{evaluationRunId}/report")]
+    [Authorize(Policy = "StartupOnly")]
+    public async Task<IActionResult> GetEvaluationReport(int evaluationRunId, CancellationToken ct)
+    {
+        var result = await _aiService.GetEvaluationReportAsync(evaluationRunId, ct);
+        return result.ToEnvelope();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     //  Investor AI Features
     // ═══════════════════════════════════════════════════════════════
