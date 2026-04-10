@@ -24,6 +24,10 @@ public interface IDocumentService
 
     Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery);
 
+    // Version history
+    Task<ApiResponse<DocumentDto>> UploadNewVersionAsync(int documentId, DocumentUploadNewVersionRequest request, int userId, CancellationToken ct = default);
+    Task<ApiResponse<IEnumerable<DocumentVersionHistoryDto>>> GetVersionHistoryAsync(int documentId, int userId, CancellationToken ct = default);
+
     // Staff review
     Task<ApiResponse<DocumentDto>> StaffVerifyAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
     Task<ApiResponse<DocumentDto>> StaffApproveAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);
