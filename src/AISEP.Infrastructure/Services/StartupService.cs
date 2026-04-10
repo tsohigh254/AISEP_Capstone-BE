@@ -1282,7 +1282,21 @@ public class StartupService : IStartupService
 
         query = query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt);
 
-        var items = query.Select(i => new InvestorSearchItemDto
+        var total = await query.CountAsync();
+        var investors = await query
+            .Skip((investorQuery.Page - 1) * investorQuery.PageSize)
+            .Take(investorQuery.PageSize)
+            .ToListAsync();
+
+        // Batch-query accepted connection counts for this page (one SQL call)
+        var investorIds = investors.Select(i => i.InvestorID).ToList();
+        var acceptedCounts = await _context.StartupInvestorConnections
+            .Where(c => investorIds.Contains(c.InvestorID) && c.ConnectionStatus == ConnectionStatus.Accepted)
+            .GroupBy(c => c.InvestorID)
+            .Select(g => new { InvestorId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.InvestorId, x => x.Count);
+
+        var items = investors.Select(i => new InvestorSearchItemDto
         {
             InvestorID = i.InvestorID,
             FullName = i.FullName,
@@ -1295,23 +1309,24 @@ public class StartupService : IStartupService
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
-            TicketSizeMin = i.Preferences != null ? i.Preferences.MinInvestmentSize : null,
-            TicketSizeMax = i.Preferences != null ? i.Preferences.MaxInvestmentSize : null,
-            PortfolioCount = i.PortfolioCompanies.Count(),
-            InvestorType = i.KycSubmissions.Where(s => s.IsActive).Select(s => s.InvestorCategory).FirstOrDefault(),
+            PreferredStages = i.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            TicketSizeMin = i.Preferences?.MinInvestmentSize,
+            TicketSizeMax = i.Preferences?.MaxInvestmentSize,
+            PortfolioCount = i.PortfolioCompanies.Count,
+            AcceptedConnectionCount = acceptedCounts.GetValueOrDefault(i.InvestorID, 0),
+            InvestorType = i.KycSubmissions.FirstOrDefault(s => s.IsActive)?.InvestorCategory,
             AcceptingConnections = i.AcceptingConnections,
             UpdatedAt = i.UpdatedAt
-        }).Paging(investorQuery.Page, investorQuery.PageSize);
-
+        }).ToList();
 
         return ApiResponse<PagedResponse<InvestorSearchItemDto>>.SuccessResponse(new PagedResponse<InvestorSearchItemDto>
         {
-            Items = await items.ToListAsync(),
+            Items = items,
             Paging = new PagingInfo
             {
                 Page = investorQuery.Page,
                 PageSize = investorQuery.PageSize,
-                TotalItems = await query.CountAsync()
+                TotalItems = total
             }
         });
     }

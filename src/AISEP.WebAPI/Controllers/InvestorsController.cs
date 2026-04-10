@@ -384,6 +384,35 @@ public class InvestorsController : ControllerBase
     }
 
     // ================================================================
+    // ACCEPTING CONNECTIONS
+    // ================================================================
+
+    /// <summary>
+    /// Enable or disable receiving new connection requests from startups.
+    /// Requires an approved profile and completed KYC.
+    /// Existing pending or accepted connections are not affected.
+    /// </summary>
+    /// <remarks>
+    /// Sample request:
+    ///
+    ///     PATCH /api/investors/me/accepting-connections
+    ///     {
+    ///       "acceptingConnections": false
+    ///     }
+    ///
+    /// </remarks>
+    [HttpPatch("me/accepting-connections")]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetAcceptingConnections([FromBody] SetAcceptingConnectionsRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _investorService.SetAcceptingConnectionsAsync(userId, request.AcceptingConnections);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
     // COMPARE STARTUPS
     // ================================================================
 

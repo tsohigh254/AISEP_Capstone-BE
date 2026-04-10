@@ -10,6 +10,7 @@ public interface IInvestorService
     Task<ApiResponse<InvestorDto>> GetMyProfileAsync(int userId);
     Task<ApiResponse<InvestorDto>> UpdateProfileAsync(int userId, UpdateInvestorRequest request);
     Task<ApiResponse<InvestorDto>> UploadPhotoAsync(int userId, Microsoft.AspNetCore.Http.IFormFile photo);
+    Task<ApiResponse<AcceptingConnectionsDto>> SetAcceptingConnectionsAsync(int userId, bool acceptingConnections);
 
     // KYC
     Task<ApiResponse<InvestorKYCStatusDto>> GetKYCStatusAsync(int userId);

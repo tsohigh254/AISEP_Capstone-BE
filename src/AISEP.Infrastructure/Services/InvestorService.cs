@@ -109,6 +109,34 @@ public class InvestorService : IInvestorService
         return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(investor, activeSubmission));
     }
 
+    public async Task<ApiResponse<AcceptingConnectionsDto>> SetAcceptingConnectionsAsync(int userId, bool acceptingConnections)
+    {
+        var investor = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (investor == null)
+            return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND",
+                "Investor profile not found.");
+
+        if (investor.ProfileStatus != ProfileStatus.Approved)
+            return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_NOT_APPROVED",
+                "Only investors with an approved profile and completed KYC can change this setting.");
+
+        if (investor.AcceptingConnections == acceptingConnections)
+            return ApiResponse<AcceptingConnectionsDto>.SuccessResponse(
+                new AcceptingConnectionsDto { AcceptingConnections = investor.AcceptingConnections });
+
+        investor.AcceptingConnections = acceptingConnections;
+        investor.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var detail = acceptingConnections ? "AcceptingConnections=true" : "AcceptingConnections=false";
+        await _audit.LogAsync("SET_ACCEPTING_CONNECTIONS", "Investor", investor.InvestorID, detail);
+        _logger.LogInformation("Investor {InvestorId} set AcceptingConnections={Value}", investor.InvestorID, acceptingConnections);
+
+        return ApiResponse<AcceptingConnectionsDto>.SuccessResponse(
+            new AcceptingConnectionsDto { AcceptingConnections = investor.AcceptingConnections });
+    }
+
     // ================================================================
     // PREFERENCES
     // ================================================================

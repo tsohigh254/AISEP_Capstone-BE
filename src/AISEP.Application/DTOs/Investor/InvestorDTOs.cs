@@ -87,6 +87,16 @@ public class UpdateInvestorRequest
     public string? Website { get; set; }
 }
 
+public class SetAcceptingConnectionsRequest
+{
+    public bool AcceptingConnections { get; set; }
+}
+
+public class AcceptingConnectionsDto
+{
+    public bool AcceptingConnections { get; set; }
+}
+
 public class UpdatePreferencesRequest
 {
     public decimal? TicketMin { get; set; }
@@ -215,9 +225,14 @@ public class InvestorSearchItemDto
     public List<string> PreferredIndustries { get; set; } = new();
     public List<string> PreferredStages { get; set; } = new();
     public string? PreferredGeographies { get; set; }
+    /// <summary>Min investment ticket size in USD. Null if investor has not set preferences.</summary>
     public decimal? TicketSizeMin { get; set; }
+    /// <summary>Max investment ticket size in USD. Null if investor has not set preferences.</summary>
     public decimal? TicketSizeMax { get; set; }
+    /// <summary>Number of real-world portfolio companies (investments outside the platform).</summary>
     public int? PortfolioCount { get; set; }
+    /// <summary>Number of accepted connections on the platform (status = Accepted).</summary>
+    public int AcceptedConnectionCount { get; set; }
     public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
     public bool AcceptingConnections { get; set; }
     public DateTime? UpdatedAt { get; set; }
