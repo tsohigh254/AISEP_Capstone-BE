@@ -231,7 +231,7 @@ public class InvestorsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _investorService.GetWatchlistAsync(userId, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     /// <summary>
@@ -278,7 +278,7 @@ public class InvestorsController : ControllerBase
     {
         // minScore is accepted but ignored until AI module is implemented
         var result = await _investorService.SearchStartupsAsync(q, industryId, stage, location, sortBy, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================

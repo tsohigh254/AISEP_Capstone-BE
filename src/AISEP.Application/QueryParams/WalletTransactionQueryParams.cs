@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 namespace AISEP.Application.QueryParams
 {
     public class WalletTransactionQueryParams : BaseQueryParams
-    {
-        [JsonPropertyName("transactionType")]   
+    {   
         
+        [JsonPropertyName("transactionType")]      
         public TransactionType? TransactionType { get; set; }
 
         [JsonPropertyName("transactionStatus")]

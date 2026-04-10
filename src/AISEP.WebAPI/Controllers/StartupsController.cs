@@ -216,7 +216,7 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> SearchStartups([FromQuery] StartupQueryParams startupQuery)
     {
         var result = await _startupService.SearchStartupsAsync(startupQuery);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -238,7 +238,7 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> SearchInvestors([FromQuery] InvestorQueryParams investorQuery)
     {
         var result = await _startupService.SearchInvestorsAsync(investorQuery);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     /// <summary>

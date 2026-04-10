@@ -185,7 +185,7 @@ public class AdvisorsController : ControllerBase
         CancellationToken ct = default)
     {
         var result = await _advisorService.SearchAdvisorsAsync(advisorQueryParams);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
