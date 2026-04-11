@@ -136,6 +136,7 @@ public class InvestorDto
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
     public string ProfileStatus { get; set; } = string.Empty;
+    public bool AcceptingConnections { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

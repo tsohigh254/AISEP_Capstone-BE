@@ -896,6 +896,7 @@ public class InvestorService : IInvestorService
         LinkedInURL = i.LinkedInURL,
         Website = i.Website,
         ProfileStatus = i.ProfileStatus.ToString(),
+        AcceptingConnections = i.AcceptingConnections,
         CreatedAt = i.CreatedAt,
         UpdatedAt = i.UpdatedAt
     };
