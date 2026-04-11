@@ -13,6 +13,15 @@ public class CreateConnectionRequest
 }
 
 /// <summary>
+/// Create a connection/invite from Startup to Investor.
+/// </summary>
+public class CreateStartupToInvestorRequest
+{
+    public int InvestorId { get; set; }
+    public string? Message { get; set; }
+}
+
+/// <summary>
 /// Update a pending connection (Investor only, status must be Sent).
 /// </summary>
 public class UpdateConnectionRequest
@@ -88,6 +97,7 @@ public class ConnectionDto
     public string ConnectionStatus { get; set; } = string.Empty;
     public string? PersonalizedMessage { get; set; }
     public float? MatchScore { get; set; }
+    public string? InitiatedByRole { get; set; } // "INVESTOR" | "STARTUP"
     public DateTime? RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
 }
@@ -103,6 +113,7 @@ public class ConnectionListItemDto
     public string ConnectionStatus { get; set; } = string.Empty;
     public string? PersonalizedMessage { get; set; }
     public float? MatchScore { get; set; }
+    public string? InitiatedByRole { get; set; } // "INVESTOR" | "STARTUP"
     public DateTime? RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
 }
@@ -119,6 +130,7 @@ public class ConnectionDetailDto
     public string? PersonalizedMessage { get; set; }
     public string? AttachedDocumentIDs { get; set; }
     public float? MatchScore { get; set; }
+    public string? InitiatedByRole { get; set; } // "INVESTOR" | "STARTUP"
     public DateTime? RequestedAt { get; set; }
     public DateTime? RespondedAt { get; set; }
     public List<InfoRequestDto> InformationRequests { get; set; } = new();
