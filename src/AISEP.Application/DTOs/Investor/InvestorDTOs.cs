@@ -109,6 +109,34 @@ public class UpdatePreferencesRequest
     public float? MinPotentialScore { get; set; }
     public List<string>? PreferredMarketScopes { get; set; }
     public List<string>? SupportOffered { get; set; }
+
+    // ── New fields (API spec 2026-04-09) ──
+    public List<string>? PreferredProductMaturity { get; set; }
+    public List<string>? PreferredValidationLevel { get; set; }
+    public List<string>? PreferredStrengths { get; set; }
+
+    /// <summary>AI score filter range, e.g. { "min": 40, "max": 100 }</summary>
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    /// <summary>low | medium | high</summary>
+    public string? AiScoreImportance { get; set; }
+
+    /// <summary>active | paused | closed</summary>
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool? RecentlyActiveBadge { get; set; }
+
+    public bool? RequireVerifiedStartups { get; set; }
+    public bool? RequireVisibleProfiles { get; set; }
+
+    /// <summary>Free-text describing what the investor does NOT want</summary>
+    public string? AvoidText { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+/// <summary>Nested AI score range filter.</summary>
+public class AiScoreRangeDto
+{
+    public float? Min { get; set; }
+    public float? Max { get; set; }
 }
 
 public class WatchlistAddRequest
@@ -338,6 +366,20 @@ public class PreferencesDto
     public float? MinPotentialScore { get; set; }
     public List<string> PreferredMarketScopes { get; set; } = new();
     public List<string> SupportOffered { get; set; } = new();
+
+    // ── New fields ──
+    public List<string> PreferredProductMaturity { get; set; } = new();
+    public List<string> PreferredValidationLevel { get; set; } = new();
+    public List<string> PreferredStrengths { get; set; } = new();
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    public string? AiScoreImportance { get; set; }
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool RecentlyActiveBadge { get; set; }
+    public bool RequireVerifiedStartups { get; set; }
+    public bool RequireVisibleProfiles { get; set; }
+    public string? AvoidText { get; set; }
+    public List<string> Tags { get; set; } = new();
+
     public DateTime? UpdatedAt { get; set; }
 }
 

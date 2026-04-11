@@ -9,6 +9,7 @@ using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -20,13 +21,15 @@ public class StartupService : IStartupService
     private readonly IAuditService _auditService;
     private readonly ILogger<StartupService> _logger;
     private readonly ICloudinaryService _cloudinaryService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger, ICloudinaryService cloudinaryService)
+    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger, ICloudinaryService cloudinaryService, IServiceScopeFactory scopeFactory)
     {
         _context = context;
         _auditService = auditService;
         _logger = logger;
         _cloudinaryService = cloudinaryService;
+        _scopeFactory = scopeFactory;
     }
 
     // ========== STARTUP PROFILE ==========
@@ -109,6 +112,19 @@ public class StartupService : IStartupService
 
         await _auditService.LogAsync("CREATE_STARTUP", "Startup", startup.StartupID,
             $"CompanyName: {startup.CompanyName}");
+
+        // Fire-and-forget: reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        var startupIdForCreate = startup.StartupID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexStartupAsync(startupIdForCreate);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for startup {StartupId}", startupIdForCreate); }
+        });
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile created successfully");
     }
@@ -205,6 +221,19 @@ public class StartupService : IStartupService
 
         await _auditService.LogAsync("UPDATE_STARTUP", "Startup", startup.StartupID,
             $"Updated fields for {startup.CompanyName}");
+
+        // Fire-and-forget: reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        var startupIdForUpdate = startup.StartupID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexStartupAsync(startupIdForUpdate);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for startup {StartupId}", startupIdForUpdate); }
+        });
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile updated successfully");
     }

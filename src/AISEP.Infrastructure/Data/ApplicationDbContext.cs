@@ -58,6 +58,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<ScoreImprovementRecommendation> ScoreImprovementRecommendations => Set<ScoreImprovementRecommendation>();
     public DbSet<ScoringModelConfiguration> ScoringModelConfigurations => Set<ScoringModelConfiguration>();
 
+    // AI Integration (Python AI Service)
+    public DbSet<AiEvaluationRun> AiEvaluationRuns => Set<AiEvaluationRun>();
+    public DbSet<AiWebhookDelivery> AiWebhookDeliveries => Set<AiWebhookDelivery>();
+
     // Collaboration
     public DbSet<StartupAdvisorMentorship> StartupAdvisorMentorships => Set<StartupAdvisorMentorship>();
     public DbSet<MentorshipSession> MentorshipSessions => Set<MentorshipSession>();
@@ -225,6 +229,10 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Incident>().HasKey(i => i.IncidentID);
         modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
         modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
+
+        // AI Integration
+        modelBuilder.Entity<AiEvaluationRun>().HasKey(r => r.Id);
+        modelBuilder.Entity<AiWebhookDelivery>().HasKey(d => d.Id);
     }
 
     private void ConfigureRelationships(ModelBuilder modelBuilder)
@@ -435,11 +443,31 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(d => d.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
+
+        // ── AI Integration ────────────────────────────────────
+        modelBuilder.Entity<AiEvaluationRun>()
+            .HasOne(r => r.Startup)
+            .WithMany()
+            .HasForeignKey(r => r.StartupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AiEvaluationRun>()
+            .HasIndex(r => r.PythonRunId)
+            .IsUnique();
+
+        modelBuilder.Entity<AiEvaluationRun>()
+            .HasIndex(r => r.StartupId);
+
+        modelBuilder.Entity<AiWebhookDelivery>()
+            .HasIndex(d => d.DeliveryId)
+            .IsUnique();
+
         // Document version history (self-referencing)
         modelBuilder.Entity<Document>()
             .HasOne(d => d.ParentDocument)
             .WithMany(d => d.ChildVersions)
             .HasForeignKey(d => d.ParentDocumentID)
             .OnDelete(DeleteBehavior.Restrict);
+
     }
 }
