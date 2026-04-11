@@ -153,6 +153,15 @@ public enum ExitType : short
     Unknown = 4
 }
 
+// ───────────────────────── Subscription / Payment ────────────
+
+public enum StartupSubscriptionPlan : short
+{
+    Free = 0,
+    Pro = 1,
+    Fundraising = 2
+}
+
 // ───────────────────────── Saved Report ───────────────────
 
 public enum ReportType : short

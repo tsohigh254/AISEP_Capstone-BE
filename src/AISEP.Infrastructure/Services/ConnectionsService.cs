@@ -54,6 +54,22 @@ public class ConnectionsService : IConnectionsService
             var investorExists = await _db.Investors.AnyAsync(i => i.InvestorID == request.InvestorId.Value);
             if (!investorExists)
                 return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_FOUND", $"Investor with id {request.InvestorId} not found.");
+
+            // Check subscription limits for Startup initiating connections
+            var totalRequests = await _db.StartupInvestorConnections.CountAsync(c => c.StartupID == startup.StartupID && c.InitiatedBy == userId);
+            int maxRequests = startup.SubscriptionPlan switch
+            {
+                StartupSubscriptionPlan.Free => 3,
+                StartupSubscriptionPlan.Pro => 15,
+                StartupSubscriptionPlan.Fundraising => int.MaxValue,
+                _ => 3
+            };
+            if (totalRequests >= maxRequests)
+            {
+                return ApiResponse<ConnectionDto>.ErrorResponse("SUBSCRIPTION_LIMIT_REACHED", 
+                    $"Your current subscription plan ({startup.SubscriptionPlan}) allows a maximum of {maxRequests} investor connection requests. Please upgrade your plan.");
+            }
+
             resolvedStartupId = startup.StartupID;
             resolvedInvestorId = request.InvestorId.Value;
         }

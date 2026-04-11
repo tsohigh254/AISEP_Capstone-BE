@@ -1,4 +1,4 @@
-﻿using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Payment;
 using AISEP.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -29,12 +29,35 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLink([FromBody] PaymentRequestDto paymentRequest)
         {
-            if (paymentRequest == null || paymentRequest.MentorshipId <= 0 || paymentRequest.Amount <= 0)
-                return BadRequest("MentorshipId and amount must be greater than 0.");
-
             try
             {
-                var paymentInfo = await _paymentService.CreatePaymentLink(paymentRequest);
+                var paymentInfo = await _paymentService.CreatePaymentLinkForMentorship(paymentRequest);
+                return Ok(paymentInfo);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Creates a payment link for Startup Subscription upgrades (Pro, Fundraising)
+        /// </summary>
+        [HttpPost("subscription/create-payment-link")]
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLinkForSubscription([FromBody] SubscriptionPaymentRequestDto paymentRequest)
+        {
+            try
+            {
+                var userIdStr = GetCurrentUserId();
+
+                var paymentInfo = await _paymentService.CreatePaymentLinkForSubscription(userIdStr, paymentRequest);
                 return Ok(paymentInfo);
             }
             catch (InvalidOperationException ex)
@@ -87,7 +110,14 @@ namespace AISEP.WebAPI.Controllers
             var result = await _paymentService.CallBack(Request);
             return Ok(result);
             //return Ok("Ok");
+            
+        }
 
+        private int GetCurrentUserId()
+        {
+            var claim = User.FindFirst("sub")?.Value
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(claim, out var id) ? id : 0;
         }
     }
 }
