@@ -10,41 +10,83 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Documents_Users_ReviewedByUserUserID",
-                table: "Documents");
+            // Use conditional SQL to handle environments where old shadow FK/index/columns
+            // may or may not exist (production DB was set up without these shadow columns).
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Incidents_Users_CreatedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Documents_Users_ReviewedByUserUserID') THEN
+                        ALTER TABLE "Documents" DROP CONSTRAINT "FK_Documents_Users_ReviewedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Incidents_Users_ResolvedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_CreatedByUserUserID') THEN
+                        ALTER TABLE "Incidents" DROP CONSTRAINT "FK_Incidents_Users_CreatedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropIndex(
-                name: "IX_Incidents_CreatedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_ResolvedByUserUserID') THEN
+                        ALTER TABLE "Incidents" DROP CONSTRAINT "FK_Incidents_Users_ResolvedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropIndex(
-                name: "IX_Incidents_ResolvedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Incidents_CreatedByUserUserID') THEN
+                        DROP INDEX "IX_Incidents_CreatedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropIndex(
-                name: "IX_Documents_ReviewedByUserUserID",
-                table: "Documents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Incidents_ResolvedByUserUserID') THEN
+                        DROP INDEX "IX_Incidents_ResolvedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropColumn(
-                name: "CreatedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Documents_ReviewedByUserUserID') THEN
+                        DROP INDEX "IX_Documents_ReviewedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropColumn(
-                name: "ResolvedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'Incidents' AND column_name = 'CreatedByUserUserID') THEN
+                        ALTER TABLE "Incidents" DROP COLUMN "CreatedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.DropColumn(
-                name: "ReviewedByUserUserID",
-                table: "Documents");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'Incidents' AND column_name = 'ResolvedByUserUserID') THEN
+                        ALTER TABLE "Incidents" DROP COLUMN "ResolvedByUserUserID";
+                    END IF;
+                END $$;
+                """);
+
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'Documents' AND column_name = 'ReviewedByUserUserID') THEN
+                        ALTER TABLE "Documents" DROP COLUMN "ReviewedByUserUserID";
+                    END IF;
+                END $$;
+                """);
 
             migrationBuilder.AlterColumn<short>(
                 name: "ProofStatus",
@@ -56,44 +98,56 @@ namespace AISEP.Infrastructure.Migrations
                 oldType: "smallint",
                 oldDefaultValue: (short)0);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Incidents_CreatedBy",
-                table: "Incidents",
-                column: "CreatedBy");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Incidents_CreatedBy') THEN
+                        CREATE INDEX "IX_Incidents_CreatedBy" ON "Incidents" ("CreatedBy");
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Incidents_ResolvedBy",
-                table: "Incidents",
-                column: "ResolvedBy");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Incidents_ResolvedBy') THEN
+                        CREATE INDEX "IX_Incidents_ResolvedBy" ON "Incidents" ("ResolvedBy");
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_ReviewedBy",
-                table: "Documents",
-                column: "ReviewedBy");
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_Documents_ReviewedBy') THEN
+                        CREATE INDEX "IX_Documents_ReviewedBy" ON "Documents" ("ReviewedBy");
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Documents_Users_ReviewedBy",
-                table: "Documents",
-                column: "ReviewedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Documents_Users_ReviewedBy') THEN
+                        ALTER TABLE "Documents" ADD CONSTRAINT "FK_Documents_Users_ReviewedBy"
+                            FOREIGN KEY ("ReviewedBy") REFERENCES "Users" ("UserID") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Incidents_Users_CreatedBy",
-                table: "Incidents",
-                column: "CreatedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_CreatedBy') THEN
+                        ALTER TABLE "Incidents" ADD CONSTRAINT "FK_Incidents_Users_CreatedBy"
+                            FOREIGN KEY ("CreatedBy") REFERENCES "Users" ("UserID") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+                """);
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Incidents_Users_ResolvedBy",
-                table: "Incidents",
-                column: "ResolvedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_ResolvedBy') THEN
+                        ALTER TABLE "Incidents" ADD CONSTRAINT "FK_Incidents_Users_ResolvedBy"
+                            FOREIGN KEY ("ResolvedBy") REFERENCES "Users" ("UserID") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+                """);
         }
 
         /// <inheritdoc />
