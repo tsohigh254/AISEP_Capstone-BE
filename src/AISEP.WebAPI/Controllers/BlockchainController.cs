@@ -4,6 +4,9 @@ using AISEP.Application.Interfaces;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AISEP.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using AISEP.Domain.Enums;
 
 namespace AISEP.WebAPI.Controllers;
 
@@ -29,6 +32,12 @@ public class BlockchainController : ControllerBase
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
+    private async Task<bool> IsBlockchainFeatureBlockedAsync(ApplicationDbContext db, int userId, CancellationToken ct)
+    {
+        var startup = await db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId, ct);
+        return startup != null && startup.SubscriptionPlan == StartupSubscriptionPlan.Free;
+    }
+
     // ================================================================
     // 1) POST /api/documents/{documentId}/hash — Compute file hash
     // ================================================================
@@ -40,9 +49,12 @@ public class BlockchainController : ControllerBase
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<HashResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<HashResponseDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ComputeHash(int documentId, CancellationToken ct)
+    public async Task<IActionResult> ComputeHash(int documentId, [FromServices] ApplicationDbContext db, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        if (await IsBlockchainFeatureBlockedAsync(db, userId, ct))
+            return ApiResponse<HashResponseDto>.ErrorResponse("FEATURE_REQUIRES_UPGRADE", "Blockchain verification requires a Pro or Fundraising plan.").ToActionResult();
+
         var result = await _proofService.ComputeHashAsync(documentId, userId, ct);
         return result.ToActionResult();
     }
@@ -61,9 +73,12 @@ public class BlockchainController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<SubmitChainResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<SubmitChainResponseDto>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<SubmitChainResponseDto>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> SubmitToChain(int documentId, CancellationToken ct)
+    public async Task<IActionResult> SubmitToChain(int documentId, [FromServices] ApplicationDbContext db, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        if (await IsBlockchainFeatureBlockedAsync(db, userId, ct))
+            return ApiResponse<SubmitChainResponseDto>.ErrorResponse("FEATURE_REQUIRES_UPGRADE", "Blockchain verification requires a Pro or Fundraising plan.").ToActionResult();
+
         var result = await _proofService.SubmitToChainAsync(documentId, userId, ct);
         return result.ToActionResult();
     }
@@ -80,9 +95,12 @@ public class BlockchainController : ControllerBase
     [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<VerifyChainResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<VerifyChainResponseDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> VerifyOnChain(int documentId, CancellationToken ct)
+    public async Task<IActionResult> VerifyOnChain(int documentId, [FromServices] ApplicationDbContext db, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        if (await IsBlockchainFeatureBlockedAsync(db, userId, ct))
+            return ApiResponse<VerifyChainResponseDto>.ErrorResponse("FEATURE_REQUIRES_UPGRADE", "Blockchain verification requires a Pro or Fundraising plan.").ToActionResult();
+
         var result = await _proofService.VerifyOnChainAsync(documentId, userId, ct);
         return result.ToActionResult();
     }
@@ -100,9 +118,12 @@ public class BlockchainController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<TxStatusResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<TxStatusResponseDto>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<TxStatusResponseDto>), StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IActionResult> GetTxStatus(int documentId, CancellationToken ct)
+    public async Task<IActionResult> GetTxStatus(int documentId, [FromServices] ApplicationDbContext db, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
+        if (await IsBlockchainFeatureBlockedAsync(db, userId, ct))
+            return ApiResponse<TxStatusResponseDto>.ErrorResponse("FEATURE_REQUIRES_UPGRADE", "Blockchain verification requires a Pro or Fundraising plan.").ToActionResult();
+
         var result = await _proofService.GetTxStatusAsync(documentId, userId, ct);
         return result.ToActionResult();
     }

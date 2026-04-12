@@ -5,6 +5,9 @@ using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Services;
 // AI Integration usings are resolved via the above namespaces
 using AISEP.Infrastructure.Settings;
+using AISEP.Infrastructure.Jobs;
+using Hangfire;
+using Hangfire.PostgreSql;
 using AISEP.WebAPI.Hubs;
 using AISEP.WebAPI.Middlewares;
 using CloudinaryDotNet;
@@ -162,8 +165,16 @@ builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
 
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
-
 builder.Services.AddSignalR();
+
+// Hangfire Background Jobs setup
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection"))));
+
+builder.Services.AddHangfireServer();
 
 builder.Services.Configure<CloudinaryOptions>(
     builder.Configuration.GetSection("CloudinaryOptions"));
@@ -329,6 +340,12 @@ var app = builder.Build();
     app.UseAuthorization();
     app.MapControllers();
     app.MapHub<ChatHub>("/hubs/chat");
+
+    app.UseHangfireDashboard("/hangfire");
+    RecurringJob.AddOrUpdate<SubscriptionExpirationJob>(
+        "ResetExpiredSubscriptions", 
+        job => job.ProcessExpiredSubscriptions(), 
+        Cron.Daily);
 
     app.Run();
 }
