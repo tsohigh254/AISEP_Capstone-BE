@@ -10,24 +10,19 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "ParentDocumentID",
-                table: "Documents",
-                type: "integer",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ParentDocumentID"" integer;
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_ParentDocumentID",
-                table: "Documents",
-                column: "ParentDocumentID");
+                CREATE INDEX IF NOT EXISTS ""IX_Documents_ParentDocumentID""
+                    ON ""Documents"" (""ParentDocumentID"");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_Documents_Documents_ParentDocumentID",
-                table: "Documents",
-                column: "ParentDocumentID",
-                principalTable: "Documents",
-                principalColumn: "DocumentID",
-                onDelete: ReferentialAction.Restrict);
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Documents_Documents_ParentDocumentID') THEN
+                        ALTER TABLE ""Documents"" ADD CONSTRAINT ""FK_Documents_Documents_ParentDocumentID""
+                            FOREIGN KEY (""ParentDocumentID"") REFERENCES ""Documents""(""DocumentID"") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+            ");
         }
 
         /// <inheritdoc />

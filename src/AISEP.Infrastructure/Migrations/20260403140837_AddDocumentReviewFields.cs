@@ -11,48 +11,25 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "ReviewNotes",
-                table: "Documents",
-                type: "text",
-                nullable: true);
+            // Use IF NOT EXISTS to handle out-of-sync DB
+            // (production DB was partially created manually)
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ReviewNotes"" text;
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ReviewStatus"" smallint NOT NULL DEFAULT 0;
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ReviewedAt"" timestamp with time zone;
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ReviewedBy"" integer;
+                ALTER TABLE ""Documents"" ADD COLUMN IF NOT EXISTS ""ReviewedByUserUserID"" integer;
 
-            migrationBuilder.AddColumn<short>(
-                name: "ReviewStatus",
-                table: "Documents",
-                type: "smallint",
-                nullable: false,
-                defaultValue: (short)0);
+                CREATE INDEX IF NOT EXISTS ""IX_Documents_ReviewedByUserUserID""
+                    ON ""Documents"" (""ReviewedByUserUserID"");
 
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ReviewedAt",
-                table: "Documents",
-                type: "timestamp with time zone",
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "ReviewedBy",
-                table: "Documents",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "ReviewedByUserUserID",
-                table: "Documents",
-                type: "integer",
-                nullable: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_ReviewedByUserUserID",
-                table: "Documents",
-                column: "ReviewedByUserUserID");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Documents_Users_ReviewedByUserUserID",
-                table: "Documents",
-                column: "ReviewedByUserUserID",
-                principalTable: "Users",
-                principalColumn: "UserID");
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Documents_Users_ReviewedByUserUserID') THEN
+                        ALTER TABLE ""Documents"" ADD CONSTRAINT ""FK_Documents_Users_ReviewedByUserUserID""
+                            FOREIGN KEY (""ReviewedByUserUserID"") REFERENCES ""Users""(""UserID"");
+                    END IF;
+                END $$;
+            ");
         }
 
         /// <inheritdoc />

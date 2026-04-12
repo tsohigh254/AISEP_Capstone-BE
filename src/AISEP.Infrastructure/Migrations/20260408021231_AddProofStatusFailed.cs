@@ -10,41 +10,23 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_Documents_Users_ReviewedByUserUserID",
-                table: "Documents");
+            // Use raw SQL with IF EXISTS to handle out-of-sync DB
+            // (production DB was partially created manually, so these
+            // constraints/columns may not exist)
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Incidents_Users_CreatedByUserUserID",
-                table: "Incidents");
+            migrationBuilder.Sql(@"
+                ALTER TABLE ""Documents"" DROP CONSTRAINT IF EXISTS ""FK_Documents_Users_ReviewedByUserUserID"";
+                ALTER TABLE ""Incidents"" DROP CONSTRAINT IF EXISTS ""FK_Incidents_Users_CreatedByUserUserID"";
+                ALTER TABLE ""Incidents"" DROP CONSTRAINT IF EXISTS ""FK_Incidents_Users_ResolvedByUserUserID"";
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Incidents_Users_ResolvedByUserUserID",
-                table: "Incidents");
+                DROP INDEX IF EXISTS ""IX_Incidents_CreatedByUserUserID"";
+                DROP INDEX IF EXISTS ""IX_Incidents_ResolvedByUserUserID"";
+                DROP INDEX IF EXISTS ""IX_Documents_ReviewedByUserUserID"";
 
-            migrationBuilder.DropIndex(
-                name: "IX_Incidents_CreatedByUserUserID",
-                table: "Incidents");
-
-            migrationBuilder.DropIndex(
-                name: "IX_Incidents_ResolvedByUserUserID",
-                table: "Incidents");
-
-            migrationBuilder.DropIndex(
-                name: "IX_Documents_ReviewedByUserUserID",
-                table: "Documents");
-
-            migrationBuilder.DropColumn(
-                name: "CreatedByUserUserID",
-                table: "Incidents");
-
-            migrationBuilder.DropColumn(
-                name: "ResolvedByUserUserID",
-                table: "Incidents");
-
-            migrationBuilder.DropColumn(
-                name: "ReviewedByUserUserID",
-                table: "Documents");
+                ALTER TABLE ""Incidents"" DROP COLUMN IF EXISTS ""CreatedByUserUserID"";
+                ALTER TABLE ""Incidents"" DROP COLUMN IF EXISTS ""ResolvedByUserUserID"";
+                ALTER TABLE ""Documents"" DROP COLUMN IF EXISTS ""ReviewedByUserUserID"";
+            ");
 
             migrationBuilder.AlterColumn<short>(
                 name: "ProofStatus",
@@ -56,44 +38,29 @@ namespace AISEP.Infrastructure.Migrations
                 oldType: "smallint",
                 oldDefaultValue: (short)0);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Incidents_CreatedBy",
-                table: "Incidents",
-                column: "CreatedBy");
+            // Create indexes and FKs only if they don't already exist
+            migrationBuilder.Sql(@"
+                CREATE INDEX IF NOT EXISTS ""IX_Incidents_CreatedBy"" ON ""Incidents"" (""CreatedBy"");
+                CREATE INDEX IF NOT EXISTS ""IX_Incidents_ResolvedBy"" ON ""Incidents"" (""ResolvedBy"");
+                CREATE INDEX IF NOT EXISTS ""IX_Documents_ReviewedBy"" ON ""Documents"" (""ReviewedBy"");
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Incidents_ResolvedBy",
-                table: "Incidents",
-                column: "ResolvedBy");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_ReviewedBy",
-                table: "Documents",
-                column: "ReviewedBy");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Documents_Users_ReviewedBy",
-                table: "Documents",
-                column: "ReviewedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Incidents_Users_CreatedBy",
-                table: "Incidents",
-                column: "CreatedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Incidents_Users_ResolvedBy",
-                table: "Incidents",
-                column: "ResolvedBy",
-                principalTable: "Users",
-                principalColumn: "UserID",
-                onDelete: ReferentialAction.Restrict);
+            migrationBuilder.Sql(@"
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Documents_Users_ReviewedBy') THEN
+                        ALTER TABLE ""Documents"" ADD CONSTRAINT ""FK_Documents_Users_ReviewedBy""
+                            FOREIGN KEY (""ReviewedBy"") REFERENCES ""Users""(""UserID"") ON DELETE RESTRICT;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_CreatedBy') THEN
+                        ALTER TABLE ""Incidents"" ADD CONSTRAINT ""FK_Incidents_Users_CreatedBy""
+                            FOREIGN KEY (""CreatedBy"") REFERENCES ""Users""(""UserID"") ON DELETE RESTRICT;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_Incidents_Users_ResolvedBy') THEN
+                        ALTER TABLE ""Incidents"" ADD CONSTRAINT ""FK_Incidents_Users_ResolvedBy""
+                            FOREIGN KEY (""ResolvedBy"") REFERENCES ""Users""(""UserID"") ON DELETE RESTRICT;
+                    END IF;
+                END $$;
+            ");
         }
 
         /// <inheritdoc />
