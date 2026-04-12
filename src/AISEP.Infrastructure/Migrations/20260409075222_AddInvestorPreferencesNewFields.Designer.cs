@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260409075222_AddInvestorPreferencesNewFields")]
+    partial class AddInvestorPreferencesNewFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -329,6 +332,91 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("AdvisorWallets");
                 });
 
+            modelBuilder.Entity("AISEP.Domain.Entities.AiEvaluationRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CorrelationId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsReportValid")
+                        .HasColumnType("boolean");
+
+                    b.Property<double?>("OverallScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("PythonRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReportJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("StartupId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PythonRunId")
+                        .IsUnique();
+
+                    b.HasIndex("StartupId");
+
+                    b.ToTable("AiEvaluationRuns");
+                });
+
+            modelBuilder.Entity("AISEP.Domain.Entities.AiWebhookDelivery", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DeliveryId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("EvaluationRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Processed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ProcessingNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryId")
+                        .IsUnique();
+
+                    b.ToTable("AiWebhookDeliveries");
+                });
+
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<int>("LogID")
@@ -436,9 +524,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<int?>("ParentDocumentID")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ReviewNotes")
                         .HasColumnType("text");
 
@@ -464,8 +549,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("DocumentID");
-
-                    b.HasIndex("ParentDocumentID");
 
                     b.HasIndex("ReviewedBy");
 
@@ -789,9 +872,6 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("InvestorID"));
 
-                    b.Property<bool>("AcceptingConnections")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1016,6 +1096,15 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PreferenceID"));
 
+                    b.Property<string>("AcceptingConnectionsStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AiScoreImportance")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AvoidText")
+                        .HasColumnType("text");
+
                     b.Property<int>("InvestorID")
                         .HasColumnType("integer");
 
@@ -1028,6 +1117,12 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<float?>("MinPotentialScore")
                         .HasColumnType("real");
 
+                    b.Property<float?>("PreferredAiScoreMax")
+                        .HasColumnType("real");
+
+                    b.Property<float?>("PreferredAiScoreMin")
+                        .HasColumnType("real");
+
                     b.Property<string>("PreferredGeographies")
                         .HasColumnType("text");
 
@@ -1037,10 +1132,31 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("PreferredMarketScopes")
                         .HasColumnType("text");
 
+                    b.Property<string>("PreferredProductMaturity")
+                        .HasColumnType("text");
+
                     b.Property<string>("PreferredStages")
                         .HasColumnType("text");
 
+                    b.Property<string>("PreferredStrengths")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreferredValidationLevel")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("RecentlyActiveBadge")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RequireVerifiedStartups")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RequireVisibleProfiles")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("SupportOffered")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Tags")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -2605,6 +2721,17 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Advisor");
                 });
 
+            modelBuilder.Entity("AISEP.Domain.Entities.AiEvaluationRun", b =>
+                {
+                    b.HasOne("AISEP.Domain.Entities.Startup", "Startup")
+                        .WithMany()
+                        .HasForeignKey("StartupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Startup");
+                });
+
             modelBuilder.Entity("AISEP.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "User")
@@ -2631,11 +2758,6 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.Document", "ParentDocument")
-                        .WithMany("ChildVersions")
-                        .HasForeignKey("ParentDocumentID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AISEP.Domain.Entities.User", "ReviewedByUser")
                         .WithMany()
                         .HasForeignKey("ReviewedBy")
@@ -2646,8 +2768,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasForeignKey("StartupID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ParentDocument");
 
                     b.Navigation("ReviewedByUser");
 
@@ -3263,8 +3383,6 @@ namespace AISEP.Infrastructure.Migrations
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
                     b.Navigation("BlockchainProof");
-
-                    b.Navigation("ChildVersions");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.FlaggedContent", b =>

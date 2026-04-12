@@ -32,13 +32,20 @@ public class ConnectionsService : IConnectionsService
         if (investor == null)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
 
-        var startupExists = await _db.Startups.AnyAsync(s => s.StartupID == request.StartupId);
+        if (!investor.AcceptingConnections)
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_ACCEPTING_CONNECTIONS",
+                "This investor is not currently accepting new connections.");
+
+        if (!request.StartupId.HasValue)
+            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_ID_REQUIRED", "StartupId is required.");
+
+        var startupExists = await _db.Startups.AnyAsync(s => s.StartupID == request.StartupId.Value);
         if (!startupExists)
             return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_FOUND",
                 $"Startup with id {request.StartupId} not found.");
 
         var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
-            c.StartupID == request.StartupId &&
+            c.StartupID == request.StartupId.Value &&
             c.InvestorID == investor.InvestorID &&
             (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
         if (duplicate)
@@ -47,7 +54,7 @@ public class ConnectionsService : IConnectionsService
 
         var conn = new StartupInvestorConnection
         {
-            StartupID = request.StartupId,
+            StartupID = request.StartupId.Value,
             InvestorID = investor.InvestorID,
             ConnectionStatus = ConnectionStatus.Requested,
             InitiatedBy = userId,
@@ -67,23 +74,87 @@ public class ConnectionsService : IConnectionsService
     }
 
     // ================================================================
-    // GET SENT CONNECTIONS (Investor)
+    // CREATE CONNECTION (Startup → Investor)
+    // ================================================================
+
+    public async Task<ApiResponse<ConnectionDto>> CreateConnectionFromStartupAsync(int userId, CreateStartupToInvestorRequest request)
+    {
+        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
+        if (investor == null)
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_FOUND",
+                $"Investor with id {request.InvestorId} not found.");
+
+        if (!investor.AcceptingConnections)
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_ACCEPTING_CONNECTIONS",
+                "This investor is not currently accepting new connections.");
+
+        var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
+            c.StartupID == startup.StartupID &&
+            c.InvestorID == request.InvestorId &&
+            (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
+        if (duplicate)
+            return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_ALREADY_EXISTS",
+                "An active or pending connection with this investor already exists.");
+
+        var conn = new StartupInvestorConnection
+        {
+            StartupID = startup.StartupID,
+            InvestorID = request.InvestorId,
+            ConnectionStatus = ConnectionStatus.Requested,
+            InitiatedBy = userId,
+            PersonalizedMessage = request.Message,
+            RequestedAt = DateTime.UtcNow
+        };
+
+        _db.StartupInvestorConnections.Add(conn);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CREATE_CONNECTION", "StartupInvestorConnection", conn.ConnectionID,
+            $"StartupId={startup.StartupID}, InvestorId={request.InvestorId}");
+        _logger.LogInformation("Connection {ConnId} created by startup {StartupId} to investor {InvestorId}",
+            conn.ConnectionID, startup.StartupID, request.InvestorId);
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
+    }
+
+    // ================================================================
+    // GET SENT CONNECTIONS (both roles — direction: InitiatedBy == me)
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(
-        int userId, string? status, int page, int pageSize)
+        int userId, string userType, string? status, int page, int pageSize)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
 
-        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
-        if (investor == null)
-            return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
-                "INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+        IQueryable<StartupInvestorConnection> query;
 
-        var query = _db.StartupInvestorConnections.AsNoTracking()
-            .Include(c => c.Startup).Include(c => c.Investor)
-            .Where(c => c.InvestorID == investor.InvestorID);
+        if (userType == "Investor")
+        {
+            var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
+            if (investor == null)
+                return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
+                    "INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+
+            query = _db.StartupInvestorConnections.AsNoTracking()
+                .Include(c => c.Startup).Include(c => c.Investor)
+                .Where(c => c.InvestorID == investor.InvestorID && c.InitiatedBy == userId);
+        }
+        else
+        {
+            var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
+            if (startup == null)
+                return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
+                    "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+            query = _db.StartupInvestorConnections.AsNoTracking()
+                .Include(c => c.Startup).Include(c => c.Investor)
+                .Where(c => c.StartupID == startup.StartupID && c.InitiatedBy == userId);
+        }
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
             query = query.Where(c => c.ConnectionStatus == statusEnum);
@@ -91,10 +162,7 @@ public class ConnectionsService : IConnectionsService
         query = query.OrderByDescending(c => c.RequestedAt);
 
         var total = await query.CountAsync();
-        var items = await query
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(c => MapToListItem(c))
-            .ToListAsync();
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(c => MapToListItem(c)).ToListAsync();
 
         return ApiResponse<PagedResponse<ConnectionListItemDto>>.SuccessResponse(
             new PagedResponse<ConnectionListItemDto>
@@ -105,43 +173,59 @@ public class ConnectionsService : IConnectionsService
     }
 
     // ================================================================
-    // GET RECEIVED CONNECTIONS (Startup)
+    // GET RECEIVED CONNECTIONS (both roles — direction: InitiatedBy != me)
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(
-        int userId, string? status, int? investorId, int page, int pageSize)
+        int userId, string userType, string? status, int? counterpartId, int page, int pageSize)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
 
-        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
-        if (startup == null)
-            return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
-                "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+        IQueryable<StartupInvestorConnection> query;
 
-        var query = _db.StartupInvestorConnections.AsNoTracking()
-            .Include(c => c.Startup).Include(c => c.Investor)
-            .Where(c => c.StartupID == startup.StartupID);
+        if (userType == "Investor")
+        {
+            var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
+            if (investor == null)
+                return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
+                    "INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
 
-        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum2))
-            query = query.Where(c => c.ConnectionStatus == statusEnum2);
+            query = _db.StartupInvestorConnections.AsNoTracking()
+                .Include(c => c.Startup).Include(c => c.Investor)
+                .Where(c => c.InvestorID == investor.InvestorID && c.InitiatedBy != userId);
 
-        if (investorId.HasValue)
-            query = query.Where(c => c.InvestorID == investorId.Value);
+            if (counterpartId.HasValue)
+                query = query.Where(c => c.StartupID == counterpartId.Value);
+        }
+        else
+        {
+            var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
+            if (startup == null)
+                return ApiResponse<PagedResponse<ConnectionListItemDto>>.ErrorResponse(
+                    "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+            query = _db.StartupInvestorConnections.AsNoTracking()
+                .Include(c => c.Startup).Include(c => c.Investor)
+                .Where(c => c.StartupID == startup.StartupID && c.InitiatedBy != userId);
+
+            if (counterpartId.HasValue)
+                query = query.Where(c => c.InvestorID == counterpartId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
+            query = query.Where(c => c.ConnectionStatus == statusEnum);
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
         var total = await query.CountAsync();
-        var items = await query
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(c => MapToListItem(c))
-            .ToListAsync();
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(c => MapToListItem(c)).ToListAsync();
 
         return ApiResponse<PagedResponse<ConnectionListItemDto>>.SuccessResponse(
             new PagedResponse<ConnectionListItemDto>
             {
                 Items = items,
-                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total}
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
             });
     }
 
@@ -189,13 +273,17 @@ public class ConnectionsService : IConnectionsService
     }
 
     // ================================================================
-    // WITHDRAW CONNECTION (Investor)
+    // WITHDRAW CONNECTION (initiator only — both roles)
     // ================================================================
 
-    public async Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, int connectionId)
+    public async Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, string userType, int connectionId)
     {
-        var (conn, error) = await GetConnectionForInvestor(userId, connectionId);
+        var (conn, error) = await GetConnectionAsParticipant(userId, userType, connectionId);
         if (conn == null) return error!;
+
+        if (conn.InitiatedBy != userId)
+            return ApiResponse<ConnectionDto>.ErrorResponse("NOT_INITIATOR",
+                "Only the party who initiated this connection can withdraw it.");
 
         if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
@@ -206,19 +294,23 @@ public class ConnectionsService : IConnectionsService
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("WITHDRAW_CONNECTION", "StartupInvestorConnection", connectionId, null);
-        _logger.LogInformation("Connection {ConnId} withdrawn by investor", connectionId);
+        _logger.LogInformation("Connection {ConnId} withdrawn by {UserType} {UserId}", connectionId, userType, userId);
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
 
     // ================================================================
-    // ACCEPT CONNECTION (Startup)
+    // ACCEPT CONNECTION (receiver only — both roles)
     // ================================================================
 
-    public async Task<ApiResponse<ConnectionDto>> AcceptAsync(int userId, int connectionId)
+    public async Task<ApiResponse<ConnectionDto>> AcceptAsync(int userId, string userType, int connectionId)
     {
-        var (conn, error) = await GetConnectionForStartup(userId, connectionId);
+        var (conn, error) = await GetConnectionAsParticipant(userId, userType, connectionId);
         if (conn == null) return error!;
+
+        if (conn.InitiatedBy == userId)
+            return ApiResponse<ConnectionDto>.ErrorResponse("NOT_RECEIVER",
+                "You cannot accept a connection you initiated.");
 
         if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
@@ -229,19 +321,23 @@ public class ConnectionsService : IConnectionsService
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("ACCEPT_CONNECTION", "StartupInvestorConnection", connectionId, null);
-        _logger.LogInformation("Connection {ConnId} accepted by startup", connectionId);
+        _logger.LogInformation("Connection {ConnId} accepted by {UserType} {UserId}", connectionId, userType, userId);
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
 
     // ================================================================
-    // REJECT CONNECTION (Startup)
+    // REJECT CONNECTION (receiver only — both roles)
     // ================================================================
 
-    public async Task<ApiResponse<ConnectionDto>> RejectAsync(int userId, int connectionId, string? reason)
+    public async Task<ApiResponse<ConnectionDto>> RejectAsync(int userId, string userType, int connectionId, string? reason)
     {
-        var (conn, error) = await GetConnectionForStartup(userId, connectionId);
+        var (conn, error) = await GetConnectionAsParticipant(userId, userType, connectionId);
         if (conn == null) return error!;
+
+        if (conn.InitiatedBy == userId)
+            return ApiResponse<ConnectionDto>.ErrorResponse("NOT_RECEIVER",
+                "You cannot reject a connection you initiated.");
 
         if (conn.ConnectionStatus != ConnectionStatus.Requested)
             return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
@@ -252,7 +348,7 @@ public class ConnectionsService : IConnectionsService
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("REJECT_CONNECTION", "StartupInvestorConnection", connectionId, $"Reason={reason}");
-        _logger.LogInformation("Connection {ConnId} rejected by startup", connectionId);
+        _logger.LogInformation("Connection {ConnId} rejected by {UserType} {UserId}", connectionId, userType, userId);
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
@@ -263,7 +359,9 @@ public class ConnectionsService : IConnectionsService
 
     public async Task<ApiResponse<ConnectionDto>> CloseAsync(int userId, string userType, int connectionId)
     {
-        var conn = await _db.StartupInvestorConnections.FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
+        var conn = await _db.StartupInvestorConnections
+            .Include(c => c.Investor)
+            .FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
         if (conn == null)
             return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_NOT_FOUND", "Connection not found.");
 
@@ -530,6 +628,7 @@ public class ConnectionsService : IConnectionsService
     // HELPERS
     // ================================================================
 
+    // Used by UpdateAsync (still InvestorOnly)
     private async Task<(StartupInvestorConnection? conn, ApiResponse<ConnectionDto>? error)>
         GetConnectionForInvestor(int userId, int connectionId)
     {
@@ -537,7 +636,9 @@ public class ConnectionsService : IConnectionsService
         if (investor == null)
             return (null, ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found."));
 
-        var conn = await _db.StartupInvestorConnections.FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
+        var conn = await _db.StartupInvestorConnections
+            .Include(c => c.Investor)
+            .FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
         if (conn == null)
             return (null, ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_NOT_FOUND", "Connection not found."));
 
@@ -548,20 +649,19 @@ public class ConnectionsService : IConnectionsService
         return (conn, null);
     }
 
+    // Used by Withdraw/Accept/Reject — works for both roles
     private async Task<(StartupInvestorConnection? conn, ApiResponse<ConnectionDto>? error)>
-        GetConnectionForStartup(int userId, int connectionId)
+        GetConnectionAsParticipant(int userId, string userType, int connectionId)
     {
-        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
-        if (startup == null)
-            return (null, ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found."));
-
-        var conn = await _db.StartupInvestorConnections.FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
+        var conn = await _db.StartupInvestorConnections
+            .Include(c => c.Investor)
+            .FirstOrDefaultAsync(c => c.ConnectionID == connectionId);
         if (conn == null)
             return (null, ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_NOT_FOUND", "Connection not found."));
 
-        if (conn.StartupID != startup.StartupID)
+        if (!await IsParticipantOrStaff(userId, userType, conn))
             return (null, ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_NOT_OWNED",
-                "You are not the startup owner for this connection."));
+                "You do not have access to this connection."));
 
         return (conn, null);
     }
@@ -597,6 +697,7 @@ public class ConnectionsService : IConnectionsService
         ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         MatchScore = c.MatchScore,
+        InitiatedByRole = c.Investor != null && c.InitiatedBy == c.Investor.UserID ? "INVESTOR" : c.InitiatedBy != null ? "STARTUP" : null,
         RequestedAt = c.RequestedAt,
         RespondedAt = c.RespondedAt
     };
@@ -611,6 +712,7 @@ public class ConnectionsService : IConnectionsService
         ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         MatchScore = c.MatchScore,
+        InitiatedByRole = c.InitiatedBy == c.Investor.UserID ? "INVESTOR" : "STARTUP",
         RequestedAt = c.RequestedAt,
         RespondedAt = c.RespondedAt
     };
@@ -626,6 +728,7 @@ public class ConnectionsService : IConnectionsService
         PersonalizedMessage = c.PersonalizedMessage,
         AttachedDocumentIDs = c.AttachedDocumentIDs,
         MatchScore = c.MatchScore,
+        InitiatedByRole = c.InitiatedBy == c.Investor.UserID ? "INVESTOR" : "STARTUP",
         RequestedAt = c.RequestedAt,
         RespondedAt = c.RespondedAt,
         InformationRequests = c.InformationRequests.Select(MapInfoRequestDto).ToList()

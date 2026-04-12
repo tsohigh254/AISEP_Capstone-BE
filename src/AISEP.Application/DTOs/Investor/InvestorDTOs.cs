@@ -87,6 +87,16 @@ public class UpdateInvestorRequest
     public string? Website { get; set; }
 }
 
+public class SetAcceptingConnectionsRequest
+{
+    public bool AcceptingConnections { get; set; }
+}
+
+public class AcceptingConnectionsDto
+{
+    public bool AcceptingConnections { get; set; }
+}
+
 public class UpdatePreferencesRequest
 {
     public decimal? TicketMin { get; set; }
@@ -99,6 +109,34 @@ public class UpdatePreferencesRequest
     public float? MinPotentialScore { get; set; }
     public List<string>? PreferredMarketScopes { get; set; }
     public List<string>? SupportOffered { get; set; }
+
+    // ── New fields (API spec 2026-04-09) ──
+    public List<string>? PreferredProductMaturity { get; set; }
+    public List<string>? PreferredValidationLevel { get; set; }
+    public List<string>? PreferredStrengths { get; set; }
+
+    /// <summary>AI score filter range, e.g. { "min": 40, "max": 100 }</summary>
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    /// <summary>low | medium | high</summary>
+    public string? AiScoreImportance { get; set; }
+
+    /// <summary>active | paused | closed</summary>
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool? RecentlyActiveBadge { get; set; }
+
+    public bool? RequireVerifiedStartups { get; set; }
+    public bool? RequireVisibleProfiles { get; set; }
+
+    /// <summary>Free-text describing what the investor does NOT want</summary>
+    public string? AvoidText { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+/// <summary>Nested AI score range filter.</summary>
+public class AiScoreRangeDto
+{
+    public float? Min { get; set; }
+    public float? Max { get; set; }
 }
 
 public class WatchlistAddRequest
@@ -126,6 +164,7 @@ public class InvestorDto
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
     public string ProfileStatus { get; set; } = string.Empty;
+    public bool AcceptingConnections { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
@@ -215,9 +254,47 @@ public class InvestorSearchItemDto
     public List<string> PreferredIndustries { get; set; } = new();
     public List<string> PreferredStages { get; set; } = new();
     public string? PreferredGeographies { get; set; }
+    /// <summary>Min investment ticket size in USD. Null if investor has not set preferences.</summary>
+    public decimal? TicketSizeMin { get; set; }
+    /// <summary>Max investment ticket size in USD. Null if investor has not set preferences.</summary>
+    public decimal? TicketSizeMax { get; set; }
+    /// <summary>Number of real-world portfolio companies (investments outside the platform).</summary>
+    public int? PortfolioCount { get; set; }
+    /// <summary>Number of accepted connections on the platform (status = Accepted).</summary>
+    public int AcceptedConnectionCount { get; set; }
+    public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
+    public bool AcceptingConnections { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+/// <summary>Investor detail DTO for Startup role — includes visibility semantics</summary>
+public class InvestorDetailForStartupDto
+{
+    public int InvestorID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? FirmName { get; set; }
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+    public string? InvestmentThesis { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? Website { get; set; }
+    public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
+    public List<string> PreferredIndustries { get; set; } = new();
+    public List<string> PreferredStages { get; set; } = new();
     public decimal? TicketSizeMin { get; set; }
     public decimal? TicketSizeMax { get; set; }
+    public int? PortfolioCount { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    // Visibility semantics — FE uses these to decide render mode
+    // OPEN: discoverable=true, canRequestConnection=true
+    // INVESTOR_PAUSED_DISCOVERY: discoverable=false, canRequestConnection=false, detail still accessible read-only
+    public bool DiscoverableForStartups { get; set; }
+    public bool CanRequestConnection { get; set; }
+    public string ProfileAvailabilityReason { get; set; } = "OPEN";
 }
 
 /// <summary>Startup search result DTO (no sensitive data exposed)</summary>
@@ -289,6 +366,20 @@ public class PreferencesDto
     public float? MinPotentialScore { get; set; }
     public List<string> PreferredMarketScopes { get; set; } = new();
     public List<string> SupportOffered { get; set; } = new();
+
+    // ── New fields ──
+    public List<string> PreferredProductMaturity { get; set; } = new();
+    public List<string> PreferredValidationLevel { get; set; } = new();
+    public List<string> PreferredStrengths { get; set; } = new();
+    public AiScoreRangeDto? PreferredAiScoreRange { get; set; }
+    public string? AiScoreImportance { get; set; }
+    public string? AcceptingConnectionsStatus { get; set; }
+    public bool RecentlyActiveBadge { get; set; }
+    public bool RequireVerifiedStartups { get; set; }
+    public bool RequireVisibleProfiles { get; set; }
+    public string? AvoidText { get; set; }
+    public List<string> Tags { get; set; } = new();
+
     public DateTime? UpdatedAt { get; set; }
 }
 

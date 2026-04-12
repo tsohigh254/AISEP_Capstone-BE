@@ -3,6 +3,7 @@ using AISEP.Application.Interfaces;
 using AISEP.Domain.Interfaces;
 using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Services;
+// AI Integration usings are resolved via the above namespaces
 using AISEP.Infrastructure.Settings;
 using AISEP.WebAPI.Hubs;
 using AISEP.WebAPI.Middlewares;
@@ -124,6 +125,21 @@ builder.Services.AddHttpClient<IAIService, AIService>(client =>
     client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://ai:8000");
     client.Timeout = TimeSpan.FromSeconds(300);
 });
+
+// ── Python AI Service Integration ──────────────────────────────
+builder.Services.Configure<PythonAiOptions>(builder.Configuration.GetSection(PythonAiOptions.SectionName));
+var pythonAiOpts = builder.Configuration.GetSection(PythonAiOptions.SectionName).Get<PythonAiOptions>() ?? new PythonAiOptions();
+builder.Services.AddHttpClient<PythonAiClient>(client =>
+{
+    client.BaseAddress = new Uri(pythonAiOpts.BaseUrl);
+    // Set Infinite so HttpClient never cuts the connection globally.
+    // Each method in PythonAiClient controls its own per-call timeout via CancellationToken.
+    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+builder.Services.AddScoped<IAiEvaluationService, AiEvaluationService>();
+builder.Services.AddScoped<IAiRecommendationService, AiRecommendationService>();
+builder.Services.AddScoped<IAiInvestorAgentService, AiInvestorAgentService>();
 
 builder.Services.AddSingleton<PayOSClient>(p =>
     {
@@ -262,12 +278,20 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-    // Migrate & seed database — app must not start with a broken schema
-    using (var scope = app.Services.CreateScope())
+    var skipMigrateOnStartup = builder.Configuration.GetValue<bool>("Database:SkipMigrateOnStartup");
+    if (!skipMigrateOnStartup)
     {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await context.Database.MigrateAsync();
-        await DbSeeder.SeedAsync(context);
+        // Migrate & seed database — app must not start with a broken schema
+        using (var scope = app.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await context.Database.MigrateAsync();
+            await DbSeeder.SeedAsync(context);
+        }
+    }
+    else
+    {
+        Log.Warning("Skipping database migration/seed on startup because Database:SkipMigrateOnStartup=true");
     }
 
     // Configure the HTTP request pipeline.

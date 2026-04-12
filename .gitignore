@@ -375,3 +375,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+src/AISEP.WebAPI/appsettings.Development.json
+src/AISEP.WebAPI/appsettings.json
+

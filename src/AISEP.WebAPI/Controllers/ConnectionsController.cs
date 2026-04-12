@@ -31,7 +31,7 @@ public class ConnectionsController : ControllerBase
         => User.FindFirst("userType")?.Value ?? string.Empty;
 
     // ================================================================
-    // 1) POST /api/connections (Investor)
+    // 1a) POST /api/connections (Investor → Startup)
     // ================================================================
 
     /// <summary>Create a connection offer from the current investor to a startup.</summary>
@@ -47,24 +47,39 @@ public class ConnectionsController : ControllerBase
     }
 
     // ================================================================
-    // 2) GET /api/connections/sent (Investor)
+    // 1b) POST /api/connections/invite (Startup → Investor)
     // ================================================================
 
-    /// <summary>List connections sent by the current investor.</summary>
+    /// <summary>Create a connection invite from the current startup to an investor.</summary>
+    [HttpPost("invite")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Invite([FromBody] CreateStartupToInvestorRequest request)
+    {
+        var result = await _svc.CreateConnectionFromStartupAsync(GetCurrentUserId(), request);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    // ================================================================
+    // 2) GET /api/connections/sent (both roles — connections I initiated)
+    // ================================================================
+
+    /// <summary>List connections initiated by the current user (Investor or Startup).</summary>
     [HttpGet("sent")]
-    [Authorize(Policy = "InvestorOnly")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<ConnectionListItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSent([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _svc.GetSentAsync(GetCurrentUserId(), status, page, pageSize);
+        var result = await _svc.GetSentAsync(GetCurrentUserId(), GetCurrentUserType(), status, page, pageSize);
         return result.ToPagedEnvelope();
     }
 
     // ================================================================
-    // 3) PUT /api/connections/{id} (Investor — only Sent)
+    // 3) PUT /api/connections/{id} (Investor — only Requested)
     // ================================================================
 
-    /// <summary>Update a pending connection (message). Investor-only, status must be 'Sent'.</summary>
+    /// <summary>Update a pending connection message. Investor-only, status must be 'Requested'.</summary>
     [HttpPut("{id:int}")]
     [Authorize(Policy = "InvestorOnly")]
     [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status200OK)]
@@ -75,58 +90,54 @@ public class ConnectionsController : ControllerBase
     }
 
     // ================================================================
-    // 4) POST /api/connections/{id}/withdraw (Investor)
+    // 4) POST /api/connections/{id}/withdraw (both roles — initiator only)
     // ================================================================
 
-    /// <summary>Withdraw a pending connection. Investor-only, status must be 'Sent'.</summary>
+    /// <summary>Withdraw a pending connection. Only the initiating party can withdraw.</summary>
     [HttpPost("{id:int}/withdraw")]
-    [Authorize(Policy = "InvestorOnly")]
     [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Withdraw(int id)
     {
-        var result = await _svc.WithdrawAsync(GetCurrentUserId(), id);
+        var result = await _svc.WithdrawAsync(GetCurrentUserId(), GetCurrentUserType(), id);
         return result.ToActionResult();
     }
 
     // ================================================================
-    // 5) GET /api/connections/received (Startup)
+    // 5) GET /api/connections/received (both roles — connections I received)
     // ================================================================
 
-    /// <summary>List connections received by the current startup.</summary>
+    /// <summary>List connections received by the current user (Investor or Startup).</summary>
     [HttpGet("received")]
-    [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<ConnectionListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int? investorId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int? counterpartId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), status, investorId, page, pageSize);
+        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), GetCurrentUserType(), status, counterpartId, page, pageSize);
         return result.ToPagedEnvelope();
     }
 
     // ================================================================
-    // 6) POST /api/connections/{id}/accept (Startup)
+    // 6) POST /api/connections/{id}/accept (both roles — receiver only)
     // ================================================================
 
-    /// <summary>Accept a connection. Startup-only, status must be 'Sent'.</summary>
+    /// <summary>Accept a connection. Only the receiving party can accept.</summary>
     [HttpPost("{id:int}/accept")]
-    [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Accept(int id)
     {
-        var result = await _svc.AcceptAsync(GetCurrentUserId(), id);
+        var result = await _svc.AcceptAsync(GetCurrentUserId(), GetCurrentUserType(), id);
         return result.ToActionResult();
     }
 
     // ================================================================
-    // 7) POST /api/connections/{id}/reject (Startup)
+    // 7) POST /api/connections/{id}/reject (both roles — receiver only)
     // ================================================================
 
-    /// <summary>Reject a connection with optional reason. Startup-only, status must be 'Sent'.</summary>
+    /// <summary>Reject a connection with optional reason. Only the receiving party can reject.</summary>
     [HttpPost("{id:int}/reject")]
-    [Authorize(Policy = "StartupOnly")]
     [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Reject(int id, [FromBody] RejectConnectionRequest request)
     {
-        var result = await _svc.RejectAsync(GetCurrentUserId(), id, request.Reason);
+        var result = await _svc.RejectAsync(GetCurrentUserId(), GetCurrentUserType(), id, request.Reason);
         return result.ToActionResult();
     }
 
@@ -212,5 +223,4 @@ public class ConnectionsController : ControllerBase
         var result = await _svc.RejectInfoRequestAsync(GetCurrentUserId(), requestId, request.Reason);
         return result.ToActionResult();
     }
-
 }

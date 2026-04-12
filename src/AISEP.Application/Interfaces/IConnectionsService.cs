@@ -7,13 +7,14 @@ public interface IConnectionsService
 {
     // ---- Connections ----
     Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, CreateConnectionRequest request);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string? status, int page, int pageSize);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string? status, int? investorId, int page, int pageSize);
+    Task<ApiResponse<ConnectionDto>> CreateConnectionFromStartupAsync(int userId, CreateStartupToInvestorRequest request);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string userType, string? status, int page, int pageSize);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string userType, string? status, int? counterpartId, int page, int pageSize);
     Task<ApiResponse<ConnectionDetailDto>> GetDetailAsync(int userId, string userType, int connectionId);
     Task<ApiResponse<ConnectionDto>> UpdateAsync(int userId, int connectionId, UpdateConnectionRequest request);
-    Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, int connectionId);
-    Task<ApiResponse<ConnectionDto>> AcceptAsync(int userId, int connectionId);
-    Task<ApiResponse<ConnectionDto>> RejectAsync(int userId, int connectionId, string? reason);
+    Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, string userType, int connectionId);
+    Task<ApiResponse<ConnectionDto>> AcceptAsync(int userId, string userType, int connectionId);
+    Task<ApiResponse<ConnectionDto>> RejectAsync(int userId, string userType, int connectionId, string? reason);
     Task<ApiResponse<ConnectionDto>> CloseAsync(int userId, string userType, int connectionId);
 
     // ---- Information Requests ----

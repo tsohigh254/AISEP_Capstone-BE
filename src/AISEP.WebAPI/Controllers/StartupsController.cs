@@ -216,7 +216,7 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> SearchStartups([FromQuery] StartupQueryParams startupQuery)
     {
         var result = await _startupService.SearchStartupsAsync(startupQuery);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -238,7 +238,7 @@ public class StartupsController : ControllerBase
     public async Task<IActionResult> SearchInvestors([FromQuery] InvestorQueryParams investorQuery)
     {
         var result = await _startupService.SearchInvestorsAsync(investorQuery);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     /// <summary>
@@ -246,8 +246,8 @@ public class StartupsController : ControllerBase
     /// </summary>
     [HttpGet("investors/{investorId:int}")]
     [Authorize(Policy = "StartupOnly")]
-    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<InvestorDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDetailForStartupDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorDetailForStartupDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetInvestorById(int investorId)
     {
         var result = await _startupService.GetInvestorByIdAsync(investorId);

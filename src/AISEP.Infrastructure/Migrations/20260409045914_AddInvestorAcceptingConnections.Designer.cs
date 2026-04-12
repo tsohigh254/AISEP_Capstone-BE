@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260409045914_AddInvestorAcceptingConnections")]
+    partial class AddInvestorAcceptingConnections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -436,9 +439,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<int?>("ParentDocumentID")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ReviewNotes")
                         .HasColumnType("text");
 
@@ -464,8 +464,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("DocumentID");
-
-                    b.HasIndex("ParentDocumentID");
 
                     b.HasIndex("ReviewedBy");
 
@@ -2631,11 +2629,6 @@ namespace AISEP.Infrastructure.Migrations
 
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
-                    b.HasOne("AISEP.Domain.Entities.Document", "ParentDocument")
-                        .WithMany("ChildVersions")
-                        .HasForeignKey("ParentDocumentID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AISEP.Domain.Entities.User", "ReviewedByUser")
                         .WithMany()
                         .HasForeignKey("ReviewedBy")
@@ -2646,8 +2639,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasForeignKey("StartupID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ParentDocument");
 
                     b.Navigation("ReviewedByUser");
 
@@ -3263,8 +3254,6 @@ namespace AISEP.Infrastructure.Migrations
             modelBuilder.Entity("AISEP.Domain.Entities.Document", b =>
                 {
                     b.Navigation("BlockchainProof");
-
-                    b.Navigation("ChildVersions");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.FlaggedContent", b =>

@@ -231,7 +231,7 @@ public class InvestorsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _investorService.GetWatchlistAsync(userId, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     /// <summary>
@@ -278,7 +278,7 @@ public class InvestorsController : ControllerBase
     {
         // minScore is accepted but ignored until AI module is implemented
         var result = await _investorService.SearchStartupsAsync(q, industryId, stage, location, sortBy, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -381,6 +381,35 @@ public class InvestorsController : ControllerBase
         var result = await _investorService.RemoveStageFocusAsync(GetCurrentUserId(), stageFocusId);
         if (!result.Success) return result.ToErrorResult();
         return ApiEnvelopeExtensions.DeletedEnvelope("Stage focus removed");
+    }
+
+    // ================================================================
+    // ACCEPTING CONNECTIONS
+    // ================================================================
+
+    /// <summary>
+    /// Enable or disable receiving new connection requests from startups.
+    /// Requires an approved profile and completed KYC.
+    /// Existing pending or accepted connections are not affected.
+    /// </summary>
+    /// <remarks>
+    /// Sample request:
+    ///
+    ///     PATCH /api/investors/me/accepting-connections
+    ///     {
+    ///       "acceptingConnections": false
+    ///     }
+    ///
+    /// </remarks>
+    [HttpPatch("me/accepting-connections")]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<AcceptingConnectionsDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetAcceptingConnections([FromBody] SetAcceptingConnectionsRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _investorService.SetAcceptingConnectionsAsync(userId, request.AcceptingConnections);
+        return result.ToActionResult();
     }
 
     // ================================================================

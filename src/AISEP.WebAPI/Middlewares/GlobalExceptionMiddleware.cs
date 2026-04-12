@@ -23,6 +23,17 @@ public class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
+            // TaskCanceledException caused by the client disconnecting is normal for SSE/long-poll.
+            // Do not log as an error and do not write a 504 response — the connection is already gone.
+            if (ex is TaskCanceledException or OperationCanceledException
+                && context.RequestAborted.IsCancellationRequested)
+            {
+                _logger.LogDebug(
+                    "Client disconnected (request aborted) for {Path}. RequestId: {RequestId}",
+                    context.Request.Path, context.TraceIdentifier);
+                return;
+            }
+
             await HandleExceptionAsync(context, ex);
         }
     }
@@ -58,6 +69,9 @@ public class GlobalExceptionMiddleware
 
             InvalidOperationException => (StatusCodes.Status409Conflict,
                 exception.Message),
+
+            TaskCanceledException or OperationCanceledException => (StatusCodes.Status504GatewayTimeout,
+                "The AI service is taking too long to respond. Please try again in a moment."),
 
             _ => (StatusCodes.Status500InternalServerError,
                 "An unexpected error occurred. Please try again later.")

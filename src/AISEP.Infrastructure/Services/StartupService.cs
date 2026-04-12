@@ -9,6 +9,7 @@ using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -20,13 +21,15 @@ public class StartupService : IStartupService
     private readonly IAuditService _auditService;
     private readonly ILogger<StartupService> _logger;
     private readonly ICloudinaryService _cloudinaryService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger, ICloudinaryService cloudinaryService)
+    public StartupService(ApplicationDbContext context, IAuditService auditService, ILogger<StartupService> logger, ICloudinaryService cloudinaryService, IServiceScopeFactory scopeFactory)
     {
         _context = context;
         _auditService = auditService;
         _logger = logger;
         _cloudinaryService = cloudinaryService;
+        _scopeFactory = scopeFactory;
     }
 
     // ========== STARTUP PROFILE ==========
@@ -109,6 +112,19 @@ public class StartupService : IStartupService
 
         await _auditService.LogAsync("CREATE_STARTUP", "Startup", startup.StartupID,
             $"CompanyName: {startup.CompanyName}");
+
+        // Fire-and-forget: reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        var startupIdForCreate = startup.StartupID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexStartupAsync(startupIdForCreate);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for startup {StartupId}", startupIdForCreate); }
+        });
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile created successfully");
     }
@@ -205,6 +221,19 @@ public class StartupService : IStartupService
 
         await _auditService.LogAsync("UPDATE_STARTUP", "Startup", startup.StartupID,
             $"Updated fields for {startup.CompanyName}");
+
+        // Fire-and-forget: reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        var startupIdForUpdate = startup.StartupID;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                await svc.ReindexStartupAsync(startupIdForUpdate);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Background reindex failed for startup {StartupId}", startupIdForUpdate); }
+        });
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup), "Startup profile updated successfully");
     }
@@ -1263,10 +1292,13 @@ public class StartupService : IStartupService
     {
         var query = _context.Investors
             .AsNoTracking()
-            .Where(i => i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
+            .Where(i => (i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
+                     && i.AcceptingConnections)
             .Include(i => i.Preferences)
             .Include(i => i.StageFocus)
             .Include(i => i.IndustryFocus)
+            .Include(i => i.PortfolioCompanies)
+            .Include(i => i.KycSubmissions)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(investorQuery.Key))
@@ -1279,7 +1311,21 @@ public class StartupService : IStartupService
 
         query = query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt);
 
-        var items = query.Select(i => new InvestorSearchItemDto
+        var total = await query.CountAsync();
+        var investors = await query
+            .Skip((investorQuery.Page - 1) * investorQuery.PageSize)
+            .Take(investorQuery.PageSize)
+            .ToListAsync();
+
+        // Batch-query accepted connection counts for this page (one SQL call)
+        var investorIds = investors.Select(i => i.InvestorID).ToList();
+        var acceptedCounts = await _context.StartupInvestorConnections
+            .Where(c => investorIds.Contains(c.InvestorID) && c.ConnectionStatus == ConnectionStatus.Accepted)
+            .GroupBy(c => c.InvestorID)
+            .Select(g => new { InvestorId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.InvestorId, x => x.Count);
+
+        var items = investors.Select(i => new InvestorSearchItemDto
         {
             InvestorID = i.InvestorID,
             FullName = i.FullName,
@@ -1292,32 +1338,47 @@ public class StartupService : IStartupService
             LinkedInURL = i.LinkedInURL,
             Website = i.Website,
             PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
+            PreferredStages = i.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            TicketSizeMin = i.Preferences?.MinInvestmentSize,
+            TicketSizeMax = i.Preferences?.MaxInvestmentSize,
+            PortfolioCount = i.PortfolioCompanies.Count,
+            AcceptedConnectionCount = acceptedCounts.GetValueOrDefault(i.InvestorID, 0),
+            InvestorType = i.KycSubmissions.FirstOrDefault(s => s.IsActive)?.InvestorCategory,
+            AcceptingConnections = i.AcceptingConnections,
             UpdatedAt = i.UpdatedAt
-        }).Paging(investorQuery.Page, investorQuery.PageSize);
-
+        }).ToList();
 
         return ApiResponse<PagedResponse<InvestorSearchItemDto>>.SuccessResponse(new PagedResponse<InvestorSearchItemDto>
         {
-            Items = await items.ToListAsync(),
+            Items = items,
             Paging = new PagingInfo
             {
                 Page = investorQuery.Page,
                 PageSize = investorQuery.PageSize,
-                TotalItems = await query.CountAsync()
+                TotalItems = total
             }
         });
     }
 
-    public async Task<ApiResponse<InvestorDto>> GetInvestorByIdAsync(int investorId)
+    public async Task<ApiResponse<InvestorDetailForStartupDto>> GetInvestorByIdAsync(int investorId)
     {
         var investor = await _context.Investors
             .AsNoTracking()
-            .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+            .Include(i => i.Preferences)
+            .Include(i => i.IndustryFocus)
+            .Include(i => i.StageFocus)
+            .Include(i => i.PortfolioCompanies)
+            .Include(i => i.KycSubmissions)
+            .FirstOrDefaultAsync(i => i.InvestorID == investorId
+                && (i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC));
 
         if (investor == null)
-            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
+            return ApiResponse<InvestorDetailForStartupDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
 
-        return ApiResponse<InvestorDto>.SuccessResponse(new InvestorDto
+        var discoverable = investor.AcceptingConnections;
+        var activeKyc = investor.KycSubmissions.FirstOrDefault(s => s.IsActive);
+
+        return ApiResponse<InvestorDetailForStartupDto>.SuccessResponse(new InvestorDetailForStartupDto
         {
             InvestorID = investor.InvestorID,
             FullName = investor.FullName,
@@ -1330,8 +1391,16 @@ public class StartupService : IStartupService
             Country = investor.Country,
             LinkedInURL = investor.LinkedInURL,
             Website = investor.Website,
-            CreatedAt = investor.CreatedAt,
-            UpdatedAt = investor.UpdatedAt
+            InvestorType = activeKyc?.InvestorCategory,
+            PreferredIndustries = investor.IndustryFocus.Select(f => f.Industry).ToList(),
+            PreferredStages = investor.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            TicketSizeMin = investor.Preferences?.MinInvestmentSize,
+            TicketSizeMax = investor.Preferences?.MaxInvestmentSize,
+            PortfolioCount = investor.PortfolioCompanies.Count,
+            UpdatedAt = investor.UpdatedAt,
+            DiscoverableForStartups = discoverable,
+            CanRequestConnection = discoverable,
+            ProfileAvailabilityReason = discoverable ? "OPEN" : "INVESTOR_PAUSED_DISCOVERY"
         });
     }
 }

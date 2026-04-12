@@ -72,7 +72,7 @@ public class MentorshipsController : ControllerBase
         var userId = GetCurrentUserId();
         var userType = GetCurrentUserType();
         var result = await _mentorshipService.GetMyMentorshipsAsync(userId, userType, status, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -88,7 +88,7 @@ public class MentorshipsController : ControllerBase
         var userId = GetCurrentUserId();
         var userType = GetCurrentUserType();
         var result = await _mentorshipService.GetMySessionsAsync(userId, userType, status, page, pageSize);
-        return result.ToPagedEnvelope();
+        return result.ToActionResult();
     }
 
     // ================================================================
