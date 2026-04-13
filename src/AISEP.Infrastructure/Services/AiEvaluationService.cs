@@ -64,15 +64,20 @@ public class AiEvaluationService : IAiEvaluationService
         if (startup.UserID != currentUserId)
             return ApiResponse<EvaluationSubmitResult>.ErrorResponse("ACCESS_DENIED", "You do not own this startup.");
 
-        // Gather documents for evaluation
+        // Gather documents for evaluation — only Pitch Deck / Business Plan that are anchored on-chain
         var docsQuery = _db.Documents
-            .Where(d => d.StartupID == request.StartupId && !d.IsArchived);
+            .Include(d => d.BlockchainProof)
+            .Where(d => d.StartupID == request.StartupId && !d.IsArchived
+                        && (d.DocumentType == Domain.Enums.DocumentType.Pitch_Deck || d.DocumentType == Domain.Enums.DocumentType.Bussiness_Plan)
+                        && d.BlockchainProof != null
+                        && d.BlockchainProof.ProofStatus == Domain.Enums.ProofStatus.Anchored);
+
         if (request.DocumentIds is { Count: > 0 })
             docsQuery = docsQuery.Where(d => request.DocumentIds.Contains(d.DocumentID));
 
         var docs = await docsQuery.ToListAsync();
         if (docs.Count == 0)
-            return ApiResponse<EvaluationSubmitResult>.ErrorResponse("VALIDATION_ERROR", "No documents available for evaluation.");
+            return ApiResponse<EvaluationSubmitResult>.ErrorResponse("VALIDATION_ERROR", "No anchored Pitch Deck or Business Plan documents available for evaluation.");
 
         // Build Python request with signed URLs (time-limited, no auth needed by Python)
         var correlationId = Guid.NewGuid().ToString();

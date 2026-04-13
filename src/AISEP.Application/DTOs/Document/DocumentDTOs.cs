@@ -85,6 +85,23 @@ public class DocumentDto
     public int? ReviewedBy { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public string? ReviewNotes { get; set; }
+
+    // Convenience fields for frontend compatibility (serialized as camelCase)
+    public string Id => DocumentID.ToString();
+    public string Name => Title ?? (FileUrl ?? "");
+    public string Type
+    {
+        get
+        {
+            var t = (DocumentType ?? string.Empty).ToUpperInvariant();
+            // Normalize common typos (backend enum uses 'Bussiness_Plan') to expected frontend value
+            if (t.Contains("BUSSINESS"))
+                t = t.Replace("BUSSINESS", "BUSINESS");
+            return t;
+        }
+    }
+    public string UpdatedAt => UploadedAt == default ? "" : UploadedAt.ToString("dd/MM/yyyy");
+    public bool Recommended => false;
 }
 
 // ──────────────────────────────────────────────

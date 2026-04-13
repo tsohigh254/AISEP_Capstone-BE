@@ -43,27 +43,57 @@ public class AIService : IAIService
                 "STARTUP_NOT_FOUND", "No startup profile found for this user.");
 
         var startupId = startup.StartupID;
-        var doc = await _db.Documents
-            .FirstOrDefaultAsync(d => d.DocumentID == documentId && d.StartupID == startupId, ct);
+        // If documentId == 0, collect all startup documents that are pitch deck / business plan
+        // and that have been anchored (verified) on-chain. Otherwise use the single document.
+        List<Document> docsToSend = new();
 
-        if (doc == null)
-            return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
-                "DOCUMENT_NOT_FOUND", "Document not found or does not belong to this startup.");
+        if (documentId == 0)
+        {
+            docsToSend = await _db.Documents
+                .Include(d => d.BlockchainProof)
+                .Where(d => d.StartupID == startupId
+                            && !d.IsArchived
+                            && (d.DocumentType == DocumentType.Pitch_Deck || d.DocumentType == DocumentType.Bussiness_Plan)
+                            && d.BlockchainProof != null
+                            && d.BlockchainProof.ProofStatus == ProofStatus.Anchored)
+                .ToListAsync(ct);
 
-        var docType = doc.DocumentType == DocumentType.Pitch_Deck ? "pitch_deck" : "business_plan";
+            if (docsToSend == null || docsToSend.Count == 0)
+                return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                    "NO_VERIFIED_DOCUMENTS", "No pitch deck or business plan documents anchored on-chain were found for this startup.");
+        }
+        else
+        {
+            var doc = await _db.Documents
+                .Include(d => d.BlockchainProof)
+                .FirstOrDefaultAsync(d => d.DocumentID == documentId && d.StartupID == startupId, ct);
+
+            if (doc == null)
+                return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                    "DOCUMENT_NOT_FOUND", "Document not found or does not belong to this startup.");
+
+            if (doc.DocumentType != DocumentType.Pitch_Deck && doc.DocumentType != DocumentType.Bussiness_Plan)
+                return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                    "INVALID_DOCUMENT_TYPE", "Only pitch deck or business plan documents can be evaluated.");
+
+            if (doc.BlockchainProof == null || doc.BlockchainProof.ProofStatus != ProofStatus.Anchored)
+                return ApiResponse<EvaluationSubmitResponse>.ErrorResponse(
+                    "DOCUMENT_NOT_VERIFIED_ON_CHAIN", "Document must be anchored on the blockchain before evaluation.");
+
+            docsToSend.Add(doc);
+        }
+
+        var docInputs = docsToSend.Select(d => new
+        {
+            document_id = d.DocumentID.ToString(),
+            document_type = d.DocumentType == DocumentType.Pitch_Deck ? "pitch_deck" : "business_plan",
+            file_url_or_path = d.FileURL
+        }).ToArray();
 
         var payload = new
         {
             startup_id = startupId.ToString(),
-            documents = new[]
-            {
-                new
-                {
-                    document_id = documentId.ToString(),
-                    document_type = docType,
-                    file_url_or_path = doc.FileURL
-                }
-            }
+            documents = docInputs
         };
 
         try
@@ -87,8 +117,11 @@ public class AIService : IAIService
                 Message = aiResp.TryGetProperty("message", out var msg) ? msg.GetString() ?? "" : "Evaluation queued"
             };
 
-            // Mark document as being analyzed
-            doc.AnalysisStatus = AnalysisStatus.NOTANALYZE;
+            // Mark documents as being analyzed
+            foreach (var d in docsToSend)
+            {
+                d.AnalysisStatus = AnalysisStatus.NOTANALYZE;
+            }
             await _db.SaveChangesAsync(ct);
 
             return ApiResponse<EvaluationSubmitResponse>.Ok(result, "Evaluation submitted successfully.");
