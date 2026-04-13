@@ -108,14 +108,14 @@ public class AIController : ControllerBase
     }
 
     /// <summary>Get AI-powered startup recommendations for an investor.</summary>
-    [HttpGet("/api/investors/recommendations")]
-    [Authorize(Policy = "InvestorOnly")]
-    public async Task<IActionResult> GetRecommendations([FromQuery] int topN = 10, CancellationToken ct = default)
-    {
-        var userId = GetCurrentUserId();
-        var result = await _aiService.GetRecommendationsAsync(userId, topN, ct);
-        return result.ToEnvelope();
-    }
+    //[HttpGet("/api/investors/recommendations")]
+    //[Authorize(Policy = "InvestorOnly")]
+    //public async Task<IActionResult> GetRecommendations([FromQuery] int topN = 10, CancellationToken ct = default)
+    //{
+    //    var userId = GetCurrentUserId();
+    //    var result = await _aiService.GetRecommendationsAsync(userId, topN, ct);
+    //    return result.ToEnvelope();
+    //}
 
     // ═══════════════════════════════════════════════════════════════
     //  Admin: Scoring Model Configuration
