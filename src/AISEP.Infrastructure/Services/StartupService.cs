@@ -2,6 +2,8 @@ using AISEP.Application.Const;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
+using AISEP.Application.DTOs.Document;
+using System.Linq;
 using AISEP.Application.Extensions;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
@@ -136,6 +138,8 @@ public class StartupService : IStartupService
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
             .Include(s => s.ApprovedByUser)
+            .Include(s => s.Documents)
+                .ThenInclude(d => d.BlockchainProof)
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
@@ -856,6 +860,27 @@ public class StartupService : IStartupService
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,
+            Documents = s.Documents?.OrderByDescending(d => d.UploadedAt).Select(d => new DocumentDto
+            {
+                DocumentID = d.DocumentID,
+                StartupID = d.StartupID,
+                DocumentType = d.DocumentType.ToString(),
+                Title = d.Title ?? string.Empty,
+                Version = d.Version,
+                FileUrl = d.FileURL,
+                IsArchived = d.IsArchived,
+                IsAnalyzed = d.IsAnalyzed,
+                AnalysisStatus = d.AnalysisStatus.ToString(),
+                UploadedAt = d.UploadedAt,
+                ProofStatus = d.BlockchainProof?.ProofStatus.ToString(),
+                FileHash = d.BlockchainProof?.FileHash,
+                TransactionHash = d.BlockchainProof?.TransactionHash,
+                AnchoredAt = d.BlockchainProof?.AnchoredAt,
+                EtherscanUrl = d.BlockchainProof?.TransactionHash != null ? $"https://etherscan.io/tx/{d.BlockchainProof.TransactionHash}" : null,
+                ReviewStatus = d.ReviewStatus.ToString(),
+                ReviewedBy = d.ReviewedBy,
+                ReviewedAt = d.ReviewedAt
+            }).ToList() ?? new List<DocumentDto>(),
         };
     }
 

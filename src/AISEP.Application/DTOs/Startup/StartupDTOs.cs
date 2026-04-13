@@ -1,5 +1,7 @@
 using AISEP.Domain.Enums;
 using Microsoft.AspNetCore.Http;
+using AISEP.Application.DTOs.Document;
+using System.Linq;
 
 namespace AISEP.Application.DTOs.Startup;
 
@@ -166,6 +168,9 @@ public class StartupMeDto
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    // Documents & IP (owner-facing)
+    public List<DocumentDto> Documents { get; set; } = new();
+    public bool HasDocuments => Documents != null && Documents.Count > 0;
 }
 
 /// <summary>Public view for investors/advisors (no sensitive data)</summary>
