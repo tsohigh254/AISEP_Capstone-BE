@@ -113,6 +113,29 @@ namespace AISEP.WebAPI.Controllers
             
         }
 
+        /// <summary>
+        /// Process money withdrawal for completed Mentorship sessions
+        /// </summary>
+        [HttpPost("cashout")]
+        [Authorize(Roles = "Advisor")]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<ApiResponse<string>>> Cashout([FromBody] CashoutRequestDto cashoutRequestDto)
+        {
+            try
+            {
+                var result = await _paymentService.Cashout(cashoutRequestDto);
+                if (result.Success)
+                    return Ok(result);
+                return BadRequest(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error processing cashout", error = ex.Message });
+            }
+        }
+
         private int GetCurrentUserId()
         {
             var claim = User.FindFirst("sub")?.Value

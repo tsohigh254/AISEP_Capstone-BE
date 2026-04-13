@@ -6,12 +6,11 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using DotNetEnv;
 using Hangfire;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PayOS;
+using PayOS.Models.V1.Payouts;
 using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.Webhooks;
 using System.Text.Json;
@@ -22,7 +21,6 @@ namespace AISEP.Infrastructure.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly PayOSClient _payOS;
-        private readonly IConfiguration _configuration;
         private readonly ILogger<PaymentService> _logger;
         private readonly IBackgroundJobClient _backgroundJobClient;
         private const decimal PLATFORM_FEE_PERCENTAGE = 15M;
@@ -31,14 +29,12 @@ namespace AISEP.Infrastructure.Services
         public PaymentService(
             ApplicationDbContext context,
             PayOSClient payOS,
-            IConfiguration configuration,
             ILogger<PaymentService> logger,
             IBackgroundJobClient backgroundJobClient)
         {
             Env.Load();
             _context = context;
             _payOS = payOS;
-            _configuration = configuration;
             _logger = logger;
             _backgroundJobClient = backgroundJobClient;
             url = Env.GetString("Frontend__URI");
@@ -98,7 +94,7 @@ namespace AISEP.Infrastructure.Services
                 var wallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == mentorship.AdvisorID);
 
                 if (wallet == null)
-                    return ApiResponse<string>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Wallet does not exist");
+                    return ApiResponse<string>.ErrorResponse("WALLET_NOT_FOUND", "Wallet not found");
 
                 _logger.LogInformation("Wallet {id}", wallet.WalletId);
 
@@ -219,7 +215,48 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<PaymentInfoDto>.SuccessResponse(response, "Create payment link successfully");
         }
 
-#region helper method
+        public async Task<ApiResponse<string>> Cashout(CashoutRequestDto cashoutRequestDto)
+        {
+            var transaction = await _context.WalletTransactions.FirstOrDefaultAsync(t => t.TransactionID == cashoutRequestDto.TransactionId);
+
+            if (transaction == null)
+                return ApiResponse<string>.ErrorResponse("TRANSACTION_NOT_FOUND", "Transaction not found");
+
+            var wallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.WalletId == transaction.WalletId);
+
+            if (wallet == null)
+                return ApiResponse<string>.ErrorResponse("WALLET_NOT_FOUND", "Wallet not found");
+
+            if (wallet.Balance < transaction.Amount)
+                return ApiResponse<string>.ErrorResponse("INSUFFICIENT_BALANCE", "Wallet balance is insufficient");
+
+            transaction.Type = TransactionType.Withdrawal;
+            transaction.CreatedAt = DateTime.UtcNow;
+
+            var payoutRequest = new PayoutRequest
+            {
+                ReferenceId = "payout",
+                Amount = (int)transaction.Amount,
+                Description = "Rút tiền",
+                ToAccountNumber = cashoutRequestDto.AccountNumber,
+                ToBin = cashoutRequestDto.Bin
+            };
+
+            var response = await _payOS.Payouts.CreateAsync(payoutRequest);
+
+            _logger.LogInformation("Payout request : {0}", payoutRequest);
+
+            wallet.Balance -= transaction.Amount;
+            wallet.TotalWithdrawn += transaction.Amount;
+
+            _context.AdvisorWallets.Update(wallet);
+            _context.WalletTransactions.Update(transaction);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<string>.SuccessResponse("CASH_OUT_SUCCESSFULLY", "Cash out successfully");
+        }
+
+        #region helper method
 
 
         private async Task<PaymentInfoDto> PaymentLinkForMentorship(PaymentRequestDto paymentRequest)
@@ -267,6 +304,8 @@ namespace AISEP.Infrastructure.Services
                 OrderCode = orderCode
             };
         }
-#endregion
+
+       
+        #endregion
     }
 }
