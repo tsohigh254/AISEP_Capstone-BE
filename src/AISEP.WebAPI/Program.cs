@@ -123,6 +123,7 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
+builder.Services.AddScoped<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>();
 builder.Services.AddHttpClient<IAIService, AIService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://ai:8000");
@@ -342,9 +343,10 @@ var app = builder.Build();
     app.MapControllers();
     app.MapHub<ChatHub>("/hubs/chat");
 
-    RecurringJob.AddOrUpdate<SubscriptionExpirationJob>(
-        "ResetExpiredSubscriptions", 
-        job => job.ProcessExpiredSubscriptions(), 
+    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>(
+        "ResetExpiredSubscriptions",
+        job => job.ProcessExpiredSubscriptions(),
         Cron.Daily);
 
     app.Run();
