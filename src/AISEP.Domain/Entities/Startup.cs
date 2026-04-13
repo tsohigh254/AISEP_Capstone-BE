@@ -59,6 +59,10 @@ public class Startup
     // Assign tag to startup
     public StartupTag StartupTag { get; set; }
 
+    // Subscription & Pricing
+    public StartupSubscriptionPlan SubscriptionPlan { get; set; } = StartupSubscriptionPlan.Free;
+    public DateTime? SubscriptionEndDate { get; set; }
+
     // Navigation properties
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }

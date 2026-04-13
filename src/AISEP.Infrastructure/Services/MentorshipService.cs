@@ -36,6 +36,21 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<MentorshipDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You must create a startup profile first.");
 
+        // Check subscription limits for Startup initiating mentorships
+        var totalRequests = await _db.StartupAdvisorMentorships.CountAsync(m => m.StartupID == startup.StartupID);
+        int maxRequests = startup.SubscriptionPlan switch
+        {
+            StartupSubscriptionPlan.Free => 2,
+            StartupSubscriptionPlan.Pro => 10,
+            StartupSubscriptionPlan.Fundraising => int.MaxValue,
+            _ => 2
+        };
+        if (totalRequests >= maxRequests)
+        {
+            return ApiResponse<MentorshipDto>.ErrorResponse("SUBSCRIPTION_LIMIT_REACHED", 
+                $"Your current subscription plan ({startup.SubscriptionPlan}) allows a maximum of {maxRequests} advisor consultation requests. Please upgrade your plan.");
+        }
+
         // Advisor must exist
         var advisorExists = await _db.Advisors.AnyAsync(a => a.AdvisorID == request.AdvisorId);
         if (!advisorExists)

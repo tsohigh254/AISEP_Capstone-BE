@@ -41,7 +41,7 @@ public class ConnectionsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<ConnectionDto>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create([FromBody] CreateConnectionRequest request)
     {
-        var result = await _svc.CreateConnectionAsync(GetCurrentUserId(), request);
+        var result = await _svc.CreateConnectionAsync(GetCurrentUserId(), GetCurrentUserType(), request);
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
     }

@@ -26,41 +26,70 @@ public class ConnectionsService : IConnectionsService
     // CREATE CONNECTION (Investor)
     // ================================================================
 
-    public async Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, CreateConnectionRequest request)
+    public async Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, string userType,  CreateConnectionRequest request)
     {
-        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
-        if (investor == null)
-            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+        int resolvedStartupId;
+        int resolvedInvestorId;
 
-        if (!investor.AcceptingConnections)
-            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_ACCEPTING_CONNECTIONS",
-                "This investor is not currently accepting new connections.");
+        if (userType == "Investor")
+        {
+            var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
+            if (investor == null)
+                return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
+            if (!request.StartupId.HasValue)
+                return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_ID_REQUIRED", "StartupId is required for investor.");
+            var startupExists = await _db.Startups.AnyAsync(s => s.StartupID == request.StartupId.Value);
+            if (!startupExists)
+                return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_FOUND", $"Startup with id {request.StartupId} not found.");
+            resolvedStartupId = request.StartupId.Value;
+            resolvedInvestorId = investor.InvestorID;
+        }
+        else if (userType == "Startup")
+        {
+            var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
+            if (startup == null)
+                return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+            if (!request.InvestorId.HasValue)
+                return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_ID_REQUIRED", "InvestorId is required for startup.");
+            var investorExists = await _db.Investors.AnyAsync(i => i.InvestorID == request.InvestorId.Value);
+            if (!investorExists)
+                return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_FOUND", $"Investor with id {request.InvestorId} not found.");
 
-        if (!request.StartupId.HasValue)
-            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_ID_REQUIRED", "StartupId is required.");
+            // Check subscription limits for Startup initiating connections
+            var totalRequests = await _db.StartupInvestorConnections.CountAsync(c => c.StartupID == startup.StartupID && c.InitiatedBy == userId);
+            int maxRequests = startup.SubscriptionPlan switch
+            {
+                StartupSubscriptionPlan.Free => 3,
+                StartupSubscriptionPlan.Pro => 15,
+                StartupSubscriptionPlan.Fundraising => int.MaxValue,
+                _ => 3
+            };
+            if (totalRequests >= maxRequests)
+            {
+                return ApiResponse<ConnectionDto>.ErrorResponse("SUBSCRIPTION_LIMIT_REACHED", 
+                    $"Your current subscription plan ({startup.SubscriptionPlan}) allows a maximum of {maxRequests} investor connection requests. Please upgrade your plan.");
+            }
 
-        var startup = await _db.Startups.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.StartupID == request.StartupId.Value);
-        if (startup == null)
-            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_FOUND",
-                $"Startup with id {request.StartupId} not found.");
-
-        if (!startup.IsVisible)
-            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_ACCEPTING_CONNECTIONS",
-                "This startup is not currently accepting new connections.");
+            resolvedStartupId = startup.StartupID;
+            resolvedInvestorId = request.InvestorId.Value;
+        }
+        else
+        {
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVALID_ROLE", "Only investors and startups can create connections.");
+        }
 
         var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
-            c.StartupID == startup.StartupID &&
-            c.InvestorID == investor.InvestorID &&
-            (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
+             c.StartupID == resolvedStartupId &&
+             c.InvestorID == resolvedInvestorId &&
+             (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
         if (duplicate)
             return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_ALREADY_EXISTS",
-                "An active or pending connection with this startup already exists.");
+                "An active or pending connection already exists.");
 
         var conn = new StartupInvestorConnection
         {
-            StartupID = startup.StartupID,
-            InvestorID = investor.InvestorID,
+            StartupID = resolvedStartupId,
+            InvestorID = resolvedInvestorId,
             ConnectionStatus = ConnectionStatus.Requested,
             InitiatedBy = userId,
             PersonalizedMessage = request.Message,
@@ -71,57 +100,9 @@ public class ConnectionsService : IConnectionsService
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("CREATE_CONNECTION", "StartupInvestorConnection", conn.ConnectionID,
-            $"InvestorId={investor.InvestorID}, StartupId={request.StartupId}");
-        _logger.LogInformation("Connection {ConnId} created by investor {InvestorId} to startup {StartupId}",
-            conn.ConnectionID, investor.InvestorID, request.StartupId);
-
-        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
-    }
-
-    // ================================================================
-    // CREATE CONNECTION (Startup → Investor)
-    // ================================================================
-
-    public async Task<ApiResponse<ConnectionDto>> CreateConnectionFromStartupAsync(int userId, CreateStartupToInvestorRequest request)
-    {
-        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
-        if (startup == null)
-            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
-
-        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
-        if (investor == null)
-            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_FOUND",
-                $"Investor with id {request.InvestorId} not found.");
-
-        if (!investor.AcceptingConnections)
-            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_ACCEPTING_CONNECTIONS",
-                "This investor is not currently accepting new connections.");
-
-        var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
-            c.StartupID == startup.StartupID &&
-            c.InvestorID == request.InvestorId &&
-            (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
-        if (duplicate)
-            return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_ALREADY_EXISTS",
-                "An active or pending connection with this investor already exists.");
-
-        var conn = new StartupInvestorConnection
-        {
-            StartupID = startup.StartupID,
-            InvestorID = request.InvestorId,
-            ConnectionStatus = ConnectionStatus.Requested,
-            InitiatedBy = userId,
-            PersonalizedMessage = request.Message,
-            RequestedAt = DateTime.UtcNow
-        };
-
-        _db.StartupInvestorConnections.Add(conn);
-        await _db.SaveChangesAsync();
-
-        await _audit.LogAsync("CREATE_CONNECTION", "StartupInvestorConnection", conn.ConnectionID,
-            $"StartupId={startup.StartupID}, InvestorId={request.InvestorId}");
+            $"StartupId={resolvedStartupId}, InvestorId={request.InvestorId}");
         _logger.LogInformation("Connection {ConnId} created by startup {StartupId} to investor {InvestorId}",
-            conn.ConnectionID, startup.StartupID, request.InvestorId);
+            conn.ConnectionID, resolvedStartupId, request.InvestorId);
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
@@ -769,4 +750,48 @@ public class ConnectionsService : IConnectionsService
         Description = p.Description,
         CompanyLogoURL = p.CompanyLogoURL
     };
+
+    public async Task<ApiResponse<ConnectionDto>> CreateConnectionFromStartupAsync(int userId, CreateStartupToInvestorRequest request)
+    {
+        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+        var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.InvestorID == request.InvestorId);
+        if (investor == null)
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_FOUND",
+                $"Investor with id {request.InvestorId} not found.");
+
+        if (!investor.AcceptingConnections)
+            return ApiResponse<ConnectionDto>.ErrorResponse("INVESTOR_NOT_ACCEPTING_CONNECTIONS",
+                "This investor is not currently accepting new connections.");
+
+        var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
+            c.StartupID == startup.StartupID &&
+            c.InvestorID == request.InvestorId &&
+            (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
+        if (duplicate)
+            return ApiResponse<ConnectionDto>.ErrorResponse("CONNECTION_ALREADY_EXISTS",
+                "An active or pending connection with this investor already exists.");
+
+        var conn = new StartupInvestorConnection
+        {
+            StartupID = startup.StartupID,
+            InvestorID = request.InvestorId,
+            ConnectionStatus = ConnectionStatus.Requested,
+            InitiatedBy = userId,
+            PersonalizedMessage = request.Message,
+            RequestedAt = DateTime.UtcNow
+        };
+
+        _db.StartupInvestorConnections.Add(conn);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CREATE_CONNECTION", "StartupInvestorConnection", conn.ConnectionID,
+            $"StartupId={startup.StartupID}, InvestorId={request.InvestorId}");
+        _logger.LogInformation("Connection {ConnId} created by startup {StartupId} to investor {InvestorId}",
+            conn.ConnectionID, startup.StartupID, request.InvestorId);
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
+    }
 }

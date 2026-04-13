@@ -311,17 +311,6 @@ public class InvestorsController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Get AI-powered startup recommendations (not yet implemented)
-    /// </summary>
-    [HttpGet("recommendations")]
-    [ProducesResponseType(typeof(ApiResponse<List<StartupSearchItemDto>>), StatusCodes.Status501NotImplemented)]
-    public IActionResult GetRecommendations()
-    {
-        return ApiEnvelopeExtensions.ErrorEnvelope(
-            "AI recommendation engine is not yet enabled. This feature is coming soon.",
-            StatusCodes.Status501NotImplemented);
-    }
 
     // ================================================================
     // INDUSTRY FOCUS

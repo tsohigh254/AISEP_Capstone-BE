@@ -32,6 +32,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentBlockchainProof> DocumentBlockchainProofs => Set<DocumentBlockchainProof>();
+    public DbSet<StartupSubscriptionPayment> StartupSubscriptionPayments => Set<StartupSubscriptionPayment>();
 
     // Advisor
     public DbSet<Advisor> Advisors => Set<Advisor>();
@@ -164,6 +165,15 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<WalletTransaction>()
             .Property(e => e.Status)
             .HasConversion<short>();
+
+        modelBuilder.Entity<StartupSubscriptionPayment>()
+            .Property(e => e.TargetPlan)
+            .HasConversion<short>();
+
+        modelBuilder.Entity<StartupSubscriptionPayment>()
+            .Property(e => e.PaymentStatus)
+            .HasConversion<short>()
+            .HasDefaultValue(PaymentStatus.Pending);
     }
 
     private void ConfigurePrimaryKeys(ModelBuilder modelBuilder)
@@ -185,6 +195,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<TeamMember>().HasKey(tm => tm.TeamMemberID);
         modelBuilder.Entity<Document>().HasKey(d => d.DocumentID);
         modelBuilder.Entity<DocumentBlockchainProof>().HasKey(p => p.ProofID);
+        modelBuilder.Entity<StartupSubscriptionPayment>().HasKey(p => p.PaymentID);
 
         // Advisor
         modelBuilder.Entity<Advisor>().HasKey(a => a.AdvisorID);
@@ -311,6 +322,13 @@ public class ApplicationDbContext : DbContext
             .HasOne(p => p.Document)
             .WithOne(d => d.BlockchainProof)
             .HasForeignKey<DocumentBlockchainProof>(p => p.DocumentID);
+
+        // StartupSubscriptionPayment relationship
+        modelBuilder.Entity<StartupSubscriptionPayment>()
+            .HasOne(p => p.Startup)
+            .WithMany()
+            .HasForeignKey(p => p.StartupID)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // AdvisorAvailability - one-to-one with Advisor
         modelBuilder.Entity<AdvisorAvailability>()

@@ -5,6 +5,9 @@ using AISEP.Infrastructure.Data;
 using AISEP.Infrastructure.Services;
 // AI Integration usings are resolved via the above namespaces
 using AISEP.Infrastructure.Settings;
+using AISEP.Infrastructure.Jobs;
+using Hangfire;
+using Hangfire.PostgreSql;
 using AISEP.WebAPI.Hubs;
 using AISEP.WebAPI.Middlewares;
 using CloudinaryDotNet;
@@ -120,6 +123,12 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
+builder.Services.AddScoped<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>();
+builder.Services.AddHttpClient<IAIService, AIService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://ai:8000");
+    client.Timeout = TimeSpan.FromSeconds(300);
+});
 
 // ── Python AI Service Integration ──────────────────────────────
 builder.Services.Configure<PythonAiOptions>(builder.Configuration.GetSection(PythonAiOptions.SectionName));
@@ -157,8 +166,16 @@ builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
 var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
 
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
-
 builder.Services.AddSignalR();
+
+// Hangfire Background Jobs setup
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(builder.Configuration.GetConnectionString("DefaultConnection"))));
+
+builder.Services.AddHangfireServer();
 
 builder.Services.Configure<CloudinaryOptions>(
     builder.Configuration.GetSection("CloudinaryOptions"));
@@ -316,6 +333,7 @@ var app = builder.Build();
     {
         app.UseSwagger();
         app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+        app.UseHangfireDashboard("/hangfire");
     }
 
     app.UseHttpsRedirection();
@@ -324,6 +342,12 @@ var app = builder.Build();
     app.UseAuthorization();
     app.MapControllers();
     app.MapHub<ChatHub>("/hubs/chat");
+
+    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>(
+        "ResetExpiredSubscriptions",
+        job => job.ProcessExpiredSubscriptions(),
+        Cron.Daily);
 
     app.Run();
 }
