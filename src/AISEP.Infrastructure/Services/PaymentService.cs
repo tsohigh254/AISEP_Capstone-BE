@@ -215,17 +215,30 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<PaymentInfoDto>.SuccessResponse(response, "Create payment link successfully");
         }
 
-        public async Task<ApiResponse<string>> Cashout(CashoutRequestDto cashoutRequestDto)
+        public async Task<ApiResponse<string>> Cashout(int userId, CashoutRequestDto cashoutRequestDto)
         {
-            var transaction = await _context.WalletTransactions.FirstOrDefaultAsync(t => t.TransactionID == cashoutRequestDto.TransactionId);
+            var transaction = await _context.WalletTransactions
+                .FirstOrDefaultAsync(t => t.TransactionID == cashoutRequestDto.TransactionId);
 
             if (transaction == null)
                 return ApiResponse<string>.ErrorResponse("TRANSACTION_NOT_FOUND", "Transaction not found");
 
-            var wallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.WalletId == transaction.WalletId);
+            if (transaction.Type != TransactionType.Deposit || transaction.Status != TransactionStatus.Completed)
+                return ApiResponse<string>.ErrorResponse(
+                    "INVALID_TRANSACTION",
+                    "Only completed deposit transactions can be withdrawn.");
+
+            var wallet = await _context.AdvisorWallets
+                .Include(w => w.Advisor)
+                .FirstOrDefaultAsync(w => w.WalletId == transaction.WalletId);
 
             if (wallet == null)
                 return ApiResponse<string>.ErrorResponse("WALLET_NOT_FOUND", "Wallet not found");
+
+            if (wallet.Advisor.UserID != userId)
+                return ApiResponse<string>.ErrorResponse(
+                    "FORBIDDEN",
+                    "You cannot withdraw from another advisor's wallet.");
 
             if (wallet.Balance < transaction.Amount)
                 return ApiResponse<string>.ErrorResponse("INSUFFICIENT_BALANCE", "Wallet balance is insufficient");

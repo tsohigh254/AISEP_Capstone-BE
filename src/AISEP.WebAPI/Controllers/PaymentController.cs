@@ -29,19 +29,13 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLink([FromBody] PaymentRequestDto paymentRequest)
         {
-            try
-            {
-                var paymentInfo = await _paymentService.CreatePaymentLinkForMentorship(paymentRequest);
-                return Ok(paymentInfo);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            if (paymentRequest == null || paymentRequest.MentorshipId <= 0 || paymentRequest.Amount <= 0)
+                return BadRequest(ApiResponse<PaymentInfoDto>.ErrorResponse(
+                    "INVALID_PAYMENT_REQUEST",
+                    "MentorshipId and amount must be greater than 0."));
+
+            var paymentInfo = await _paymentService.CreatePaymentLinkForMentorship(paymentRequest);
+            return ToActionResult(paymentInfo);
         }
 
         /// <summary>
@@ -53,21 +47,19 @@ namespace AISEP.WebAPI.Controllers
         [ProducesResponseType(typeof(ApiResponse<PaymentInfoDto>), StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<PaymentInfoDto>> CreatePaymentLinkForSubscription([FromBody] SubscriptionPaymentRequestDto paymentRequest)
         {
-            try
-            {
-                var userIdStr = GetCurrentUserId();
+            if (paymentRequest == null || paymentRequest.Amount <= 0)
+                return BadRequest(ApiResponse<PaymentInfoDto>.ErrorResponse(
+                    "INVALID_PAYMENT_REQUEST",
+                    "Amount must be greater than 0."));
 
-                var paymentInfo = await _paymentService.CreatePaymentLinkForSubscription(userIdStr, paymentRequest);
-                return Ok(paymentInfo);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var userId = GetCurrentUserId();
+            if (userId <= 0)
+                return Unauthorized(ApiResponse<PaymentInfoDto>.ErrorResponse(
+                    "UNAUTHORIZED",
+                    "User identity is missing or invalid."));
+
+            var paymentInfo = await _paymentService.CreatePaymentLinkForSubscription(userId, paymentRequest);
+            return ToActionResult(paymentInfo);
         }
 
         /// <summary>
@@ -125,7 +117,13 @@ namespace AISEP.WebAPI.Controllers
         {
             try
             {
-                var result = await _paymentService.Cashout(cashoutRequestDto);
+                var userId = GetCurrentUserId();
+                if (userId <= 0)
+                    return Unauthorized(ApiResponse<string>.ErrorResponse(
+                        "UNAUTHORIZED",
+                        "User identity is missing or invalid."));
+
+                var result = await _paymentService.Cashout(userId, cashoutRequestDto);
                 if (result.Success)
                     return Ok(result);
                 return BadRequest(result);
@@ -134,6 +132,14 @@ namespace AISEP.WebAPI.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error processing cashout", error = ex.Message });
             }
+        }
+
+        private ActionResult<TResponse> ToActionResult<TResponse>(ApiResponse<TResponse> response)
+        {
+            if (response.Success)
+                return Ok(response);
+
+            return BadRequest(response);
         }
 
         private int GetCurrentUserId()

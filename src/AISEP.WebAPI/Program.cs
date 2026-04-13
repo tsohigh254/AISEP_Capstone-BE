@@ -332,6 +332,7 @@ var app = builder.Build();
     {
         app.UseSwagger();
         app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
+        app.UseHangfireDashboard("/hangfire");
     }
 
     app.UseHttpsRedirection();
@@ -341,7 +342,6 @@ var app = builder.Build();
     app.MapControllers();
     app.MapHub<ChatHub>("/hubs/chat");
 
-    app.UseHangfireDashboard("/hangfire");
     RecurringJob.AddOrUpdate<SubscriptionExpirationJob>(
         "ResetExpiredSubscriptions", 
         job => job.ProcessExpiredSubscriptions(), 
