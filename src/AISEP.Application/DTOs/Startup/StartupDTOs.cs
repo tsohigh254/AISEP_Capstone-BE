@@ -206,6 +206,13 @@ public class StartupPublicDto
     public string? ContactPhone { get; set; }
     public string? TeamSize { get; set; }
 
+    /// <summary>
+    /// Mã đăng ký doanh nghiệp từ KYC đã được duyệt (Approved).
+    /// Chỉ có giá trị khi startup có pháp nhân (WithLegalEntity) và đã KYC approved.
+    /// Trả về null nếu startup WithoutLegalEntity hoặc chưa qua KYC.
+    /// </summary>
+    public string? EnterpriseCode { get; set; }
+
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

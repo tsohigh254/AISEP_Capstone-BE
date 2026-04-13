@@ -207,6 +207,48 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // 6b) POST /api/mentorships/{id}/sessions/{sessionId}/confirm — Startup chọn slot
+    // ================================================================
+
+    /// <summary>
+    /// Startup confirms one ProposedByAdvisor slot as the final scheduled session.
+    /// All other ProposedByAdvisor and ProposedByStartup slots for this mentorship are cancelled.
+    /// Mentorship advances to InProgress atomically.
+    /// </summary>
+    [HttpPost("{id:int}/sessions/{sessionId:int}/confirm")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ConfirmSession(int id, int sessionId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.ConfirmSessionAsync(userId, id, sessionId);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 6c) POST /api/mentorships/{id}/sessions/{sessionId}/accept — Advisor chọn slot startup đề xuất
+    // ================================================================
+
+    /// <summary>
+    /// Advisor accepts one ProposedByStartup slot as the final scheduled session.
+    /// All other ProposedByStartup and ProposedByAdvisor slots for this mentorship are cancelled.
+    /// Mentorship advances to InProgress atomically.
+    /// </summary>
+    [HttpPost("{id:int}/sessions/{sessionId:int}/accept")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AcceptSession(int id, int sessionId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.AcceptSessionAsync(userId, id, sessionId);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
     // 7) PUT /api/mentorships/sessions/{sessionId} — Update session (Advisor)
     // ================================================================
 

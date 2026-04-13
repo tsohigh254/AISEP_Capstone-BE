@@ -119,6 +119,10 @@ public class MentorshipListItemDto
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public string StartupName { get; set; } = string.Empty;
+    /// <summary>Tên ngành của startup (null nếu chưa set).</summary>
+    public string? StartupIndustry { get; set; }
+    /// <summary>Giai đoạn startup: Idea | PreSeed | Seed | SeriesA | SeriesB | SeriesC | Growth (null nếu chưa set).</summary>
+    public string? StartupStage { get; set; }
     public int AdvisorID { get; set; }
     public string AdvisorName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
@@ -126,6 +130,9 @@ public class MentorshipListItemDto
     public string? PreferredFormat { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool HasReport { get; set; }
+    public int ReportCount { get; set; }
+    public DateTime? LatestReportSubmittedAt { get; set; }
 }
 
 /// <summary>Detail DTO with sessions, reports, feedbacks.</summary>
@@ -147,14 +154,22 @@ public class MentorshipDetailDto
     public DateTime? AcceptedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
     public string? RejectedReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    /// <summary>"Startup" | "Advisor" | "System" — null chỉ tồn tại với data cũ trước khi có field này.</summary>
+    public string? CancelledBy { get; set; }
+    public string? CancellationReason { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool CompletionConfirmedByStartup { get; set; }
     public bool CompletionConfirmedByAdvisor { get; set; }
+    public decimal SessionAmount { get; set; }
+    public string PaymentStatus { get; set; } = string.Empty;  // "Pending" | "Completed" | "Failed"
+    public DateTime? PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public List<SessionDto> Sessions { get; set; } = new();
     public List<ReportDto> Reports { get; set; } = new();
     public List<FeedbackDto> Feedbacks { get; set; } = new();
+    public List<TimelineEventDto> TimelineEvents { get; set; } = new();
 }
 
 /// <summary>Session DTO.</summary>
@@ -182,6 +197,12 @@ public class SessionListItemDto : SessionDto
     public string? AdvisorProfilePhotoURL { get; set; }
     public int StartupID { get; set; }
     public string? StartupName { get; set; }
+    /// <summary>Mô tả thách thức của mentorship cha — dùng làm displayTopic khi session chưa có topicsDiscussed.</summary>
+    public string? MentorshipChallengeDescription { get; set; }
+    /// <summary>true nếu đã có ít nhất 1 report gắn với session này.</summary>
+    public bool HasReport { get; set; }
+    /// <summary>Trạng thái của mentorship cha. Dùng để FE override display khi mentorship bị cancel.</summary>
+    public string? MentorshipStatus { get; set; }
 }
 
 /// <summary>Report DTO.</summary>
@@ -209,4 +230,18 @@ public class FeedbackDto
     public int Rating { get; set; }
     public string? Comment { get; set; }
     public DateTime? SubmittedAt { get; set; }
+}
+
+/// <summary>
+/// A single ordered event in the mentorship timeline.
+/// type taxonomy: Requested | Accepted | InProgress | Rejected | Cancelled | Completed
+/// actor taxonomy: Startup | Advisor | System
+/// </summary>
+public class TimelineEventDto
+{
+    public string Type { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Actor { get; set; } = string.Empty;
+    public DateTime HappenedAt { get; set; }
 }

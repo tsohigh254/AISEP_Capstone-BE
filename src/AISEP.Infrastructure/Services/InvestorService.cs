@@ -263,12 +263,16 @@ public class InvestorService : IInvestorService
             return ApiResponse<WatchlistItemDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND",
                 "Investor profile not found.");
 
-        // Check startup exists
+        // Check startup exists and is discoverable
         var startup = await _db.Startups.AsNoTracking()
             .Include(s => s.Industry)
             .FirstOrDefaultAsync(s => s.StartupID == request.StartupId);
 
         if (startup == null)
+            return ApiResponse<WatchlistItemDto>.ErrorResponse("STARTUP_NOT_FOUND",
+                $"Startup with id {request.StartupId} not found.");
+
+        if (startup.ProfileStatus != ProfileStatus.Approved || !startup.IsVisible)
             return ApiResponse<WatchlistItemDto>.ErrorResponse("STARTUP_NOT_FOUND",
                 $"Startup with id {request.StartupId} not found.");
 
@@ -328,7 +332,10 @@ public class InvestorService : IInvestorService
 
         var query = _db.InvestorWatchlists
             .AsNoTracking()
-            .Where(w => w.InvestorID == investor.InvestorID && w.IsActive)
+            .Where(w => w.InvestorID == investor.InvestorID
+                     && w.IsActive
+                     && w.Startup.ProfileStatus == ProfileStatus.Approved
+                     && w.Startup.IsVisible)
             .OrderByDescending(w => w.AddedAt);
 
         var totalItems = await query.CountAsync();
@@ -402,7 +409,7 @@ public class InvestorService : IInvestorService
         page = Math.Max(page, 1);
 
         var query = _db.Startups.AsNoTracking()
-              // .Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC)
+              .Where(s => s.ProfileStatus == ProfileStatus.Approved && s.IsVisible)
               .AsQueryable();
 
         // Keyword filter (company name)

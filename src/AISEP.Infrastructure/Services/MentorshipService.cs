@@ -1,3 +1,4 @@
+using AISEP.Application.Const;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
 using AISEP.Application.Interfaces;
@@ -102,8 +103,9 @@ public class MentorshipService : IMentorshipService
 
         IQueryable<StartupAdvisorMentorship> query = _db.StartupAdvisorMentorships
             .AsNoTracking()
-            .Include(m => m.Startup)
-            .Include(m => m.Advisor);
+            .Include(m => m.Startup).ThenInclude(s => s.Industry)
+            .Include(m => m.Advisor)
+            .Include(m => m.Reports);
 
         if (userType == "Startup")
         {
@@ -150,13 +152,20 @@ public class MentorshipService : IMentorshipService
                 MentorshipID = m.MentorshipID,
                 StartupID = m.StartupID,
                 StartupName = m.Startup?.CompanyName ?? "Unknown",
+                StartupIndustry = m.Startup?.Industry?.IndustryName,
+                StartupStage = m.Startup?.Stage?.ToString(),
                 AdvisorID = m.AdvisorID,
                 AdvisorName = m.Advisor?.FullName ?? "Unknown",
                 Status = m.MentorshipStatus.ToString(),
                 ChallengeDescription = m.ChallengeDescription,
                 PreferredFormat = m.PreferredFormat,
                 RequestedAt = m.RequestedAt,
-                CreatedAt = m.CreatedAt
+                CreatedAt = m.CreatedAt,
+                HasReport = m.Reports.Any(),
+                ReportCount = m.Reports.Count,
+                LatestReportSubmittedAt = m.Reports.Any()
+                    ? m.Reports.Max(r => r.SubmittedAt)
+                    : null
             })
             .ToList();
 
@@ -277,11 +286,21 @@ public class MentorshipService : IMentorshipService
 
         mentorship.MentorshipStatus = MentorshipStatus.Cancelled;
         var role = startup != null ? "Startup" : "Advisor";
-        mentorship.RejectedReason = string.IsNullOrEmpty(mentorship.RejectedReason)
-            ? $"Cancelled by {role}. Reason: " + reason
-            : mentorship.RejectedReason + $"\nCancelled Reason ({role}): " + reason;
+        mentorship.CancelledAt = DateTime.UtcNow;
+        mentorship.CancelledBy = role;
+        mentorship.CancellationReason = reason;
         mentorship.LastUpdatedByRole = role;
         mentorship.UpdatedAt = DateTime.UtcNow;
+
+        // Cascade-cancel all sessions that haven't completed yet
+        var pendingSessions = await _db.MentorshipSessions
+            .Where(s => s.MentorshipID == mentorshipId && s.SessionStatus != SessionStatusValues.Completed)
+            .ToListAsync();
+        foreach (var s in pendingSessions)
+        {
+            s.SessionStatus = SessionStatusValues.Cancelled;
+            s.UpdatedAt = DateTime.UtcNow;
+        }
 
         await _db.SaveChangesAsync();
         await _audit.LogAsync("CANCEL_MENTORSHIP", "StartupAdvisorMentorship", mentorship.MentorshipID, reason);
@@ -295,6 +314,7 @@ public class MentorshipService : IMentorshipService
             var query = _db.MentorshipSessions
                 .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
                 .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
+                .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
                 .AsNoTracking();
 
         if (userType == "Startup")
@@ -308,7 +328,21 @@ public class MentorshipService : IMentorshipService
 
         if (!string.IsNullOrEmpty(status))
         {
-            query = query.Where(s => s.SessionStatus == status);
+            if (status == SessionStatusValues.Cancelled)
+            {
+                // Include legacy rows whose parent mentorship was cancelled/rejected
+                // but session row itself was never updated in DB
+                query = query.Where(s => s.SessionStatus == SessionStatusValues.Cancelled
+                    || s.Mentorship.MentorshipStatus == MentorshipStatus.Cancelled
+                    || s.Mentorship.MentorshipStatus == MentorshipStatus.Rejected);
+            }
+            else
+            {
+                // Exclude sessions whose parent is cancelled (override takes precedence in projection)
+                query = query.Where(s => s.SessionStatus == status
+                    && s.Mentorship.MentorshipStatus != MentorshipStatus.Cancelled
+                    && s.Mentorship.MentorshipStatus != MentorshipStatus.Rejected);
+            }
         }
 
         var totalItems = await query.CountAsync();
@@ -322,10 +356,16 @@ public class MentorshipService : IMentorshipService
                 DurationMinutes = s.DurationMinutes,
                 SessionFormat = s.SessionFormat,
                 MeetingURL = s.MeetingURL,
-                SessionStatus = s.SessionStatus,
+                // If parent mentorship is Cancelled/Rejected, override session status so legacy
+                // rows (created before cascade-cancel was deployed) show correct status.
+                SessionStatus = (s.Mentorship.MentorshipStatus == MentorshipStatus.Cancelled
+                                 || s.Mentorship.MentorshipStatus == MentorshipStatus.Rejected)
+                                    ? SessionStatusValues.Cancelled
+                                    : s.SessionStatus,
                 TopicsDiscussed = s.TopicsDiscussed,
                 KeyInsights = s.KeyInsights,
                 ActionItems = s.ActionItems,
+                MentorshipStatus = s.Mentorship.MentorshipStatus.ToString(),
                 NextSteps = s.NextSteps,
                 CreatedAt = s.CreatedAt,
                 UpdatedAt = s.UpdatedAt,
@@ -333,7 +373,9 @@ public class MentorshipService : IMentorshipService
                 AdvisorName = s.Mentorship.Advisor.FullName,
                 AdvisorProfilePhotoURL = s.Mentorship.Advisor.ProfilePhotoURL,
                 StartupID = s.Mentorship.StartupID,
-                StartupName = s.Mentorship.Startup.CompanyName
+                StartupName = s.Mentorship.Startup.CompanyName,
+                MentorshipChallengeDescription = s.Mentorship.ChallengeDescription,
+                HasReport = s.Mentorship.Reports.Any(r => r.SessionID == s.SessionID)
             }).ToListAsync();
 
         return ApiResponse<PagedResponse<SessionListItemDto>>.SuccessResponse(new PagedResponse<SessionListItemDto> { Items = items, Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = totalItems } });
@@ -348,31 +390,51 @@ public class MentorshipService : IMentorshipService
         if (mentorship == null)
             return ApiResponse<SessionDto>.ErrorResponse(error!.Error!.Code, error.Error.Message);
 
-        if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
+        if (mentorship.MentorshipStatus != MentorshipStatus.Requested
+            && mentorship.MentorshipStatus != MentorshipStatus.Accepted
+            && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot create session for mentorship with status '{mentorship.MentorshipStatus}'. Must be 'Accepted' or 'InProgress'.");
+                $"Cannot create session for mentorship with status '{mentorship.MentorshipStatus}'. Must be 'Requested', 'Accepted' or 'InProgress'.");
+
+        var scheduledAt = request.ScheduledStartAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(request.ScheduledStartAt, DateTimeKind.Utc)
+            : request.ScheduledStartAt.ToUniversalTime();
+
+        // If mentorship is still Requested, advisor is counter-proposing slots.
+        // Session stays ProposedByAdvisor until startup confirms one.
+        // Mentorship stays Requested — does NOT auto-advance.
+        bool isCounterProposal = mentorship.MentorshipStatus == MentorshipStatus.Requested;
+
+        // Auto-fill meeting URL from advisor profile if not explicitly provided
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        var resolvedMeetingUrl = request.MeetingUrl
+            ?? advisor?.GoogleMeetLink
+            ?? advisor?.MsTeamsLink;
 
         var session = new MentorshipSession
         {
             MentorshipID = mentorshipId,
-            ScheduledStartAt = request.ScheduledStartAt.Kind == DateTimeKind.Unspecified
-                ? DateTime.SpecifyKind(request.ScheduledStartAt, DateTimeKind.Utc)
-                : request.ScheduledStartAt.ToUniversalTime(),
+            ScheduledStartAt = scheduledAt,
             DurationMinutes = request.DurationMinutes,
             SessionFormat = request.SessionFormat,
-            MeetingURL = request.MeetingUrl,
-            SessionStatus = "Scheduled",
+            MeetingURL = resolvedMeetingUrl,
+            SessionStatus = isCounterProposal ? SessionStatusValues.ProposedByAdvisor : SessionStatusValues.Scheduled,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.MentorshipSessions.Add(session);
 
-        // Move mentorship to InProgress if still Accepted
-        if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
+        // Only advance mentorship status when advisor is scheduling directly (not counter-proposing)
+        if (!isCounterProposal)
         {
-            mentorship.MentorshipStatus = MentorshipStatus.InProgress;
-            mentorship.LastUpdatedByRole = "Advisor";
-            mentorship.UpdatedAt = DateTime.UtcNow;
+            if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
+            {
+                mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+                mentorship.InProgressAt = DateTime.UtcNow;
+                mentorship.LastUpdatedByRole = "Advisor";
+                mentorship.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -405,6 +467,10 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
                 "You are not the advisor for this session's mentorship.");
 
+        if (request.SessionStatus != null && !SessionStatusValues.All.Contains(request.SessionStatus))
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                $"SessionStatus must be one of: {string.Join(", ", SessionStatusValues.All)}");
+
         if (request.ScheduledStartAt.HasValue) session.ScheduledStartAt = request.ScheduledStartAt.Value;
         if (request.DurationMinutes.HasValue) session.DurationMinutes = request.DurationMinutes.Value;
         if (request.SessionFormat != null) session.SessionFormat = request.SessionFormat;
@@ -420,6 +486,140 @@ public class MentorshipService : IMentorshipService
 
         await _audit.LogAsync("UPDATE_SESSION", "MentorshipSession", sessionId, null);
         _logger.LogInformation("Session {SessionId} updated", sessionId);
+
+        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
+    }
+
+    // ================================================================
+    // ACCEPT SESSION (Advisor) — chọn 1 slot ProposedByStartup để chốt lịch
+    // ================================================================
+
+    public async Task<ApiResponse<SessionDto>> AcceptSessionAsync(int userId, int mentorshipId, int sessionId)
+    {
+        var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
+        if (mentorship == null)
+            return ApiResponse<SessionDto>.ErrorResponse(error!.Error!.Code, error.Error.Message);
+
+        var session = await _db.MentorshipSessions
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId && s.MentorshipID == mentorshipId);
+        if (session == null)
+            return ApiResponse<SessionDto>.ErrorResponse("SESSION_NOT_FOUND", "Session not found.");
+        if (session.SessionStatus != SessionStatusValues.ProposedByStartup)
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                $"Only sessions with status '{SessionStatusValues.ProposedByStartup}' can be accepted by advisor.");
+
+        // Auto-fill meeting URL from advisor profile if session has none
+        if (string.IsNullOrEmpty(session.MeetingURL))
+        {
+            var advisorProfile = await _db.Advisors.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.UserID == userId);
+            session.MeetingURL = advisorProfile?.GoogleMeetLink ?? advisorProfile?.MsTeamsLink;
+        }
+
+        // Accept the chosen slot
+        session.SessionStatus = SessionStatusValues.Scheduled;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        // Cancel all other pending slots for this mentorship
+        var otherPending = await _db.MentorshipSessions
+            .Where(s => s.MentorshipID == mentorshipId
+                && s.SessionID != sessionId
+                && (s.SessionStatus == SessionStatusValues.ProposedByStartup
+                    || s.SessionStatus == SessionStatusValues.ProposedByAdvisor))
+            .ToListAsync();
+        foreach (var s in otherPending)
+        {
+            s.SessionStatus = SessionStatusValues.Cancelled;
+            s.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Advance mentorship: Requested → Accepted → InProgress
+        if (mentorship.MentorshipStatus == MentorshipStatus.Requested)
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.Accepted;
+            mentorship.AcceptedAt = DateTime.UtcNow;
+        }
+        if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+            mentorship.InProgressAt = DateTime.UtcNow;
+            mentorship.LastUpdatedByRole = "Advisor";
+            mentorship.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("ACCEPT_SESSION", "MentorshipSession", sessionId,
+            $"MentorshipId={mentorshipId}, CancelledOtherSlots={otherPending.Count}");
+        _logger.LogInformation("Session {SessionId} accepted by advisor for mentorship {MentorshipId}",
+            sessionId, mentorshipId);
+
+        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
+    }
+
+    // ================================================================
+    // CONFIRM SESSION (Startup) — chọn 1 slot ProposedByAdvisor để chốt lịch
+    // ================================================================
+
+    public async Task<ApiResponse<SessionDto>> ConfirmSessionAsync(int userId, int mentorshipId, int sessionId)
+    {
+        var startup = await _db.Startups.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<SessionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+        var mentorship = await _db.StartupAdvisorMentorships
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+        if (mentorship == null)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
+        if (mentorship.StartupID != startup.StartupID)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_OWNED", "You are not the startup for this mentorship.");
+
+        var session = await _db.MentorshipSessions
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId && s.MentorshipID == mentorshipId);
+        if (session == null)
+            return ApiResponse<SessionDto>.ErrorResponse("SESSION_NOT_FOUND", "Session not found.");
+        if (session.SessionStatus != SessionStatusValues.ProposedByAdvisor)
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                $"Only sessions with status '{SessionStatusValues.ProposedByAdvisor}' can be confirmed by startup.");
+
+        // Confirm the chosen slot
+        session.SessionStatus = SessionStatusValues.Scheduled;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        // Cancel all other pending slots for this mentorship (ProposedByAdvisor + ProposedByStartup)
+        var otherPending = await _db.MentorshipSessions
+            .Where(s => s.MentorshipID == mentorshipId
+                && s.SessionID != sessionId
+                && (s.SessionStatus == SessionStatusValues.ProposedByAdvisor
+                    || s.SessionStatus == SessionStatusValues.ProposedByStartup))
+            .ToListAsync();
+        foreach (var s in otherPending)
+        {
+            s.SessionStatus = SessionStatusValues.Cancelled;
+            s.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Advance mentorship: Requested → Accepted → InProgress
+        if (mentorship.MentorshipStatus == MentorshipStatus.Requested)
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.Accepted;
+            mentorship.AcceptedAt = DateTime.UtcNow;
+        }
+        if (mentorship.MentorshipStatus == MentorshipStatus.Accepted)
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+            mentorship.InProgressAt = DateTime.UtcNow;
+            mentorship.LastUpdatedByRole = "Startup";
+            mentorship.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CONFIRM_SESSION", "MentorshipSession", sessionId,
+            $"MentorshipId={mentorshipId}, CancelledOtherSlots={otherPending.Count}");
+        _logger.LogInformation("Session {SessionId} confirmed by startup for mentorship {MentorshipId}",
+            sessionId, mentorshipId);
 
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
     }
@@ -634,15 +834,96 @@ public class MentorshipService : IMentorshipService
         AcceptedAt = m.AcceptedAt,
         RejectedAt = m.RejectedAt,
         RejectedReason = m.RejectedReason,
+        CancelledAt = m.CancelledAt,
+        CancelledBy = m.CancelledBy,
+        CancellationReason = m.CancellationReason,
         CompletedAt = m.CompletedAt,
         CompletionConfirmedByStartup = m.CompletionConfirmedByStartup,
         CompletionConfirmedByAdvisor = m.CompletionConfirmedByAdvisor,
+        SessionAmount = m.SessionAmount,
+        PaymentStatus = m.PaymentStatus.ToString(),
+        PaidAt = m.PaidAt,
         CreatedAt = m.CreatedAt,
         UpdatedAt = m.UpdatedAt,
         Sessions = m.Sessions.Select(MapSessionDto).ToList(),
         Reports = m.Reports.Select(MapReportDto).ToList(),
-        Feedbacks = m.Feedbacks.Select(MapFeedbackDto).ToList()
+        Feedbacks = m.Feedbacks.Select(MapFeedbackDto).ToList(),
+        TimelineEvents = BuildTimeline(m)
     };
+
+    private static List<TimelineEventDto> BuildTimeline(StartupAdvisorMentorship m)
+    {
+        var events = new List<TimelineEventDto>();
+
+        if (m.RequestedAt.HasValue)
+            events.Add(new TimelineEventDto
+            {
+                Type = "Requested",
+                Title = "Yêu cầu đã gửi",
+                Description = "Yêu cầu tư vấn đã được tạo và gửi đến cố vấn.",
+                Actor = "Startup",
+                HappenedAt = m.RequestedAt.Value
+            });
+
+        if (m.AcceptedAt.HasValue)
+            events.Add(new TimelineEventDto
+            {
+                Type = "Accepted",
+                Title = "Cố vấn đã chấp nhận",
+                Description = "Cố vấn đã chấp nhận yêu cầu tư vấn.",
+                Actor = "Advisor",
+                HappenedAt = m.AcceptedAt.Value
+            });
+
+        if (m.InProgressAt.HasValue)
+            events.Add(new TimelineEventDto
+            {
+                Type = "InProgress",
+                Title = "Mentorship đã bắt đầu",
+                Description = "Buổi tư vấn đầu tiên đã được lập lịch.",
+                Actor = "Advisor",
+                HappenedAt = m.InProgressAt.Value
+            });
+
+        if (m.RejectedAt.HasValue)
+            events.Add(new TimelineEventDto
+            {
+                Type = "Rejected",
+                Title = "Yêu cầu bị từ chối",
+                Description = string.IsNullOrEmpty(m.RejectedReason)
+                    ? "Cố vấn đã từ chối yêu cầu tư vấn."
+                    : $"Cố vấn đã từ chối yêu cầu. Lý do: {m.RejectedReason}",
+                Actor = "Advisor",
+                HappenedAt = m.RejectedAt.Value
+            });
+
+        if (m.CancelledAt.HasValue)
+        {
+            var actor = m.CancelledBy ?? "Unknown";
+            events.Add(new TimelineEventDto
+            {
+                Type = "Cancelled",
+                Title = "Yêu cầu đã bị hủy",
+                Description = string.IsNullOrEmpty(m.CancellationReason)
+                    ? $"{actor} đã hủy yêu cầu tư vấn."
+                    : $"{actor} đã hủy yêu cầu. Lý do: {m.CancellationReason}",
+                Actor = actor,
+                HappenedAt = m.CancelledAt.Value
+            });
+        }
+
+        if (m.CompletedAt.HasValue)
+            events.Add(new TimelineEventDto
+            {
+                Type = "Completed",
+                Title = "Mentorship đã hoàn thành",
+                Description = "Mentorship đã hoàn thành thành công.",
+                Actor = "Advisor",
+                HappenedAt = m.CompletedAt.Value
+            });
+
+        return events.OrderBy(e => e.HappenedAt).ToList();
+    }
 
     private static SessionDto MapSessionDto(MentorshipSession s) => new()
     {
@@ -699,6 +980,21 @@ public class MentorshipService : IMentorshipService
             && mentorship.MentorshipStatus != MentorshipStatus.Accepted)
             return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
                 $"Cannot complete mentorship with status '{mentorship.MentorshipStatus}'. Must be 'InProgress' or 'Accepted'.");
+
+        // Must have paid before advisor can mark as complete
+        if (mentorship.PaymentStatus != PaymentStatus.Completed)
+            return ApiResponse<MentorshipDto>.ErrorResponse("PAYMENT_REQUIRED",
+                "Mentorship must be paid before it can be marked as completed.");
+
+        // Must have at least one session that is Scheduled or InProgress (not all cancelled/proposed)
+        var hasValidSession = await _db.MentorshipSessions
+            .AnyAsync(s => s.MentorshipID == mentorshipId
+                && (s.SessionStatus == SessionStatusValues.Scheduled
+                    || s.SessionStatus == SessionStatusValues.InProgress
+                    || s.SessionStatus == SessionStatusValues.Completed));
+        if (!hasValidSession)
+            return ApiResponse<MentorshipDto>.ErrorResponse("NO_VALID_SESSION",
+                "No confirmed session found for this mentorship.");
 
         mentorship.MentorshipStatus = MentorshipStatus.Completed;
         mentorship.CompletedAt = DateTime.UtcNow;

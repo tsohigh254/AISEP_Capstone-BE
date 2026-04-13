@@ -97,7 +97,10 @@ namespace AISEP.Infrastructure.Services
                 reviewedStartup.UpdatedAt = reviewedAt;
             }
 
+            await using var tx = await _context.Database.BeginTransactionAsync();
             await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+
             return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
                 MapToKycSubmissionDto(startupSubmission),
                 "Startup reviewed successfully");

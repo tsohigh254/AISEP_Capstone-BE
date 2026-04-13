@@ -33,6 +33,9 @@ public class StartupsController : ControllerBase
         return int.TryParse(userIdClaim, out var userId) ? userId : 0;
     }
 
+    private string GetCurrentUserType()
+        => User.FindFirst("userType")?.Value ?? string.Empty;
+
     // ================================================================
     // STARTUP OWNER ENDPOINTS (Role = Startup)
     // ================================================================
@@ -198,7 +201,7 @@ public class StartupsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<StartupPublicDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStartupById(int startupId)
     {
-        var result = await _startupService.GetStartupByIdAsync(startupId);
+        var result = await _startupService.GetStartupByIdAsync(startupId, GetCurrentUserId(), GetCurrentUserType());
         return result.ToActionResult();
     }
 
@@ -215,7 +218,7 @@ public class StartupsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<StartupListItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchStartups([FromQuery] StartupQueryParams startupQuery)
     {
-        var result = await _startupService.SearchStartupsAsync(startupQuery);
+        var result = await _startupService.SearchStartupsAsync(startupQuery, GetCurrentUserType());
         return result.ToActionResult();
     }
 
@@ -237,7 +240,7 @@ public class StartupsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<InvestorSearchItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchInvestors([FromQuery] InvestorQueryParams investorQuery)
     {
-        var result = await _startupService.SearchInvestorsAsync(investorQuery);
+        var result = await _startupService.SearchInvestorsAsync(investorQuery, GetCurrentUserId());
         return result.ToActionResult();
     }
 

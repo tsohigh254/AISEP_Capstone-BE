@@ -10,80 +10,18 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "AcceptingConnectionsStatus",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "AiScoreImportance",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "AvoidText",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<float>(
-                name: "PreferredAiScoreMax",
-                table: "InvestorPreferences",
-                type: "real",
-                nullable: true);
-
-            migrationBuilder.AddColumn<float>(
-                name: "PreferredAiScoreMin",
-                table: "InvestorPreferences",
-                type: "real",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "PreferredProductMaturity",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "PreferredStrengths",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "PreferredValidationLevel",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "RecentlyActiveBadge",
-                table: "InvestorPreferences",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "RequireVerifiedStartups",
-                table: "InvestorPreferences",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<bool>(
-                name: "RequireVisibleProfiles",
-                table: "InvestorPreferences",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Tags",
-                table: "InvestorPreferences",
-                type: "text",
-                nullable: true);
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""AcceptingConnectionsStatus"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""AiScoreImportance"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""AvoidText"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""PreferredAiScoreMax"" real;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""PreferredAiScoreMin"" real;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""PreferredProductMaturity"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""PreferredStrengths"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""PreferredValidationLevel"" text;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""RecentlyActiveBadge"" boolean NOT NULL DEFAULT false;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""RequireVerifiedStartups"" boolean NOT NULL DEFAULT false;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""RequireVisibleProfiles"" boolean NOT NULL DEFAULT false;");
+            migrationBuilder.Sql(@"ALTER TABLE ""InvestorPreferences"" ADD COLUMN IF NOT EXISTS ""Tags"" text;");
         }
 
         /// <inheritdoc />

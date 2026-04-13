@@ -20,11 +20,11 @@ public interface IStartupService
     Task<ApiResponse<StartupKYCStatusDto>> SaveKYCDraftAsync(int userId, SaveStartupKYCDraftRequest request);
 
     // Public (investors/advisors)
-    Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId);
-    Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery);
+    Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId, int requestingUserId, string userType);
+    Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType);
 
     // Browse investors (Startup role)
-    Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery);
+    Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery, int requestingUserId);
     Task<ApiResponse<InvestorDetailForStartupDto>> GetInvestorByIdAsync(int investorId);
 
     // Team members (owner)

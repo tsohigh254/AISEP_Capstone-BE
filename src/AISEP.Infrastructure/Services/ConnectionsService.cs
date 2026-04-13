@@ -39,13 +39,18 @@ public class ConnectionsService : IConnectionsService
         if (!request.StartupId.HasValue)
             return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_ID_REQUIRED", "StartupId is required.");
 
-        var startupExists = await _db.Startups.AnyAsync(s => s.StartupID == request.StartupId.Value);
-        if (!startupExists)
+        var startup = await _db.Startups.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.StartupID == request.StartupId.Value);
+        if (startup == null)
             return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_FOUND",
                 $"Startup with id {request.StartupId} not found.");
 
+        if (!startup.IsVisible)
+            return ApiResponse<ConnectionDto>.ErrorResponse("STARTUP_NOT_ACCEPTING_CONNECTIONS",
+                "This startup is not currently accepting new connections.");
+
         var duplicate = await _db.StartupInvestorConnections.AnyAsync(c =>
-            c.StartupID == request.StartupId.Value &&
+            c.StartupID == startup.StartupID &&
             c.InvestorID == investor.InvestorID &&
             (c.ConnectionStatus == ConnectionStatus.Requested || c.ConnectionStatus == ConnectionStatus.Accepted));
         if (duplicate)
@@ -54,7 +59,7 @@ public class ConnectionsService : IConnectionsService
 
         var conn = new StartupInvestorConnection
         {
-            StartupID = request.StartupId.Value,
+            StartupID = startup.StartupID,
             InvestorID = investor.InvestorID,
             ConnectionStatus = ConnectionStatus.Requested,
             InitiatedBy = userId,
