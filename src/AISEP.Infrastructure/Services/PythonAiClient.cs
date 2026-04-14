@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -40,7 +41,8 @@ public class PythonAiClient
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     public PythonAiClient(HttpClient http, IOptions<PythonAiOptions> options, ILogger<PythonAiClient> logger)
