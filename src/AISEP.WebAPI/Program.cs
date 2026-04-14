@@ -141,25 +141,43 @@ builder.Services.AddHttpClient<PythonAiClient>(client =>
     client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
+
 builder.Services.AddScoped<IAiEvaluationService, AiEvaluationService>();
 builder.Services.AddScoped<IAiRecommendationService, AiRecommendationService>();
 builder.Services.AddScoped<IAiInvestorAgentService, AiInvestorAgentService>();
 
-builder.Services.AddSingleton<PayOSClient>(p =>
+builder.Services.AddKeyedSingleton("OrderClient", (p, key) =>
     {
         var options = p.GetRequiredService<IOptions<PaymentOptions>>().Value;
 
-        var account = new PayOSClient(
-             options.ClientId,
-             options.ApiKey,
-             options.ChecksumKey
-            );
+        var account = new PayOSClient
+        (
+            options.ClientId,
+            options.ApiKey, 
+            options.ChecksumKey
+        );
 
         return account;
     });
 
-// Blockchain — Ethereum (Sepolia) via Nethereum
-builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
+builder.Services.AddKeyedSingleton("TransferClient", (p, key) =>
+    {
+        var options = p.GetRequiredService<IOptions<PaymentOptions>>().Value;
+
+        var account = new PayOSClient
+        (
+            options.CashoutClientId,
+            options.CashoutApiKey,
+            options.CashoutChecksumKey
+        );
+
+        return account;
+    });
+
+
+
+    // Blockchain — Ethereum (Sepolia) via Nethereum
+    builder.Services.Configure<BlockchainSettings>(builder.Configuration.GetSection("Blockchain"));
 builder.Services.AddSingleton<IBlockchainService, EthereumBlockchainService>();
 
 // Storage (local file system for dev — swap to Azure Blob / S3 for production)

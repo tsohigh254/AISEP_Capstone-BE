@@ -11,16 +11,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PayOS;
 using PayOS.Models.V1.Payouts;
+using PayOS.Models.V1.PayoutsAccount;
 using PayOS.Models.V2.PaymentRequests;
 using PayOS.Models.Webhooks;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AISEP.Infrastructure.Services
 {
     public class PaymentService : IPaymentService
     {
         private readonly ApplicationDbContext _context;
-        private readonly PayOSClient _payOS;
+        private readonly PayOSClient _orderClient;
+        private readonly PayOSClient _transferClient;
         private readonly ILogger<PaymentService> _logger;
         private readonly IBackgroundJobClient _backgroundJobClient;
         private const decimal PLATFORM_FEE_PERCENTAGE = 15M;
@@ -28,13 +31,15 @@ namespace AISEP.Infrastructure.Services
 
         public PaymentService(
             ApplicationDbContext context,
-            PayOSClient payOS,
+            [FromKeyedServices("OrderClient")] PayOSClient orderClient,
+            [FromKeyedServices("TransferClient")] PayOSClient transferClient,
             ILogger<PaymentService> logger,
             IBackgroundJobClient backgroundJobClient)
         {
             Env.Load();
             _context = context;
-            _payOS = payOS;
+            _orderClient = orderClient;
+            _transferClient = transferClient;
             _logger = logger;
             _backgroundJobClient = backgroundJobClient;
             url = Env.GetString("Frontend__URI");
@@ -53,7 +58,7 @@ namespace AISEP.Infrastructure.Services
             if (webhook?.Data == null)
                 throw new ArgumentNullException(nameof(webhook), "Invalid payload");
 
-            var result = await _payOS.Webhooks.VerifyAsync(webhook);
+            var result = await _orderClient.Webhooks.VerifyAsync(webhook);
 
             _logger.LogInformation("Result of callback : {result}", result);
 
@@ -151,7 +156,7 @@ namespace AISEP.Infrastructure.Services
 
         public async Task<string> ConfirmWebHook(string webhookUrl)
         {
-            var result = await _payOS.Webhooks.ConfirmAsync(webhookUrl);
+            var result = await _orderClient.Webhooks.ConfirmAsync(webhookUrl);
             return result.WebhookUrl;
         }
 
@@ -208,7 +213,7 @@ namespace AISEP.Infrastructure.Services
             await _context.StartupSubscriptionPayments.AddAsync(subPayment);
             await _context.SaveChangesAsync();
 
-            _backgroundJobClient.Schedule<AISEP.Infrastructure.Jobs.PaymentExpirationJob>(
+            _backgroundJobClient.Schedule<Jobs.PaymentExpirationJob>(
                 job => job.ExpireSubscriptionPayment(subPayment.PaymentID),
                 TimeSpan.FromMinutes(10));
 
@@ -248,14 +253,14 @@ namespace AISEP.Infrastructure.Services
 
             var payoutRequest = new PayoutRequest
             {
-                ReferenceId = "payout",
+                ReferenceId = Guid.NewGuid().ToString(),
                 Amount = (int)transaction.Amount,
                 Description = "Rút tiền",
                 ToAccountNumber = cashoutRequestDto.AccountNumber,
                 ToBin = cashoutRequestDto.Bin
             };
 
-            var response = await _payOS.Payouts.CreateAsync(payoutRequest);
+            var response = await _transferClient.Payouts.CreateAsync(payoutRequest);
 
             _logger.LogInformation("Payout request : {0}", payoutRequest);
 
@@ -269,8 +274,17 @@ namespace AISEP.Infrastructure.Services
             return ApiResponse<string>.SuccessResponse("CASH_OUT_SUCCESSFULLY", "Cash out successfully");
         }
 
-        #region helper method
+        public async Task<PayoutAccountInfo> GetAccountBalance()
+        {
+            var response = await _transferClient.PayoutsAccount.GetBalanceAsync();
 
+            _logger.LogInformation("Response : {0}", response);
+
+            return response;
+        }
+
+
+        #region helper method
 
         private async Task<PaymentInfoDto> PaymentLinkForMentorship(PaymentRequestDto paymentRequest)
         {
@@ -286,7 +300,7 @@ namespace AISEP.Infrastructure.Services
                 CancelUrl = $"{url}/startup/mentorship-requests/{paymentRequest.MentorshipId}/checkout"
             };
 
-            var paymentInfo = await _payOS.PaymentRequests.CreateAsync(paymentLinkRequest);
+            var paymentInfo = await _orderClient.PaymentRequests.CreateAsync(paymentLinkRequest);
 
             return new PaymentInfoDto
             {
@@ -309,16 +323,15 @@ namespace AISEP.Infrastructure.Services
                 CancelUrl = $"{url}/startup/subscription"
             };
 
-            var paymentInfo = await _payOS.PaymentRequests.CreateAsync(paymentLinkRequest);
+            var paymentInfo = await _orderClient.PaymentRequests.CreateAsync(paymentLinkRequest);
 
             return new PaymentInfoDto
             {
                 CheckoutUrl = paymentInfo.CheckoutUrl,
                 OrderCode = orderCode
             };
-        }
+        }    
 
-       
         #endregion
     }
 }

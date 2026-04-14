@@ -3,6 +3,8 @@ using AISEP.Application.DTOs.Payment;
 using AISEP.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PayOS;
+using PayOS.Models.V1.PayoutsAccount;
 
 namespace AISEP.WebAPI.Controllers
 {
@@ -109,7 +111,6 @@ namespace AISEP.WebAPI.Controllers
         /// Process money withdrawal for completed Mentorship sessions
         /// </summary>
         [HttpPost("cashout")]
-        [Authorize(Roles = "Advisor")]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status500InternalServerError)]
@@ -134,6 +135,26 @@ namespace AISEP.WebAPI.Controllers
             }
         }
 
+        [HttpGet("balance")]
+        [ProducesResponseType(typeof(PayoutAccountInfo), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(PayoutAccountInfo), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(PayoutAccountInfo), StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<PayoutAccountInfo>> CheckBalance()
+        {
+            try
+            {
+                var result = await _paymentService.GetAccountBalance();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Error processing cashout", error = ex.Message });
+            }
+        }
+
+        #region helper method
+
         private ActionResult<TResponse> ToActionResult<TResponse>(ApiResponse<TResponse> response)
         {
             if (response.Success)
@@ -148,5 +169,6 @@ namespace AISEP.WebAPI.Controllers
                 ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             return int.TryParse(claim, out var id) ? id : 0;
         }
+        #endregion
     }
 }
