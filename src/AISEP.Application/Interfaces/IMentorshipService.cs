@@ -17,6 +17,8 @@ public interface IMentorshipService
     Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId);
     Task<ApiResponse<SessionDto>> CreateSessionAsync(int userId, int mentorshipId, CreateSessionRequest request);
     Task<ApiResponse<SessionDto>> UpdateSessionAsync(int userId, int sessionId, UpdateSessionRequest request);
+    Task<ApiResponse<SessionDto>> ConfirmSessionAsync(int userId, int mentorshipId, int sessionId);
+    Task<ApiResponse<SessionDto>> AcceptSessionAsync(int userId, int mentorshipId, int sessionId);
 
     // Reports
     Task<ApiResponse<ReportDto>> CreateReportAsync(int userId, int mentorshipId, CreateReportRequest request);

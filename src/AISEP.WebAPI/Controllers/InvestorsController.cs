@@ -264,7 +264,7 @@ public class InvestorsController : ControllerBase
     /// <param name="page">Page number (default 1)</param>
     /// <param name="pageSize">Items per page (default 20, max 100)</param>
     [HttpGet("search")]
-    [AllowAnonymous]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<StartupSearchItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchStartups(
         [FromQuery] string? q,

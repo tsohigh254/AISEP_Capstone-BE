@@ -11,8 +11,8 @@ public class CreateConnectionRequestValidator : AbstractValidator<CreateConnecti
             .GreaterThan(0).WithMessage("StartupId must be a positive integer.");
 
         RuleFor(x => x.Message)
-            .MaximumLength(2000).WithMessage("Message must not exceed 2000 characters.")
-            .When(x => x.Message != null);
+            .NotEmpty().WithMessage("Lời nhắn không được để trống.")
+            .MaximumLength(300).WithMessage("Lời nhắn tối đa 300 ký tự.");
     }
 }
 

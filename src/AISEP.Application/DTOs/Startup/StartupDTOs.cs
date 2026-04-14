@@ -182,6 +182,7 @@ public class StartupPublicDto
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
+    public string? ParentIndustryName { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
@@ -210,6 +211,13 @@ public class StartupPublicDto
     public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
     public string? TeamSize { get; set; }
+
+    /// <summary>
+    /// Mã đăng ký doanh nghiệp từ KYC đã được duyệt (Approved).
+    /// Chỉ có giá trị khi startup có pháp nhân (WithLegalEntity) và đã KYC approved.
+    /// Trả về null nếu startup WithoutLegalEntity hoặc chưa qua KYC.
+    /// </summary>
+    public string? EnterpriseCode { get; set; }
 
     public string? ProfileStatus { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -256,6 +264,7 @@ public class TeamMemberPublicDto
     public string? Bio { get; set; }
     public string? PhotoURL { get; set; }
     public bool IsFounder { get; set; }
+    public int? YearsOfExperience { get; set; }
 }
 
 public class CreateTeamMemberRequest

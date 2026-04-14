@@ -18,7 +18,7 @@ namespace AISEP.Infrastructure.Services
         private readonly CloudinaryOptions _options;
 
         private const int MaxFileSizeImage = 5 * 1024 * 1024;
-        private const int MaxFileSizeDocument = 20 * 1024 * 1024;
+        private const int MaxFileSizeDocument = 10 * 1024 * 1024;
 
         public CloudinaryService(IOptions<CloudinaryOptions> options)
         {
@@ -92,7 +92,7 @@ namespace AISEP.Infrastructure.Services
 
             if (file.Length > MaxFileSizeDocument)
             {
-                throw new InvalidOperationException($"Document must not exceed {MaxFileSizeDocument / (1024 * 1024)} MB.");
+                throw new InvalidOperationException($"Document must not exceed {MaxFileSizeDocument / (1024 * 1024)} MB due to the current Cloudinary upload limit.");
             }
 
             var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -114,7 +114,8 @@ namespace AISEP.Infrastructure.Services
             var result = await _cloudinary.UploadAsync(uploadParams);
             if (result?.SecureUrl == null || string.IsNullOrWhiteSpace(result.PublicId))
             {
-                throw new InvalidOperationException("Document upload failed: Cloudinary did not return secure URL/public ID.");
+                var cloudinaryError = result?.Error?.Message ?? "no details";
+                throw new InvalidOperationException($"Document upload failed: Cloudinary did not return secure URL/public ID. Cloudinary error: {cloudinaryError}");
             }
 
             return new CloudinaryUploadResultDto
@@ -130,7 +131,7 @@ namespace AISEP.Infrastructure.Services
                 throw new FileNotFoundException("Document file cannot be empty.");
 
             if (file.Length > MaxFileSizeDocument)
-                throw new InvalidOperationException($"Document must not exceed {MaxFileSizeDocument / (1024 * 1024)} MB.");
+                throw new InvalidOperationException($"Document must not exceed {MaxFileSizeDocument / (1024 * 1024)} MB due to the current Cloudinary upload limit.");
 
             var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!AllowedExtensionsDocument.Contains(fileExtension))
@@ -164,7 +165,10 @@ namespace AISEP.Infrastructure.Services
             var result = await _cloudinary.UploadAsync(uploadParams);
 
             if (result?.SecureUrl == null)
-                throw new InvalidOperationException("Document upload failed: Cloudinary did not return secure URL.");
+            {
+                var cloudinaryError = result?.Error?.Message ?? "no details";
+                throw new InvalidOperationException($"Document upload failed: Cloudinary did not return secure URL. Cloudinary error: {cloudinaryError}");
+            }
 
             return new DocumentUploadResult
             {

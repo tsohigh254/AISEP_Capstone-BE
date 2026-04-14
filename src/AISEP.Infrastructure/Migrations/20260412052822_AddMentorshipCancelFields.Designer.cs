@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260412052822_AddMentorshipCancelFields")]
+    partial class AddMentorshipCancelFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2051,12 +2054,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("SubIndustry")
                         .HasColumnType("text");
 
-                    b.Property<DateTime?>("SubscriptionEndDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("SubscriptionPlan")
-                        .HasColumnType("smallint");
-
                     b.Property<string>("TeamSize")
                         .HasColumnType("text");
 
@@ -2233,10 +2230,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.HasIndex("StartupID", "InvestorID")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Connections_Unique_Requested")
-                        .HasFilter("\"ConnectionStatus\" = 0");
+                    b.HasIndex("StartupID");
 
                     b.ToTable("StartupInvestorConnections");
                 });
@@ -2459,44 +2453,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("StartupID");
 
                     b.ToTable("StartupPotentialScores");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.StartupSubscriptionPayment", b =>
-                {
-                    b.Property<int>("PaymentID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PaymentID"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<short>("PaymentStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)0);
-
-                    b.Property<int>("StartupID")
-                        .HasColumnType("integer");
-
-                    b.Property<short>("TargetPlan")
-                        .HasColumnType("smallint");
-
-                    b.Property<int?>("TransactionCode")
-                        .HasColumnType("integer");
-
-                    b.HasKey("PaymentID");
-
-                    b.HasIndex("StartupID");
-
-                    b.ToTable("StartupSubscriptionPayments");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.SystemSettings", b =>
@@ -3356,17 +3312,6 @@ namespace AISEP.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("ScoringConfiguration");
-
-                    b.Navigation("Startup");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.StartupSubscriptionPayment", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Startup", "Startup")
-                        .WithMany()
-                        .HasForeignKey("StartupID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
 
                     b.Navigation("Startup");
                 });

@@ -97,7 +97,10 @@ namespace AISEP.Infrastructure.Services
                 reviewedStartup.UpdatedAt = reviewedAt;
             }
 
+            await using var tx = await _context.Database.BeginTransactionAsync();
             await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+
             return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
                 MapToKycSubmissionDto(startupSubmission),
                 "Startup reviewed successfully");
@@ -231,6 +234,14 @@ namespace AISEP.Infrastructure.Services
             investor.ApprovedBy = workflowStatus == InvestorKycWorkflowStatus.Approved ? staffId : null;
             investor.UpdatedAt = reviewedAt;
 
+            // Auto-disable AcceptingConnections when KYC is not approved
+            if (workflowStatus != InvestorKycWorkflowStatus.Approved && investor.AcceptingConnections)
+            {
+                investor.AcceptingConnections = false;
+                _logger.LogInformation("Auto-disabled AcceptingConnections for investor {InvestorId} due to KYC status: {Status}.",
+                    investor.InvestorID, workflowStatus);
+            }
+
             await _context.SaveChangesAsync();
             return ApiResponse<Investor>.SuccessResponse(investor, "Investor reviewed successfully");
         }
@@ -321,6 +332,14 @@ namespace AISEP.Infrastructure.Services
             investor.ProfileStatus = ProfileStatus.Rejected;
             investor.InvestorTag = InvestorTag.None;
             investor.UpdatedAt = rejectedAt;
+
+            // Auto-disable AcceptingConnections on explicit rejection
+            if (investor.AcceptingConnections)
+            {
+                investor.AcceptingConnections = false;
+                _logger.LogInformation("Auto-disabled AcceptingConnections for investor {InvestorId} due to registration rejection.",
+                    investor.InvestorID);
+            }
 
             await _context.SaveChangesAsync();
             return ApiResponse<Investor>.SuccessResponse(investor, "Rejected successfully");

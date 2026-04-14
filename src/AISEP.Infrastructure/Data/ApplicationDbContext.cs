@@ -150,6 +150,14 @@ public class ApplicationDbContext : DbContext
         // Connection
         modelBuilder.Entity<StartupInvestorConnection>().Property(e => e.ConnectionStatus).HasConversion<short>().HasDefaultValue(ConnectionStatus.Requested);
 
+        // Prevent duplicate pending connections between the same Startup–Investor pair.
+        // Filtered index: only one row with ConnectionStatus = 0 (Requested) per (StartupID, InvestorID).
+        modelBuilder.Entity<StartupInvestorConnection>()
+            .HasIndex(c => new { c.StartupID, c.InvestorID })
+            .HasDatabaseName("IX_Connections_Unique_Requested")
+            .HasFilter("\"ConnectionStatus\" = 0")
+            .IsUnique();
+
         // Mentorship
         modelBuilder.Entity<StartupAdvisorMentorship>().Property(e => e.MentorshipStatus).HasConversion<short>().HasDefaultValue(MentorshipStatus.Requested);
 

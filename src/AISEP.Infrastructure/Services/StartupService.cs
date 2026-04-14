@@ -94,6 +94,7 @@ public class StartupService : IStartupService
             ContactPhone = request.ContactPhone,
 
             ProfileStatus = ProfileStatus.Approved,
+            IsVisible = false,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -134,7 +135,6 @@ public class StartupService : IStartupService
     public async Task<ApiResponse<StartupMeDto>> GetMyStartupAsync(int userId)
     {
         var startup = await _context.Startups
-            .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
             .Include(s => s.ApprovedByUser)
@@ -143,8 +143,25 @@ public class StartupService : IStartupService
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
-        {
             return ApiResponse<StartupMeDto>.SuccessResponse(null!, "Profile has not been created yet.");
+
+        // Auto-heal: if KYC submission is Approved but ProfileStatus is still PendingKYC, sync it
+        if (startup.ProfileStatus == ProfileStatus.PendingKYC)
+        {
+            var approvedSubmission = await _context.StartupKycSubmissions
+                .AsNoTracking()
+                .AnyAsync(k => k.StartupID == startup.StartupID
+                            && k.IsActive
+                            && k.WorkflowStatus == StartupKycWorkflowStatus.Approved);
+
+            if (approvedSubmission)
+            {
+                startup.ProfileStatus = ProfileStatus.Approved;
+                startup.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                await _auditService.LogAsync("AUTO_HEAL_PROFILE_STATUS", "Startup", startup.StartupID,
+                    "ProfileStatus auto-corrected to Approved: KYC was approved but ProfileStatus was PendingKYC");
+            }
         }
 
         return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(startup));
@@ -279,10 +296,12 @@ public class StartupService : IStartupService
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
-        {
             return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You haven't created a startup profile yet.");
-        }
+
+        if (isVisible && startup.ProfileStatus != ProfileStatus.Approved)
+            return ApiResponse<string>.ErrorResponse("STARTUP_VISIBILITY_NOT_ALLOWED",
+                "Your profile must be KYC-approved before it can be made visible.");
 
         startup.IsVisible = isVisible;
         startup.UpdatedAt = DateTime.UtcNow;
@@ -616,27 +635,67 @@ public class StartupService : IStartupService
 
     // ========== PUBLIC ENDPOINTS ==========
 
-    public async Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId)
+    public async Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId, int requestingUserId, string userType)
     {
         var startup = await _context.Startups
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
-            .FirstOrDefaultAsync(s => s.StartupID == startupId && (s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC));
+                .ThenInclude(i => i!.ParentIndustry)
+            .FirstOrDefaultAsync(s => s.StartupID == startupId
+                && s.ProfileStatus == ProfileStatus.Approved);
 
         if (startup == null)
+            return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+
+        if (!startup.IsVisible)
         {
-            return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND",
-                "Startup not found.");
+            var isStaff = userType == "Staff" || userType == "Admin";
+            if (!isStaff)
+            {
+                // Investor exception: still visible if they have an Accepted connection
+                if (userType == "Investor")
+                {
+                    var investor = await _context.Investors
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
+
+                    var hasAcceptedConnection = investor != null && await _context.StartupInvestorConnections
+                        .AnyAsync(c => c.StartupID == startupId
+                                    && c.InvestorID == investor.InvestorID
+                                    && c.ConnectionStatus == ConnectionStatus.Accepted);
+
+                    if (!hasAcceptedConnection)
+                        return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                }
+                else
+                {
+                    return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                }
+            }
         }
 
-        return ApiResponse<StartupPublicDto>.SuccessResponse(MapToPublicDto(startup));
+        var enterpriseCode = await _context.StartupKycSubmissions
+            .AsNoTracking()
+            .Where(k => k.StartupID == startupId
+                     && k.IsActive
+                     && k.WorkflowStatus == StartupKycWorkflowStatus.Approved)
+            .Select(k => k.EnterpriseCode)
+            .FirstOrDefaultAsync();
+
+        var dto = MapToPublicDto(startup);
+        dto.EnterpriseCode = enterpriseCode;
+        return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery)
+    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType)
     {
+        var isStaff = userType == "Staff" || userType == "Admin";
 
-        var query = _context.Startups.AsNoTracking().Where(s => s.ProfileStatus == ProfileStatus.Approved || s.ProfileStatus == ProfileStatus.PendingKYC).AsQueryable();
+        var query = _context.Startups.AsNoTracking()
+            .Where(s => s.ProfileStatus == ProfileStatus.Approved
+                     && (isStaff || s.IsVisible))
+            .AsQueryable();
 
         // Keyword search on CompanyName
         if (!string.IsNullOrWhiteSpace(startupQuery.Key))
@@ -894,6 +953,7 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
+            ParentIndustryName = s.Industry?.ParentIndustry?.IndustryName,
             Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
             Website = s.Website,
@@ -925,7 +985,8 @@ public class StartupService : IStartupService
                 LinkedInURL = tm.LinkedInURL,
                 Bio = tm.Bio,
                 PhotoURL = tm.PhotoURL,
-                IsFounder = tm.IsFounder
+                IsFounder = tm.IsFounder,
+                YearsOfExperience = tm.YearsOfExperience
             }).ToList() ?? new()
         };
     }
@@ -1313,64 +1374,176 @@ public class StartupService : IStartupService
 
     // ========== BROWSE INVESTORS (Startup role) ==========
 
-    public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(InvestorQueryParams investorQuery)
+    public async Task<ApiResponse<PagedResponse<InvestorSearchItemDto>>> SearchInvestorsAsync(
+        InvestorQueryParams q, int requestingUserId)
     {
+        // Resolve the requesting startup
+        var myStartupId = await _context.Startups
+            .AsNoTracking()
+            .Where(s => s.UserID == requestingUserId)
+            .Select(s => (int?)s.StartupID)
+            .FirstOrDefaultAsync();
+
+        // Fetch active/pending connections for this startup — keyed by InvestorID
+        // Statuses: Requested, Accepted, InDiscussion → block new request + show state
+        // Rejected/Withdrawn/Closed → treated as NONE (startup may request again)
+        var connectionsByInvestor = new Dictionary<int, (int ConnectionId, ConnectionStatus Status, int? InitiatedBy)>();
+
+        if (myStartupId.HasValue)
+        {
+            var conns = await _context.StartupInvestorConnections
+                .AsNoTracking()
+                .Where(c => c.StartupID == myStartupId.Value &&
+                            (c.ConnectionStatus == ConnectionStatus.Requested ||
+                             c.ConnectionStatus == ConnectionStatus.Accepted ||
+                             c.ConnectionStatus == ConnectionStatus.InDiscussion))
+                .Select(c => new { c.InvestorID, c.ConnectionID, c.ConnectionStatus, c.InitiatedBy })
+                .ToListAsync();
+
+            connectionsByInvestor = conns.ToDictionary(
+                c => c.InvestorID,
+                c => (c.ConnectionID, c.ConnectionStatus, c.InitiatedBy));
+        }
+
+        // Base query — only visible profiles
         var query = _context.Investors
             .AsNoTracking()
             .Where(i => (i.ProfileStatus == ProfileStatus.Approved || i.ProfileStatus == ProfileStatus.PendingKYC)
                      && i.AcceptingConnections)
-            .Include(i => i.Preferences)
-            .Include(i => i.StageFocus)
-            .Include(i => i.IndustryFocus)
-            .Include(i => i.PortfolioCompanies)
-            .Include(i => i.KycSubmissions)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(investorQuery.Key))
+        // --- Filters ---
+        if (!string.IsNullOrWhiteSpace(q.Keyword))
         {
-            var kw = investorQuery.Key.Trim().ToLower();
+            var kw = q.Keyword.Trim().ToLower();
             query = query.Where(i =>
-                i.FullName.Trim().ToLower().Contains(kw) ||
-                (i.FirmName != null && i.FirmName.ToLower().Contains(kw)));
+                i.FullName.ToLower().Contains(kw) ||
+                (i.FirmName != null && i.FirmName.ToLower().Contains(kw)) ||
+                (i.Title != null && i.Title.ToLower().Contains(kw)));
         }
 
-        query = query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt);
+        if (!string.IsNullOrWhiteSpace(q.Industry))
+        {
+            var ind = q.Industry.ToLower();
+            query = query.Where(i => i.IndustryFocus.Any(f => f.Industry.ToLower().Contains(ind)));
+        }
 
-        var total = await query.CountAsync();
-        var investors = await query
-            .Skip((investorQuery.Page - 1) * investorQuery.PageSize)
-            .Take(investorQuery.PageSize)
+        if (!string.IsNullOrWhiteSpace(q.Stage))
+        {
+            if (Enum.TryParse<StartupStage>(q.Stage, true, out var stageEnum))
+                query = query.Where(i => i.StageFocus.Any(s => s.Stage == stageEnum));
+        }
+
+        if (q.TicketSizeMin.HasValue)
+            query = query.Where(i => i.Preferences != null && i.Preferences.MaxInvestmentSize >= q.TicketSizeMin.Value);
+
+        if (q.TicketSizeMax.HasValue)
+            query = query.Where(i => i.Preferences != null && i.Preferences.MinInvestmentSize <= q.TicketSizeMax.Value);
+
+        if (!string.IsNullOrWhiteSpace(q.Country))
+        {
+            var country = q.Country.ToLower();
+            query = query.Where(i => i.Country != null && i.Country.ToLower().Contains(country));
+        }
+
+        if (!string.IsNullOrWhiteSpace(q.InvestorType))
+            query = query.Where(i => i.KycSubmissions.Any(k => k.IsActive && k.InvestorCategory == q.InvestorType));
+
+        if (q.KycVerified == true)
+            query = query.Where(i => i.InvestorTag != InvestorTag.None);
+
+        // --- Sort ---
+        query = q.SortBy switch
+        {
+            "ticketSizeAsc"   => query.OrderBy(i => i.Preferences != null ? i.Preferences.MinInvestmentSize : null),
+            "ticketSizeDesc"  => query.OrderByDescending(i => i.Preferences != null ? i.Preferences.MaxInvestmentSize : null),
+            "connectionsDesc" => query.OrderByDescending(i =>
+                i.StartupConnections.Count(c => c.ConnectionStatus == ConnectionStatus.Accepted)),
+            _                 => query.OrderByDescending(i => i.UpdatedAt ?? i.CreatedAt)
+        };
+
+        var totalItems = await query.CountAsync();
+
+        var pageSize = Math.Clamp(q.PageSize <= 0 ? 12 : q.PageSize, 1, 100);
+        var page     = q.Page <= 0 ? 1 : q.Page;
+
+        // SQL-side projection (no connection state — done in memory below)
+        var raw = await query
+            .Select(i => new
+            {
+                i.InvestorID,
+                i.FullName,
+                i.FirmName,
+                i.Title,
+                i.Bio,
+                i.ProfilePhotoURL,
+                i.Location,
+                i.Country,
+                i.LinkedInURL,
+                i.Website,
+                i.UpdatedAt,
+                i.InvestorTag,
+                i.AcceptingConnections,
+                Industries           = i.IndustryFocus.Select(f => f.Industry).ToList(),
+                Stages               = i.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+                RawGeographies       = i.Preferences != null ? i.Preferences.PreferredGeographies : null,
+                TicketSizeMin        = i.Preferences != null ? i.Preferences.MinInvestmentSize : (decimal?)null,
+                TicketSizeMax        = i.Preferences != null ? i.Preferences.MaxInvestmentSize : (decimal?)null,
+                InvestorType         = i.KycSubmissions.Where(k => k.IsActive).Select(k => k.InvestorCategory).FirstOrDefault(),
+                AcceptedConnectionCount = i.StartupConnections.Count(c => c.ConnectionStatus == ConnectionStatus.Accepted),
+                PortfolioCount       = i.PortfolioCompanies.Count()
+            })
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        // Batch-query accepted connection counts for this page (one SQL call)
-        var investorIds = investors.Select(i => i.InvestorID).ToList();
-        var acceptedCounts = await _context.StartupInvestorConnections
-            .Where(c => investorIds.Contains(c.InvestorID) && c.ConnectionStatus == ConnectionStatus.Accepted)
-            .GroupBy(c => c.InvestorID)
-            .Select(g => new { InvestorId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.InvestorId, x => x.Count);
-
-        var items = investors.Select(i => new InvestorSearchItemDto
+        // In-memory mapping — merge connection state
+        var items = raw.Select(i =>
         {
-            InvestorID = i.InvestorID,
-            FullName = i.FullName,
-            FirmName = i.FirmName,
-            Title = i.Title,
-            Bio = i.Bio,
-            ProfilePhotoURL = i.ProfilePhotoURL,
-            Location = i.Location,
-            Country = i.Country,
-            LinkedInURL = i.LinkedInURL,
-            Website = i.Website,
-            PreferredIndustries = i.IndustryFocus.Select(f => f.Industry).ToList(),
-            PreferredStages = i.StageFocus.Select(s => s.Stage.ToString()).ToList(),
-            TicketSizeMin = i.Preferences?.MinInvestmentSize,
-            TicketSizeMax = i.Preferences?.MaxInvestmentSize,
-            PortfolioCount = i.PortfolioCompanies.Count,
-            AcceptedConnectionCount = acceptedCounts.GetValueOrDefault(i.InvestorID, 0),
-            InvestorType = i.KycSubmissions.FirstOrDefault(s => s.IsActive)?.InvestorCategory,
-            AcceptingConnections = i.AcceptingConnections,
-            UpdatedAt = i.UpdatedAt
+            var hasConn = connectionsByInvestor.TryGetValue(i.InvestorID, out var conn);
+            var connStatus = hasConn ? conn.Status switch
+            {
+                ConnectionStatus.Requested    => "REQUESTED",
+                ConnectionStatus.Accepted     => "ACCEPTED",
+                ConnectionStatus.InDiscussion => "IN_DISCUSSION",
+                _                             => "NONE"
+            } : "NONE";
+
+            var accepting  = i.AcceptingConnections;
+            var canRequest = accepting && connStatus == "NONE";
+
+            return new InvestorSearchItemDto
+            {
+                InvestorID              = i.InvestorID,
+                FullName                = i.FullName,
+                FirmName                = i.FirmName,
+                Title                   = i.Title,
+                Bio                     = i.Bio,
+                ProfilePhotoURL         = i.ProfilePhotoURL,
+                Location                = i.Location,
+                Country                 = i.Country,
+                LinkedInURL             = i.LinkedInURL,
+                Website                 = i.Website,
+                UpdatedAt               = i.UpdatedAt,
+                InvestorType            = i.InvestorType,
+                KycVerified             = i.InvestorTag != InvestorTag.None,
+                AcceptingConnections    = accepting,
+                CanRequestConnection    = canRequest,
+                ConnectionStatus        = connStatus,
+                InitiatedByRole         = hasConn ? (conn.InitiatedBy == requestingUserId ? "STARTUP" : "INVESTOR") : null,
+                ConnectionId            = hasConn ? conn.ConnectionId : (int?)null,
+                AcceptedConnectionCount = i.AcceptedConnectionCount,
+                PortfolioCount          = i.PortfolioCount,
+                PreferredIndustries     = i.Industries,
+                PreferredStages         = i.Stages,
+                PreferredGeographies    = string.IsNullOrWhiteSpace(i.RawGeographies)
+                                          ? new List<string>()
+                                          : i.RawGeographies.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                            .Select(g => g.Trim())
+                                                            .ToList(),
+                TicketSizeMin           = i.TicketSizeMin,
+                TicketSizeMax           = i.TicketSizeMax,
+            };
         }).ToList();
 
         return ApiResponse<PagedResponse<InvestorSearchItemDto>>.SuccessResponse(new PagedResponse<InvestorSearchItemDto>
@@ -1378,9 +1551,9 @@ public class StartupService : IStartupService
             Items = items,
             Paging = new PagingInfo
             {
-                Page = investorQuery.Page,
-                PageSize = investorQuery.PageSize,
-                TotalItems = total
+                Page       = page,
+                PageSize   = pageSize,
+                TotalItems = totalItems
             }
         });
     }

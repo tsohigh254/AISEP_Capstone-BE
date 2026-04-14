@@ -15,8 +15,12 @@ public class StartupAdvisorMentorship
     public string? PreferredFormat { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? AcceptedAt { get; set; }
+    public DateTime? InProgressAt { get; set; }
     public DateTime? RejectedAt { get; set; }
     public string? RejectedReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledBy { get; set; }    // "Startup" | "Advisor" | "System"
+    public string? CancellationReason { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? LastUpdatedByRole { get; set; }
     public string? ObligationSummary { get; set; }

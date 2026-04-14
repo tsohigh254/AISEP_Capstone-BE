@@ -108,8 +108,13 @@ public class ConnectionListItemDto
     public int ConnectionID { get; set; }
     public int StartupID { get; set; }
     public string StartupName { get; set; } = string.Empty;
+    public string? StartupLogoURL { get; set; }
+    public string? StartupStage { get; set; }
+    public string? StartupIndustryName { get; set; }
     public int InvestorID { get; set; }
     public string InvestorName { get; set; } = string.Empty;
+    public string? InvestorPhotoURL { get; set; }
+    public string? FirmName { get; set; }
     public string ConnectionStatus { get; set; } = string.Empty;
     public string? PersonalizedMessage { get; set; }
     public float? MatchScore { get; set; }
@@ -149,6 +154,16 @@ public class InfoRequestDto
     public string? ResponseDocumentIDs { get; set; }
     public DateTime? RequestedAt { get; set; }
     public DateTime? FulfilledAt { get; set; }
+}
+
+/// <summary>Response for GET /api/connections/can-invite.</summary>
+public class CanInviteDto
+{
+    public bool CanInvite { get; set; }
+    public List<string> ReasonCodes { get; set; } = new();
+    public int? RetryAfterSeconds { get; set; }
+    public int? MinMessageLength { get; set; }
+    public int MessageMaxLength { get; set; } = 300;
 }
 
 /// <summary>Portfolio company DTO.</summary>

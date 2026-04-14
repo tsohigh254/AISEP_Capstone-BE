@@ -170,14 +170,17 @@ public class ChatService : IChatService
                 return ApiResponse<ConversationDto>.ErrorResponse(
                     "ACCESS_DENIED", "You are not a participant of this mentorship.");
 
-            if (mentorship.MentorshipStatus != MentorshipStatus.Accepted && mentorship.MentorshipStatus != MentorshipStatus.InProgress)
+            var chatAllowed = mentorship.MentorshipStatus == MentorshipStatus.Accepted
+                           || mentorship.MentorshipStatus == MentorshipStatus.InProgress
+                           || mentorship.MentorshipStatus == MentorshipStatus.Completed;
+            if (!chatAllowed)
                 return ApiResponse<ConversationDto>.ErrorResponse(
-                    "INVALID_STATUS_TRANSITION",
-                    $"Cannot create conversation: mentorship status is '{mentorship.MentorshipStatus}', must be 'Accepted' or 'InProgress'.");
+                    "MENTORSHIP_CHAT_NOT_AVAILABLE",
+                    $"Chat is not available: mentorship status is '{mentorship.MentorshipStatus}'.");
 
+            // Bỏ filter ConversationStatus.Active — mentorship Completed có thể có conversation đã closed
             var existingMentorConv = await _db.Conversations
-                .FirstOrDefaultAsync(c => c.MentorshipID == request.MentorshipId.Value
-                            && c.ConversationStatus == ConversationStatus.Active);
+                .FirstOrDefaultAsync(c => c.MentorshipID == request.MentorshipId.Value);
             if (existingMentorConv != null)
                 return ApiResponse<ConversationDto>.SuccessResponse(MapToDto(existingMentorConv));
         }
