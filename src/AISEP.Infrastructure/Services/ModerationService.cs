@@ -253,6 +253,13 @@ public class ModerationService : IModerationService
                 targetUser.IsActive = false;
                 sideEffectNote = $"User {targetUser.UserID} deactivated (IsActive=false).";
             }
+            var investorProfile = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == flag.RelatedUserID.Value);
+            if (investorProfile != null && investorProfile.AcceptingConnections)
+            {
+                investorProfile.AcceptingConnections = false;
+                sideEffectNote += $" Investor {investorProfile.InvestorID} AcceptingConnections auto-disabled.";
+                _logger.LogInformation("Auto-disabled AcceptingConnections for investor {InvestorId} due to LockUser action.", investorProfile.InvestorID);
+            }
         }
         else if (string.Equals(request.ActionType, "UnlockUser", StringComparison.OrdinalIgnoreCase) &&
                  flag.RelatedUserID.HasValue)
@@ -272,6 +279,13 @@ public class ModerationService : IModerationService
             {
                 targetUser.IsActive = false;
                 sideEffectNote = $"User {targetUser.UserID} banned (IsActive=false).";
+            }
+            var investorProfile = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == flag.RelatedUserID.Value);
+            if (investorProfile != null && investorProfile.AcceptingConnections)
+            {
+                investorProfile.AcceptingConnections = false;
+                sideEffectNote += $" Investor {investorProfile.InvestorID} AcceptingConnections auto-disabled.";
+                _logger.LogInformation("Auto-disabled AcceptingConnections for investor {InvestorId} due to BanUser action.", investorProfile.InvestorID);
             }
         }
         // Hide/Remove: No visibility/isArchived field on generic entities — action recorded only.

@@ -112,7 +112,7 @@ public class ConnectionsService : IConnectionsService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(
-        int userId, string userType, string? status, int page, int pageSize)
+        int userId, string userType, string? status, string? keyword, int page, int pageSize)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
@@ -127,7 +127,8 @@ public class ConnectionsService : IConnectionsService
                     "INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
 
             query = _db.StartupInvestorConnections.AsNoTracking()
-                .Include(c => c.Startup).Include(c => c.Investor)
+                .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Investor)
                 .Where(c => c.InvestorID == investor.InvestorID && c.InitiatedBy == userId);
         }
         else
@@ -138,12 +139,21 @@ public class ConnectionsService : IConnectionsService
                     "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
 
             query = _db.StartupInvestorConnections.AsNoTracking()
-                .Include(c => c.Startup).Include(c => c.Investor)
+                .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Investor)
                 .Where(c => c.StartupID == startup.StartupID && c.InitiatedBy == userId);
         }
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
             query = query.Where(c => c.ConnectionStatus == statusEnum);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var trimmedKeyword = keyword.Trim();
+            query = userType == "Investor"
+                ? query.Where(c => c.Startup.CompanyName.Contains(trimmedKeyword))
+                : query.Where(c => c.Investor.FullName.Contains(trimmedKeyword));
+        }
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
@@ -163,7 +173,7 @@ public class ConnectionsService : IConnectionsService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(
-        int userId, string userType, string? status, int? counterpartId, int page, int pageSize)
+        int userId, string userType, string? status, string? keyword, int? counterpartId, int page, int pageSize)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
@@ -178,7 +188,8 @@ public class ConnectionsService : IConnectionsService
                     "INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found.");
 
             query = _db.StartupInvestorConnections.AsNoTracking()
-                .Include(c => c.Startup).Include(c => c.Investor)
+                .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Investor)
                 .Where(c => c.InvestorID == investor.InvestorID && c.InitiatedBy != userId);
 
             if (counterpartId.HasValue)
@@ -192,7 +203,8 @@ public class ConnectionsService : IConnectionsService
                     "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
 
             query = _db.StartupInvestorConnections.AsNoTracking()
-                .Include(c => c.Startup).Include(c => c.Investor)
+                .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Investor)
                 .Where(c => c.StartupID == startup.StartupID && c.InitiatedBy != userId);
 
             if (counterpartId.HasValue)
@@ -201,6 +213,14 @@ public class ConnectionsService : IConnectionsService
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
             query = query.Where(c => c.ConnectionStatus == statusEnum);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var trimmedKeyword = keyword.Trim();
+            query = userType == "Investor"
+                ? query.Where(c => c.Startup.CompanyName.Contains(trimmedKeyword))
+                : query.Where(c => c.Investor.FullName.Contains(trimmedKeyword));
+        }
 
         query = query.OrderByDescending(c => c.RequestedAt);
 
@@ -693,8 +713,13 @@ public class ConnectionsService : IConnectionsService
         ConnectionID = c.ConnectionID,
         StartupID = c.StartupID,
         StartupName = c.Startup.CompanyName,
+        StartupLogoURL = c.Startup.LogoURL,
+        StartupStage = c.Startup.Stage?.ToString(),
+        StartupIndustryName = c.Startup.Industry?.IndustryName,
         InvestorID = c.InvestorID,
         InvestorName = c.Investor.FullName,
+        InvestorPhotoURL = c.Investor.ProfilePhotoURL,
+        FirmName = c.Investor.FirmName,
         ConnectionStatus = c.ConnectionStatus.ToString(),
         PersonalizedMessage = c.PersonalizedMessage,
         MatchScore = c.MatchScore,
@@ -793,5 +818,47 @@ public class ConnectionsService : IConnectionsService
             conn.ConnectionID, startup.StartupID, request.InvestorId);
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
+    }
+
+    // ================================================================
+    // CAN INVITE CHECK (Startup → Investor)
+    // ================================================================
+
+    public async Task<ApiResponse<CanInviteDto>> CanInviteAsync(int startupUserId, int investorId)
+    {
+        var investor = await _db.Investors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+        if (investor == null)
+            return ApiResponse<CanInviteDto>.ErrorResponse("INVESTOR_NOT_FOUND",
+                $"Investor with id {investorId} not found.");
+
+        var reasonCodes = new List<string>();
+
+        // Gate 1 — account active (highest priority)
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserID == investor.UserID);
+        if (user == null || !user.IsActive)
+            reasonCodes.Add("INVESTOR_ACCOUNT_INACTIVE");
+
+        // Gate 2 — profile approved
+        if (investor.ProfileStatus != ProfileStatus.Approved)
+            reasonCodes.Add("INVESTOR_PROFILE_NOT_APPROVED");
+
+        // Gate 3 — KYC approved
+        var kyc = await _db.InvestorKycSubmissions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.InvestorID == investor.InvestorID && s.IsActive);
+        if (kyc == null || kyc.WorkflowStatus != InvestorKycWorkflowStatus.Approved)
+            reasonCodes.Add("INVESTOR_KYC_NOT_APPROVED");
+
+        // Gate 4 — toggle (only relevant when all investor-side gates pass)
+        if (reasonCodes.Count == 0 && !investor.AcceptingConnections)
+            reasonCodes.Add("INVESTOR_NOT_ACCEPTING_CONNECTIONS");
+
+        return ApiResponse<CanInviteDto>.SuccessResponse(new CanInviteDto
+        {
+            CanInvite = reasonCodes.Count == 0,
+            ReasonCodes = reasonCodes,
+            MessageMaxLength = 300
+        });
     }
 }

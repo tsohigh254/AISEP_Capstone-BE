@@ -637,6 +637,7 @@ public class StartupService : IStartupService
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
+                .ThenInclude(i => i!.ParentIndustry)
             .FirstOrDefaultAsync(s => s.StartupID == startupId
                 && s.ProfileStatus == ProfileStatus.Approved);
 
@@ -927,6 +928,7 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
+            ParentIndustryName = s.Industry?.ParentIndustry?.IndustryName,
             Stage = s.Stage?.ToString(),
             FoundedDate = s.FoundedDate,
             Website = s.Website,
@@ -958,7 +960,8 @@ public class StartupService : IStartupService
                 LinkedInURL = tm.LinkedInURL,
                 Bio = tm.Bio,
                 PhotoURL = tm.PhotoURL,
-                IsFounder = tm.IsFounder
+                IsFounder = tm.IsFounder,
+                YearsOfExperience = tm.YearsOfExperience
             }).ToList() ?? new()
         };
     }

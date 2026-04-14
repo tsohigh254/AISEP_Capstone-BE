@@ -8,8 +8,8 @@ public interface IConnectionsService
     // ---- Connections ----
     Task<ApiResponse<ConnectionDto>> CreateConnectionAsync(int userId, string userType, CreateConnectionRequest request);
     Task<ApiResponse<ConnectionDto>> CreateConnectionFromStartupAsync(int userId, CreateStartupToInvestorRequest request);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string userType, string? status, int page, int pageSize);
-    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string userType, string? status, int? counterpartId, int page, int pageSize);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetSentAsync(int userId, string userType, string? status, string? keyword, int page, int pageSize);
+    Task<ApiResponse<PagedResponse<ConnectionListItemDto>>> GetReceivedAsync(int userId, string userType, string? status, string? keyword, int? counterpartId, int page, int pageSize);
     Task<ApiResponse<ConnectionDetailDto>> GetDetailAsync(int userId, string userType, int connectionId);
     Task<ApiResponse<ConnectionDto>> UpdateAsync(int userId, int connectionId, UpdateConnectionRequest request);
     Task<ApiResponse<ConnectionDto>> WithdrawAsync(int userId, string userType, int connectionId);
@@ -28,4 +28,7 @@ public interface IConnectionsService
     Task<ApiResponse<PortfolioCompanyDto>> CreatePortfolioAsync(int userId, CreatePortfolioCompanyRequest request);
     Task<ApiResponse<PortfolioCompanyDto>> UpdatePortfolioAsync(int userId, int portfolioId, UpdatePortfolioCompanyRequest request);
     Task<ApiResponse<PortfolioCompanyDto>> DeletePortfolioAsync(int userId, int portfolioId);
+
+    // ---- Eligibility check ----
+    Task<ApiResponse<CanInviteDto>> CanInviteAsync(int startupUserId, int investorId);
 }

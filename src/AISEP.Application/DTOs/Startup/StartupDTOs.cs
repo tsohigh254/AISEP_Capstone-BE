@@ -177,6 +177,7 @@ public class StartupPublicDto
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
+    public string? ParentIndustryName { get; set; }
     public string? Stage { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
@@ -258,6 +259,7 @@ public class TeamMemberPublicDto
     public string? Bio { get; set; }
     public string? PhotoURL { get; set; }
     public bool IsFounder { get; set; }
+    public int? YearsOfExperience { get; set; }
 }
 
 public class CreateTeamMemberRequest

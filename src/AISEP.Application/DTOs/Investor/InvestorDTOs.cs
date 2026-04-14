@@ -165,6 +165,7 @@ public class InvestorDto
     public string? Website { get; set; }
     public string ProfileStatus { get; set; } = string.Empty;
     public bool AcceptingConnections { get; set; }
+    public string KycStatus { get; set; } = "NOT_STARTED";
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
@@ -320,10 +321,14 @@ public class StartupSearchItemDto
     public string CompanyName { get; set; } = string.Empty;
     public string? Stage { get; set; }
     public string? IndustryName { get; set; }
+    public string? ParentIndustryName { get; set; }
     public string? SubIndustry { get; set; }
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public decimal? FundingAmountSought { get; set; }
+    public decimal? CurrentFundingRaised { get; set; }
 }
 
 // ========== INDUSTRY FOCUS DTOs ==========

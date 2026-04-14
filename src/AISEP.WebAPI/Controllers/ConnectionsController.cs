@@ -47,7 +47,21 @@ public class ConnectionsController : ControllerBase
     }
 
     // ================================================================
-    // 1b) POST /api/connections/invite (Startup → Investor)
+    // 1b) GET /api/connections/can-invite?investorId={id} (Startup)
+    // ================================================================
+
+    /// <summary>Check whether the current startup can invite a specific investor. Returns all active blockers.</summary>
+    [HttpGet("can-invite")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<CanInviteDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CanInvite([FromQuery] int investorId)
+    {
+        var result = await _svc.CanInviteAsync(GetCurrentUserId(), investorId);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 1c) POST /api/connections/invite (Startup → Investor)
     // ================================================================
 
     /// <summary>Create a connection invite from the current startup to an investor.</summary>
@@ -69,9 +83,9 @@ public class ConnectionsController : ControllerBase
     /// <summary>List connections initiated by the current user (Investor or Startup).</summary>
     [HttpGet("sent")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<ConnectionListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSent([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetSent([FromQuery] string? status, [FromQuery] string? keyword, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _svc.GetSentAsync(GetCurrentUserId(), GetCurrentUserType(), status, page, pageSize);
+        var result = await _svc.GetSentAsync(GetCurrentUserId(), GetCurrentUserType(), status, keyword, page, pageSize);
         return result.ToPagedEnvelope();
     }
 
@@ -109,9 +123,9 @@ public class ConnectionsController : ControllerBase
     /// <summary>List connections received by the current user (Investor or Startup).</summary>
     [HttpGet("received")]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<ConnectionListItemDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] int? counterpartId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetReceived([FromQuery] string? status, [FromQuery] string? keyword, [FromQuery] int? counterpartId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), GetCurrentUserType(), status, counterpartId, page, pageSize);
+        var result = await _svc.GetReceivedAsync(GetCurrentUserId(), GetCurrentUserType(), status, keyword, counterpartId, page, pageSize);
         return result.ToPagedEnvelope();
     }
 

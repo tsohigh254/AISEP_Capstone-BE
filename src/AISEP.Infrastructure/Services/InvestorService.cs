@@ -116,9 +116,24 @@ public class InvestorService : IInvestorService
             return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND",
                 "Investor profile not found.");
 
-        if (investor.ProfileStatus != ProfileStatus.Approved)
-            return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_NOT_APPROVED",
-                "Only investors with an approved profile and completed KYC can change this setting.");
+        // Three-gate check — only enforced when enabling the toggle
+        if (acceptingConnections)
+        {
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserID == userId);
+            if (user == null || !user.IsActive)
+                return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_ACCOUNT_INACTIVE",
+                    "Tài khoản đã bị vô hiệu hóa.");
+
+            if (investor.ProfileStatus != ProfileStatus.Approved)
+                return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_PROFILE_NOT_APPROVED",
+                    "Hồ sơ nhà đầu tư chưa được duyệt.");
+
+            var kyc = await _db.InvestorKycSubmissions.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.InvestorID == investor.InvestorID && s.IsActive);
+            if (kyc == null || kyc.WorkflowStatus != InvestorKycWorkflowStatus.Approved)
+                return ApiResponse<AcceptingConnectionsDto>.ErrorResponse("INVESTOR_KYC_NOT_APPROVED",
+                    "KYC chưa được duyệt.");
+        }
 
         if (investor.AcceptingConnections == acceptingConnections)
             return ApiResponse<AcceptingConnectionsDto>.SuccessResponse(
@@ -421,10 +436,14 @@ public class InvestorService : IInvestorService
                 (s.Description != null && s.Description.ToLower().Contains(keyword)));
         }
 
-        // Industry filter by ID
+        // Industry filter by ID — cascade: matches startups in the selected industry OR any of its sub-industries
         if (industryId.HasValue)
         {
-            query = query.Where(s => s.IndustryID == industryId.Value);
+            var subIndustryIds = _db.Industries
+                .Where(i => i.ParentIndustryID == industryId.Value)
+                .Select(i => (int?)i.IndustryID);
+
+            query = query.Where(s => s.IndustryID == industryId.Value || subIndustryIds.Contains(s.IndustryID));
         }
 
         // Stage filter
@@ -453,9 +472,15 @@ public class InvestorService : IInvestorService
                 CompanyName = s.CompanyName,
                 Stage = s.Stage != null ? s.Stage.ToString() : null,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
+                ParentIndustryName = s.Industry != null && s.Industry.ParentIndustry != null
+                    ? s.Industry.ParentIndustry.IndustryName
+                    : null,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
-                UpdatedAt = s.UpdatedAt
+                UpdatedAt = s.UpdatedAt,
+                CreatedAt = s.CreatedAt,
+                FundingAmountSought = s.FundingAmountSought,
+                CurrentFundingRaised = s.CurrentFundingRaised
             })
             .ToListAsync();
 
@@ -912,6 +937,7 @@ public class InvestorService : IInvestorService
     {
         var dto = MapToDto(i);
         if (submission == null) return dto;
+        dto.KycStatus = MapWorkflowStatus(submission.WorkflowStatus);
         dto.InvestorType = submission.InvestorCategory;
         dto.ContactEmail = submission.ContactEmail;
         dto.CurrentOrganization = submission.OrganizationName;
