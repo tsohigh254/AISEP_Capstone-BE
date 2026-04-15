@@ -90,6 +90,24 @@ public class SystemHealthDto
     public DateTime CheckedAt { get; set; }
 }
 
+// ───────────────────────── Server Logs ──────────────────────
+
+public class LogFileDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+    public DateTime LastModifiedUtc { get; set; }
+}
+
+public class LogContentDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+    public DateTime LastModifiedUtc { get; set; }
+    public int TotalLinesReturned { get; set; }
+    public List<string> Lines { get; set; } = new();
+}
+
 // ───────────────────────── Violation Reports ─────────────────
 
 public class ViolationReportDto

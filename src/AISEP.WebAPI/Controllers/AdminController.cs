@@ -96,6 +96,26 @@ public class AdminController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  Server Logs (Serilog files)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>List Serilog log files available on the server.</summary>
+    [HttpGet("logs")]
+    public async Task<IActionResult> ListLogFiles()
+    {
+        var result = await _svc.ListLogFilesAsync();
+        return result.ToEnvelope();
+    }
+
+    /// <summary>Read last N lines of a log file (default 500, max 5000).</summary>
+    [HttpGet("logs/{fileName}")]
+    public async Task<IActionResult> ReadLogFile(string fileName, [FromQuery] int tail = 500)
+    {
+        var result = await _svc.ReadLogFileAsync(fileName, tail);
+        return result.ToEnvelope();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //  Violation Reports
     // ═══════════════════════════════════════════════════════════════
 
