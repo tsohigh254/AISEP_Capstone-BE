@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,6 +13,9 @@ namespace AISEP.Application.DTOs.Wallet
         public decimal Balance { get; set; } 
         public decimal TotalEarned { get; set; } 
         public decimal TotalWithdrawn { get; set; } 
+        public string? BankAccountNumber { get; set; }
+        public string? BankBin { get; set; }
+        public string? BankName { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }
