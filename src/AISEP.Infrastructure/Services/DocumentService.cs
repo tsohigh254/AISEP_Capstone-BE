@@ -99,7 +99,8 @@ public class DocumentService : IDocumentService
             Version = version,
             IsAnalyzed = false,
             IsArchived = false,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.UtcNow,
+            Visibility = request.Visibility ?? DocumentVisibility.OwnerOnly
         };
 
         _context.Documents.Add(document);
@@ -189,6 +190,7 @@ public class DocumentService : IDocumentService
             doc.IsArchived = request.IsArchived.Value;
             doc.ArchivedAt = request.IsArchived.Value ? DateTime.UtcNow : null;
         }
+        if (request.Visibility.HasValue) doc.Visibility = request.Visibility.Value;
 
         // NOTE: Document entity doesn't have UpdatedAt field.
         // If ERD adds UpdatedAt later, set it here. For now we skip.
@@ -223,6 +225,61 @@ public class DocumentService : IDocumentService
             $"Archived document '{doc.Title}'");
 
         return ApiResponse<string>.SuccessResponse("Document archived successfully.");
+    }
+
+    // ================================================================
+    // Access Logging
+    // ================================================================
+
+    public async Task LogAccessAsync(int documentId, int userId, string userType, string action, string? ipAddress, CancellationToken ct = default)
+    {
+        var log = new DocumentAccessLog
+        {
+            DocumentID = documentId,
+            UserID = userId,
+            UserType = userType,
+            Action = action,
+            AccessedAt = DateTime.UtcNow,
+            IpAddress = ipAddress
+        };
+        _context.DocumentAccessLogs.Add(log);
+        await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task<ApiResponse<IEnumerable<DocumentAccessLogDto>>> GetDocumentAccessLogsAsync(
+        int documentId, int ownerUserId, CancellationToken ct = default)
+    {
+        var doc = await _context.Documents
+            .AsNoTracking()
+            .Include(d => d.Startup)
+            .FirstOrDefaultAsync(d => d.DocumentID == documentId, ct);
+
+        if (doc == null)
+            return ApiResponse<IEnumerable<DocumentAccessLogDto>>.ErrorResponse(
+                "DOCUMENT_NOT_FOUND", "Document not found.");
+
+        if (doc.Startup.UserID != ownerUserId)
+            return ApiResponse<IEnumerable<DocumentAccessLogDto>>.ErrorResponse(
+                "DOCUMENT_NOT_FOUND", "Document not found.");
+
+        var logs = await _context.DocumentAccessLogs
+            .AsNoTracking()
+            .Include(l => l.User)
+            .Where(l => l.DocumentID == documentId)
+            .OrderByDescending(l => l.AccessedAt)
+            .Select(l => new DocumentAccessLogDto
+            {
+                LogID = l.LogID,
+                UserID = l.UserID,
+                UserName = l.User.Email,
+                UserType = l.UserType,
+                Action = l.Action,
+                AccessedAt = l.AccessedAt
+            })
+            .ToListAsync(ct);
+
+        return ApiResponse<IEnumerable<DocumentAccessLogDto>>.SuccessResponse(
+            logs, $"Found {logs.Count} access log(s)");
     }
 
     // ================================================================
@@ -266,8 +323,176 @@ public class DocumentService : IDocumentService
             ProofStatus = d.BlockchainProof != null ? d.BlockchainProof.ProofStatus.ToString() : string.Empty,
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
             TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null,
-            AnchoredAt = d.BlockchainProof?.AnchoredAt
+            AnchoredAt = d.BlockchainProof?.AnchoredAt,
+            Visibility = (int)d.Visibility,
+            VisibilityLabel = d.Visibility == DocumentVisibility.OwnerOnly
+                ? "OwnerOnly"
+                : d.Visibility.ToString()
         };
+    }
+
+    // ================================================================
+    // List startup's documents visible to the caller
+    // Enforces DocumentVisibility flags per document.
+    // ================================================================
+    public async Task<ApiResponse<IEnumerable<DocumentDto>>> GetStartupDocumentsAsync(
+        int startupId, int userId, string userType, CancellationToken ct = default)
+    {
+        var startup = await _context.Startups
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.StartupID == startupId, ct);
+
+        if (startup == null)
+            return ApiResponse<IEnumerable<DocumentDto>>.ErrorResponse(
+                "STARTUP_NOT_FOUND", "Startup not found.");
+
+        var docs = await _context.Documents
+            .AsNoTracking()
+            .Include(d => d.BlockchainProof)
+            .Where(d => d.StartupID == startupId && !d.IsArchived)
+            .ToListAsync(ct);
+
+        var isOwner = startup.UserID == userId;
+        var isStaffOrAdmin = userType == "Staff" || userType == "Admin";
+
+        if (!isOwner && !isStaffOrAdmin)
+        {
+            // Filter by Visibility flags (in-memory — EF can't translate [Flags] HasFlag reliably).
+            var allowedMask = DocumentVisibility.Public;
+            if (userType == "Investor") allowedMask |= DocumentVisibility.Investor;
+            if (userType == "Advisor")  allowedMask |= DocumentVisibility.Advisor;
+
+            docs = docs.Where(d => (d.Visibility & allowedMask) != 0).ToList();
+        }
+
+        return ApiResponse<IEnumerable<DocumentDto>>.SuccessResponse(
+            docs.Select(MapToDto).ToList(), $"Found {docs.Count} document(s)");
+    }
+
+    // ================================================================
+    // Cross-role view (Investor / Advisor / other Startups / anyone)
+    // Enforces DocumentVisibility flags.
+    // ================================================================
+    public async Task<ApiResponse<DocumentDto>> GetViewableDocumentAsync(
+        int documentId, int userId, string userType, CancellationToken ct = default)
+    {
+        var doc = await _context.Documents
+            .AsNoTracking()
+            .Include(d => d.Startup)
+            .Include(d => d.BlockchainProof)
+            .FirstOrDefaultAsync(d => d.DocumentID == documentId, ct);
+
+        if (doc == null || doc.IsArchived)
+            return ApiResponse<DocumentDto>.ErrorResponse("DOCUMENT_NOT_FOUND", "Document not found.");
+
+        // Owner always sees their own
+        if (doc.Startup.UserID == userId)
+            return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(doc));
+
+        // Staff/Admin bypass visibility rules
+        if (userType == "Staff" || userType == "Admin")
+        {
+            _ = LogAccessAsync(documentId, userId, userType, "View", null, ct);
+            return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(doc));
+        }
+
+        // Non-owner: enforce Visibility flags
+        var requiredFlag = userType switch
+        {
+            "Investor" => DocumentVisibility.Investor,
+            "Advisor"  => DocumentVisibility.Advisor,
+            _          => (DocumentVisibility?)null
+        };
+
+        var canView = doc.Visibility.HasFlag(DocumentVisibility.Public)
+                      || (requiredFlag.HasValue && doc.Visibility.HasFlag(requiredFlag.Value));
+
+        if (!canView)
+            return ApiResponse<DocumentDto>.ErrorResponse("ACCESS_DENIED",
+                "You do not have permission to view this document.");
+
+        // Log access for non-owners (fire-and-forget style — don't block the response)
+        _ = LogAccessAsync(documentId, userId, userType, "View", null, ct);
+
+        return ApiResponse<DocumentDto>.SuccessResponse(MapToDto(doc));
+    }
+
+    // ================================================================
+    // Download — returns file bytes with visibility check
+    // ================================================================
+    public async Task<ApiResponse<DocumentDownloadResult>> DownloadDocumentAsync(
+        int documentId, int userId, string userType, CancellationToken ct = default)
+    {
+        var doc = await _context.Documents
+            .AsNoTracking()
+            .Include(d => d.Startup)
+            .FirstOrDefaultAsync(d => d.DocumentID == documentId, ct);
+
+        if (doc == null || doc.IsArchived)
+            return ApiResponse<DocumentDownloadResult>.ErrorResponse(
+                "DOCUMENT_NOT_FOUND", "Document not found.");
+
+        var isOwner = doc.Startup.UserID == userId;
+        var isStaffOrAdmin = userType == "Staff" || userType == "Admin";
+
+        if (!isOwner && !isStaffOrAdmin)
+        {
+            var requiredFlag = userType switch
+            {
+                "Investor" => DocumentVisibility.Investor,
+                "Advisor"  => DocumentVisibility.Advisor,
+                _          => (DocumentVisibility?)null
+            };
+
+            var canDownload = doc.Visibility.HasFlag(DocumentVisibility.Public)
+                              || (requiredFlag.HasValue && doc.Visibility.HasFlag(requiredFlag.Value));
+
+            if (!canDownload)
+                return ApiResponse<DocumentDownloadResult>.ErrorResponse(
+                    "ACCESS_DENIED", "You do not have permission to download this document.");
+        }
+
+        if (string.IsNullOrWhiteSpace(doc.FileURL))
+            return ApiResponse<DocumentDownloadResult>.ErrorResponse(
+                "DOCUMENT_FILE_MISSING", "File URL is empty for this document.");
+
+        var bytes = await _cloudinaryService.DownloadFileAsync(doc.FileURL, ct);
+
+        // Derive a friendly filename + guess content-type from URL extension
+        var urlPath = doc.FileURL.Split('?')[0];
+        var ext = Path.GetExtension(urlPath);
+        if (string.IsNullOrEmpty(ext)) ext = ".bin";
+
+        var baseName = string.IsNullOrWhiteSpace(doc.Title)
+            ? $"document-{doc.DocumentID}"
+            : doc.Title;
+        var safeBase = string.Concat(baseName.Split(Path.GetInvalidFileNameChars()));
+        var fileName = $"{safeBase}{ext}";
+
+        var contentType = ext.ToLowerInvariant() switch
+        {
+            ".pdf"  => "application/pdf",
+            ".doc"  => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".ppt"  => "application/vnd.ms-powerpoint",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            _       => "application/octet-stream"
+        };
+
+        // Log to DocumentAccessLogs for non-owners (startup owner sees who downloaded)
+        var isOwnerDl = doc.Startup.UserID == userId;
+        if (!isOwnerDl)
+            _ = LogAccessAsync(documentId, userId, userType, "Download", null, ct);
+
+        await _audit.LogAsync("DOWNLOAD_DOCUMENT", "Document", doc.DocumentID,
+            $"User {userId} ({userType}) downloaded document '{doc.Title}' ({bytes.Length} bytes)");
+
+        return ApiResponse<DocumentDownloadResult>.SuccessResponse(new DocumentDownloadResult
+        {
+            Content = bytes,
+            FileName = fileName,
+            ContentType = contentType
+        });
     }
 
     public async Task<ApiResponse<PagedResponse<DocumentDto>>> GetAllDocumentByStaff(DocumentQueryParams documentQuery)
@@ -476,7 +701,9 @@ public class DocumentService : IDocumentService
             ReviewStatus = doc.ReviewStatus.ToString(),
             ReviewedBy = doc.ReviewedBy,
             ReviewedAt = doc.ReviewedAt,
-            ReviewNotes = doc.ReviewNotes
+            ReviewNotes = doc.ReviewNotes,
+            Visibility = (int)doc.Visibility,
+            VisibilityLabel = doc.Visibility == DocumentVisibility.OwnerOnly ? "OwnerOnly" : doc.Visibility.ToString()
         }, $"Document {status.ToString().ToLower()}");
     }
 }

@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260414132106_AddDocumentVisibility")]
+    partial class AddDocumentVisibility
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -562,44 +565,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("StartupID");
 
                     b.ToTable("Documents");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.DocumentAccessLog", b =>
-                {
-                    b.Property<int>("LogID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LogID"));
-
-                    b.Property<DateTime>("AccessedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("DocumentID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("text");
-
-                    b.Property<int>("UserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("UserType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("LogID");
-
-                    b.HasIndex("UserID");
-
-                    b.HasIndex("DocumentID", "AccessedAt")
-                        .IsDescending(false, true);
-
-                    b.ToTable("DocumentAccessLogs");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.DocumentBlockchainProof", b =>
@@ -2871,25 +2836,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("ReviewedByUser");
 
                     b.Navigation("Startup");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.DocumentAccessLog", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Document", "Document")
-                        .WithMany()
-                        .HasForeignKey("DocumentID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AISEP.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.DocumentBlockchainProof", b =>

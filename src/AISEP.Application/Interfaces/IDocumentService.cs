@@ -16,6 +16,15 @@ public interface IDocumentService
     /// <summary>Get full metadata for a single document (owner only).</summary>
     Task<ApiResponse<DocumentDto>> GetMyDocumentAsync(int documentId, int userId, CancellationToken ct = default);
 
+    /// <summary>Get document for any authenticated user, enforcing DocumentVisibility flags.</summary>
+    Task<ApiResponse<DocumentDto>> GetViewableDocumentAsync(int documentId, int userId, string userType, CancellationToken ct = default);
+
+    /// <summary>List a startup's documents visible to the caller based on DocumentVisibility flags.</summary>
+    Task<ApiResponse<IEnumerable<DocumentDto>>> GetStartupDocumentsAsync(int startupId, int userId, string userType, CancellationToken ct = default);
+
+    /// <summary>Download a document's file bytes, enforcing DocumentVisibility flags.</summary>
+    Task<ApiResponse<DocumentDownloadResult>> DownloadDocumentAsync(int documentId, int userId, string userType, CancellationToken ct = default);
+
     /// <summary>Update document metadata (owner only).</summary>
     Task<ApiResponse<DocumentDto>> UpdateMetadataAsync(int documentId, DocumentUpdateMetadataRequest request, int userId, CancellationToken ct = default);
 
@@ -27,6 +36,10 @@ public interface IDocumentService
     // Version history
     Task<ApiResponse<DocumentDto>> UploadNewVersionAsync(int documentId, DocumentUploadNewVersionRequest request, int userId, CancellationToken ct = default);
     Task<ApiResponse<IEnumerable<DocumentVersionHistoryDto>>> GetVersionHistoryAsync(int documentId, int userId, CancellationToken ct = default);
+
+    // Access logging
+    Task LogAccessAsync(int documentId, int userId, string userType, string action, string? ipAddress, CancellationToken ct = default);
+    Task<ApiResponse<IEnumerable<DocumentAccessLogDto>>> GetDocumentAccessLogsAsync(int documentId, int ownerUserId, CancellationToken ct = default);
 
     // Staff review
     Task<ApiResponse<DocumentDto>> StaffVerifyAsync(int documentId, int staffId, string? notes, CancellationToken ct = default);

@@ -23,6 +23,9 @@ public class Document
     public DateTime? ReviewedAt { get; set; }
     public string? ReviewNotes { get; set; }
 
+    // Visibility — controls which roles can view the document (see DocumentVisibility flags)
+    public DocumentVisibility Visibility { get; set; } = DocumentVisibility.OwnerOnly;
+
     // Version history
     public int? ParentDocumentID { get; set; }
 
