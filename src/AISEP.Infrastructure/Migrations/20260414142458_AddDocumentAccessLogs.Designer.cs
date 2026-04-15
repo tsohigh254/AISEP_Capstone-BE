@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260414142458_AddDocumentAccessLogs")]
+    partial class AddDocumentAccessLogs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2144,15 +2147,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int>("AdvisorID")
                         .HasColumnType("integer");
 
-                    b.Property<string>("CancellationReason")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CancelledBy")
-                        .HasColumnType("text");
-
                     b.Property<string>("ChallengeDescription")
                         .HasColumnType("text");
 
@@ -2173,9 +2167,6 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.Property<string>("ExpectedScope")
                         .HasColumnType("text");
-
-                    b.Property<DateTime?>("InProgressAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LastUpdatedByRole")
                         .HasColumnType("text");
@@ -2276,10 +2267,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasIndex("InvestorID");
 
-                    b.HasIndex("StartupID", "InvestorID")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Connections_Unique_Requested")
-                        .HasFilter("\"ConnectionStatus\" = 0");
+                    b.HasIndex("StartupID");
 
                     b.ToTable("StartupInvestorConnections");
                 });

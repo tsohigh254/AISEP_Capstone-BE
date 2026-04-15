@@ -81,6 +81,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Industry> Industries => Set<Industry>();
     public DbSet<IndustryTrend> IndustryTrends => Set<IndustryTrend>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+    public DbSet<DocumentAccessLog> DocumentAccessLogs => Set<DocumentAccessLog>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
@@ -133,6 +134,10 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<PortfolioCompany>().Property(e => e.ExitType).HasConversion<short?>();
         modelBuilder.Entity<Document>().Property(e => e.DocumentType).HasConversion<short?>();
         modelBuilder.Entity<Document>().Property(e => e.AnalysisStatus).HasConversion<short?>();
+        modelBuilder.Entity<Document>()
+            .Property(e => e.Visibility)
+            .HasConversion<int>()
+            .HasDefaultValue(DocumentVisibility.OwnerOnly);
 
         // Startup
         modelBuilder.Entity<Startup>().Property(e => e.Stage).HasConversion<short?>();
@@ -245,6 +250,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
         modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
         modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
+        modelBuilder.Entity<DocumentAccessLog>().HasKey(l => l.LogID);
         modelBuilder.Entity<Incident>().HasKey(i => i.IncidentID);
         modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
         modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
@@ -330,6 +336,26 @@ public class ApplicationDbContext : DbContext
             .HasOne(p => p.Document)
             .WithOne(d => d.BlockchainProof)
             .HasForeignKey<DocumentBlockchainProof>(p => p.DocumentID);
+
+        // DocumentAccessLog
+        modelBuilder.Entity<DocumentAccessLog>()
+            .HasOne(l => l.Document)
+            .WithMany()
+            .HasForeignKey(l => l.DocumentID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DocumentAccessLog>()
+            .HasOne(l => l.User)
+            .WithMany()
+            .HasForeignKey(l => l.UserID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DocumentAccessLog>()
+            .HasIndex(l => new { l.DocumentID, l.AccessedAt })
+            .IsDescending(false, true);
+
+        modelBuilder.Entity<DocumentAccessLog>()
+            .HasIndex(l => l.UserID);
 
         // StartupSubscriptionPayment relationship
         modelBuilder.Entity<StartupSubscriptionPayment>()
