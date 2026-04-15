@@ -44,3 +44,15 @@ public class MarkReadRequest
     /// <summary>True to mark read, false to unread. Defaults to true when null.</summary>
     public bool? IsRead { get; set; }
 }
+
+/// <summary>Request to create a new notification.</summary>
+public class CreateNotificationRequest
+{
+    public int UserId { get; set; }
+    public string NotificationType { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string? Message { get; set; }
+    public string? RelatedEntityType { get; set; }
+    public int? RelatedEntityId { get; set; }
+    public string? ActionUrl { get; set; }
+}

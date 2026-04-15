@@ -162,6 +162,32 @@ public class NotificationService : INotificationService
         return ApiResponse<string>.SuccessResponse("Notification deleted.");
     }
 
+    // ── CREATE (system / programmatic) ─────────────────────────────────
+    public async Task<ApiResponse<NotificationDto>> CreateAsync(CreateNotificationRequest request)
+    {
+        var n = new Domain.Entities.Notification
+        {
+            UserID = request.UserId,
+            NotificationType = request.NotificationType ?? string.Empty,
+            Title = request.Title ?? string.Empty,
+            Message = request.Message,
+            RelatedEntityType = request.RelatedEntityType,
+            RelatedEntityID = request.RelatedEntityId,
+            ActionURL = request.ActionUrl,
+            IsRead = false,
+            IsSent = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Notifications.Add(n);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("CREATE_NOTIFICATION", "Notification",
+            n.NotificationID, $"Created notification '{n.Title}' for user {n.UserID}");
+
+        return ApiResponse<NotificationDto>.SuccessResponse(MapToDto(n), "Notification created.");
+    }
+
     // ── Mapper ────────────────────────────────────────────────────
 
     private static NotificationDto MapToDto(Domain.Entities.Notification n) => new()

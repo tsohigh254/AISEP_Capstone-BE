@@ -20,4 +20,7 @@ public interface INotificationService
 
     /// <summary>Delete a notification (owner only, hard delete).</summary>
     Task<ApiResponse<string>> DeleteAsync(int userId, int notificationId);
+
+    /// <summary>Create a notification (system-generated or manual).</summary>
+    Task<ApiResponse<NotificationDto>> CreateAsync(CreateNotificationRequest request);
 }
