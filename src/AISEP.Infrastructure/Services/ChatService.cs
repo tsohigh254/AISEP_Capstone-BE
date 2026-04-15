@@ -6,6 +6,7 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using AISEP.Application.DTOs.Notification;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -14,12 +15,14 @@ public class ChatService : IChatService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<ChatService> _logger;
+    private readonly INotificationDeliveryService _notifications;
 
-    public ChatService(ApplicationDbContext db, IAuditService audit, ILogger<ChatService> logger)
+    public ChatService(ApplicationDbContext db, IAuditService audit, ILogger<ChatService> logger, INotificationDeliveryService notifications)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _notifications = notifications;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -90,6 +93,7 @@ public class ChatService : IChatService
             unreadCounts.TryGetValue(c.ConversationID, out var unread);
 
             var (participantId, participantName, participantRole) = GetOtherParticipant(c, userId);
+            if (participantId == 0) continue; // Skip corrupted conversations
 
             items.Add(new ConversationListItemDto
             {
@@ -290,7 +294,9 @@ public class ChatService : IChatService
 
         var query = _db.Messages
             .Where(m => m.ConversationID == conversationId)
-            .Include(m => m.SenderUser);
+            .Include(m => m.SenderUser).ThenInclude(u => u.Startup)
+            .Include(m => m.SenderUser).ThenInclude(u => u.Investor)
+            .Include(m => m.SenderUser).ThenInclude(u => u.Advisor);
 
         var totalItems = await query.CountAsync();
 
@@ -352,9 +358,29 @@ public class ChatService : IChatService
         // Load sender for display name
         await _db.Entry(message).Reference(m => m.SenderUser).LoadAsync();
 
-        await _audit.LogAsync("SEND_MESSAGE", "Message",
-            message.MessageID,
-            $"Sent message in conversation {conv.ConversationID}");
+        // Get recipient for notification
+        var (recipientUserId, senderName, _) = GetOtherParticipant(conv, userId);
+
+        // Push notification inline (NOT via Task.Run) to keep scoped DI services alive.
+        // Task.Run would cause DbContext/NotificationService to be disposed before execution.
+        try
+        {
+            var senderDisplayName = GetSenderDisplayName(message.SenderUser);
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = recipientUserId,
+                NotificationType = "MESSAGE",
+                Title = $"Tin nhắn mới từ {senderDisplayName}",
+                Message = message.MessageText.Length > 100 ? message.MessageText[..100] + "..." : message.MessageText,
+                RelatedEntityType = "Conversation",
+                RelatedEntityId = conv.ConversationID,
+                ActionUrl = $"/messaging?conversationId={conv.ConversationID}"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send message notification to user {UserId}", recipientUserId);
+        }
 
         return ApiResponse<MessageDto>.SuccessResponse(
             MapToMessageDto(message, userId), "Message sent successfully.");
@@ -489,15 +515,27 @@ public class ChatService : IChatService
     {
         if (conv.Connection != null)
         {
-            if (conv.Connection.Startup.UserID == userId)
-                return (conv.Connection.Investor.UserID, conv.Connection.Investor.FullName, "Investor");
-            return (conv.Connection.Startup.UserID, conv.Connection.Startup.CompanyName, "Startup");
+            if (conv.Connection.Startup != null && conv.Connection.Startup.UserID == userId)
+            {
+                return (conv.Connection.Investor?.UserID ?? 0, 
+                        conv.Connection.Investor?.FullName ?? "Unknown Investor", 
+                        "Investor");
+            }
+            return (conv.Connection.Startup?.UserID ?? 0, 
+                    conv.Connection.Startup?.CompanyName ?? "Unknown Startup", 
+                    "Startup");
         }
         if (conv.Mentorship != null)
         {
-            if (conv.Mentorship.Startup.UserID == userId)
-                return (conv.Mentorship.Advisor.UserID, conv.Mentorship.Advisor.FullName, "Advisor");
-            return (conv.Mentorship.Startup.UserID, conv.Mentorship.Startup.CompanyName, "Startup");
+            if (conv.Mentorship.Startup != null && conv.Mentorship.Startup.UserID == userId)
+            {
+                return (conv.Mentorship.Advisor?.UserID ?? 0, 
+                        conv.Mentorship.Advisor?.FullName ?? "Unknown Advisor", 
+                        "Advisor");
+            }
+            return (conv.Mentorship.Startup?.UserID ?? 0, 
+                    conv.Mentorship.Startup?.CompanyName ?? "Unknown Startup", 
+                    "Startup");
         }
         return (0, "Unknown", "Unknown");
     }
@@ -507,16 +545,16 @@ public class ChatService : IChatService
         if (conv.Connection != null)
         {
             // Show the other party's name
-            if (conv.Connection.Startup.UserID == currentUserId)
-                return conv.Connection.Investor.FullName;
-            return conv.Connection.Startup.CompanyName;
+            if (conv.Connection.Startup != null && conv.Connection.Startup.UserID == currentUserId)
+                return conv.Connection.Investor?.FullName ?? "Investor";
+            return conv.Connection.Startup?.CompanyName ?? "Startup";
         }
 
         if (conv.Mentorship != null)
         {
-            if (conv.Mentorship.Startup.UserID == currentUserId)
-                return conv.Mentorship.Advisor.FullName;
-            return conv.Mentorship.Startup.CompanyName;
+            if (conv.Mentorship.Startup != null && conv.Mentorship.Startup.UserID == currentUserId)
+                return conv.Mentorship.Advisor?.FullName ?? "Advisor";
+            return conv.Mentorship.Startup?.CompanyName ?? "Startup";
         }
 
         return "Conversation";

@@ -1,5 +1,6 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Connection;
+using AISEP.Application.DTOs.Notification;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
@@ -14,12 +15,14 @@ public class ConnectionsService : IConnectionsService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<ConnectionsService> _logger;
+    private readonly INotificationDeliveryService _notifications;
 
-    public ConnectionsService(ApplicationDbContext db, IAuditService audit, ILogger<ConnectionsService> logger)
+    public ConnectionsService(ApplicationDbContext db, IAuditService audit, ILogger<ConnectionsService> logger, INotificationDeliveryService notifications)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _notifications = notifications;
     }
 
     // ================================================================
@@ -100,9 +103,54 @@ public class ConnectionsService : IConnectionsService
         await _db.SaveChangesAsync();
 
         await _audit.LogAsync("CREATE_CONNECTION", "StartupInvestorConnection", conn.ConnectionID,
-            $"StartupId={resolvedStartupId}, InvestorId={request.InvestorId}");
-        _logger.LogInformation("Connection {ConnId} created by startup {StartupId} to investor {InvestorId}",
-            conn.ConnectionID, resolvedStartupId, request.InvestorId);
+            $"StartupId={resolvedStartupId}, InvestorId={resolvedInvestorId}");
+        _logger.LogInformation("Connection {ConnId} created by {UserType} {UserId}",
+            conn.ConnectionID, userType, userId);
+
+        // Notify the recipient of the connection request
+        try
+        {
+            if (userType == "Investor")
+            {
+                var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == resolvedStartupId);
+                var investorName = await _db.Investors.AsNoTracking().Where(i => i.InvestorID == resolvedInvestorId).Select(i => i.FullName).FirstOrDefaultAsync();
+                if (startup != null)
+                {
+                    await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                    {
+                        UserId = startup.UserID,
+                        NotificationType = "CONNECTION",
+                        Title = "Yêu cầu kết nối mới",
+                        Message = $"Nhà đầu tư {investorName} đã gửi yêu cầu kết nối với bạn.",
+                        RelatedEntityType = "Connection",
+                        RelatedEntityId = conn.ConnectionID,
+                        ActionUrl = $"/startup/connections"
+                    });
+                }
+            }
+            else // Startup initiated
+            {
+                var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.InvestorID == resolvedInvestorId);
+                var startupName = await _db.Startups.AsNoTracking().Where(s => s.StartupID == resolvedStartupId).Select(s => s.CompanyName).FirstOrDefaultAsync();
+                if (investor != null)
+                {
+                    await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                    {
+                        UserId = investor.UserID,
+                        NotificationType = "CONNECTION",
+                        Title = "Yêu cầu kết nối mới",
+                        Message = $"Startup '{startupName}' đã gửi yêu cầu kết nối với bạn.",
+                        RelatedEntityType = "Connection",
+                        RelatedEntityId = conn.ConnectionID,
+                        ActionUrl = $"/investor/connections"
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send connection request notification for connection {ConnId}", conn.ConnectionID);
+        }
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
@@ -329,6 +377,35 @@ public class ConnectionsService : IConnectionsService
         await _audit.LogAsync("ACCEPT_CONNECTION", "StartupInvestorConnection", connectionId, null);
         _logger.LogInformation("Connection {ConnId} accepted by {UserType} {UserId}", connectionId, userType, userId);
 
+        // Notify the initiator that their connection was accepted
+        try
+        {
+            var initiatorUserId = conn.InitiatedBy ?? 0;
+            if (initiatorUserId > 0)
+            {
+                var accepterName = userType == "Startup"
+                    ? (await _db.Startups.AsNoTracking().Where(s => s.UserID == userId).Select(s => s.CompanyName).FirstOrDefaultAsync()) ?? "Startup"
+                    : (await _db.Investors.AsNoTracking().Where(i => i.UserID == userId).Select(i => i.FullName).FirstOrDefaultAsync()) ?? "Nhà đầu tư";
+
+                var actionUrl = userType == "Startup" ? "/investor/connections" : "/startup/connections";
+
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = initiatorUserId,
+                    NotificationType = "CONNECTION",
+                    Title = "Yêu cầu kết nối được chấp nhận",
+                    Message = $"{accepterName} đã chấp nhận yêu cầu kết nối của bạn.",
+                    RelatedEntityType = "Connection",
+                    RelatedEntityId = connectionId,
+                    ActionUrl = actionUrl
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send accept notification for connection {ConnId}", connectionId);
+        }
+
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
 
@@ -355,6 +432,35 @@ public class ConnectionsService : IConnectionsService
 
         await _audit.LogAsync("REJECT_CONNECTION", "StartupInvestorConnection", connectionId, $"Reason={reason}");
         _logger.LogInformation("Connection {ConnId} rejected by {UserType} {UserId}", connectionId, userType, userId);
+
+        // Notify the initiator that their connection was rejected
+        try
+        {
+            var initiatorUserId = conn.InitiatedBy ?? 0;
+            if (initiatorUserId > 0)
+            {
+                var rejecterName = userType == "Startup"
+                    ? (await _db.Startups.AsNoTracking().Where(s => s.UserID == userId).Select(s => s.CompanyName).FirstOrDefaultAsync()) ?? "Startup"
+                    : (await _db.Investors.AsNoTracking().Where(i => i.UserID == userId).Select(i => i.FullName).FirstOrDefaultAsync()) ?? "Nhà đầu tư";
+
+                var actionUrl = userType == "Startup" ? "/investor/connections" : "/startup/connections";
+
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = initiatorUserId,
+                    NotificationType = "CONNECTION",
+                    Title = "Yêu cầu kết nối bị từ chối",
+                    Message = $"{rejecterName} đã từ chối yêu cầu kết nối của bạn.",
+                    RelatedEntityType = "Connection",
+                    RelatedEntityId = connectionId,
+                    ActionUrl = actionUrl
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send reject notification for connection {ConnId}", connectionId);
+        }
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }
@@ -422,6 +528,30 @@ public class ConnectionsService : IConnectionsService
             $"ConnectionId={connectionId}");
         _logger.LogInformation("InfoRequest {ReqId} created for connection {ConnId}", ir.RequestID, connectionId);
 
+        // Notify Startup about the new info request
+        try
+        {
+            var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == conn.StartupID);
+            var investorName = conn.Investor?.FullName ?? "Nhà đầu tư";
+            if (startup != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = startup.UserID,
+                    NotificationType = "INFO_REQUEST",
+                    Title = "Yêu cầu thông tin mới",
+                    Message = $"{investorName} đã yêu cầu thêm thông tin về startup của bạn.",
+                    RelatedEntityType = "InformationRequest",
+                    RelatedEntityId = ir.RequestID,
+                    ActionUrl = $"/startup/connections/{connectionId}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send info request notification for request {ReqId}", ir.RequestID);
+        }
+
         return ApiResponse<InfoRequestDto>.SuccessResponse(MapInfoRequestDto(ir));
     }
 
@@ -477,6 +607,30 @@ public class ConnectionsService : IConnectionsService
 
         await _audit.LogAsync("FULFILL_INFO_REQUEST", "InformationRequest", requestId, null);
         _logger.LogInformation("InfoRequest {ReqId} fulfilled", requestId);
+
+        // Notify Investor that the info request was fulfilled
+        try
+        {
+            var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.InvestorID == ir.InvestorID);
+            var startupName = startup?.CompanyName ?? "Startup";
+            if (investor != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = investor.UserID,
+                    NotificationType = "INFO_REQUEST",
+                    Title = "Yêu cầu thông tin đã được phản hồi",
+                    Message = $"{startupName} đã phản hồi yêu cầu thông tin của bạn.",
+                    RelatedEntityType = "InformationRequest",
+                    RelatedEntityId = requestId,
+                    ActionUrl = $"/investor/connections/{ir.ConnectionID}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send info request fulfilled notification for request {ReqId}", requestId);
+        }
 
         return ApiResponse<InfoRequestDto>.SuccessResponse(MapInfoRequestDto(ir));
     }
@@ -816,6 +970,25 @@ public class ConnectionsService : IConnectionsService
             $"StartupId={startup.StartupID}, InvestorId={request.InvestorId}");
         _logger.LogInformation("Connection {ConnId} created by startup {StartupId} to investor {InvestorId}",
             conn.ConnectionID, startup.StartupID, request.InvestorId);
+
+        // Notify Investor of the connection request from startup
+        try
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = investor.UserID,
+                NotificationType = "CONNECTION",
+                Title = "Yêu cầu kết nối mới",
+                Message = $"Startup '{startup.CompanyName}' đã gửi yêu cầu kết nối với bạn.",
+                RelatedEntityType = "Connection",
+                RelatedEntityId = conn.ConnectionID,
+                ActionUrl = $"/investor/connections"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send connection request notification for connection {ConnId}", conn.ConnectionID);
+        }
 
         return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(conn));
     }

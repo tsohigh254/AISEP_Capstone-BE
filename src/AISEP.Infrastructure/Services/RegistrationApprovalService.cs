@@ -12,6 +12,7 @@ using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using AISEP.Application.DTOs.Notification;
 
 namespace AISEP.Infrastructure.Services
 {
@@ -20,15 +21,18 @@ namespace AISEP.Infrastructure.Services
         private readonly ApplicationDbContext _context;
         private readonly ILogger<RegistrationApprovalService> _logger;
         private readonly ICloudinaryService _cloudinaryService;
+        private readonly INotificationDeliveryService _notifications;
 
         public RegistrationApprovalService(
             ApplicationDbContext context,
             ILogger<RegistrationApprovalService> logger,
-            ICloudinaryService cloudinaryService)
+            ICloudinaryService cloudinaryService,
+            INotificationDeliveryService notifications)
         {
             _context = context;
             _logger = logger;
             _cloudinaryService = cloudinaryService;
+            _notifications = notifications;
         }
 
         public async Task<ApiResponse<StartupKycSubmissionDto>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest)
@@ -100,6 +104,24 @@ namespace AISEP.Infrastructure.Services
             await using var tx = await _context.Database.BeginTransactionAsync();
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
+
+            // Notify Startup
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = reviewedStartup.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = startupSubmission.WorkflowStatus switch
+                {
+                    StartupKycWorkflowStatus.Approved => "Chúc mừng! Hồ sơ KYC của bạn đã được phê duyệt.",
+                    StartupKycWorkflowStatus.PendingMoreInfo => "Hồ sơ KYC của bạn cần bổ sung thêm thông tin. Vui lòng kiểm tra lại.",
+                    StartupKycWorkflowStatus.Rejected => $"Hồ sơ KYC của bạn đã bị từ chối. Lý do: {startupSubmission.Remarks ?? "Không có lý do cụ thể."}",
+                    _ => "Trạng thái hồ sơ KYC của bạn đã thay đổi."
+                },
+                RelatedEntityType = "StartupKycSubmission",
+                RelatedEntityId = startupSubmission.SubmissionID,
+                ActionUrl = "/startup/verification"
+            });
 
             return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
                 MapToKycSubmissionDto(startupSubmission),
@@ -173,6 +195,24 @@ namespace AISEP.Infrastructure.Services
             _context.Advisors.Update(advisor);
             await _context.SaveChangesAsync();
 
+            // Notify Advisor
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = advisor.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = advisor.ProfileStatus switch
+                {
+                    ProfileStatus.Approved => "Chúc mừng! Hồ sơ của bạn đã được phê duyệt.",
+                    ProfileStatus.Pending => "Hồ sơ của bạn cần bổ sung thêm thông tin. Vui lòng kiểm tra lại.",
+                    ProfileStatus.Rejected => $"Hồ sơ của bạn đã bị từ chối. Lý do: {advisor.RejectionRemarks ?? "Không có lý do cụ thể."}",
+                    _ => "Trạng thái hồ sơ của bạn đã thay đổi."
+                },
+                RelatedEntityType = "Advisor",
+                RelatedEntityId = advisor.AdvisorID,
+                ActionUrl = "/advisor/settings"
+            });
+
             return ApiResponse<Advisor>.SuccessResponse(advisor, "Advisor reviewed successfully");
         }
 
@@ -243,6 +283,25 @@ namespace AISEP.Infrastructure.Services
             }
 
             await _context.SaveChangesAsync();
+
+            // Notify Investor
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = investor.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = submission.WorkflowStatus switch
+                {
+                    InvestorKycWorkflowStatus.Approved => "Chúc mừng! Hồ sơ KYC của bạn đã được phê duyệt.",
+                    InvestorKycWorkflowStatus.PendingMoreInfo => "Hồ sơ KYC của bạn cần bổ sung thêm thông tin. Vui lòng kiểm tra lại.",
+                    InvestorKycWorkflowStatus.Rejected => $"Hồ sơ KYC của bạn đã bị từ chối. Lý do: {submission.Remarks ?? "Không có lý do cụ thể."}",
+                    _ => "Trạng thái hồ sơ KYC của bạn đã thay đổi."
+                },
+                RelatedEntityType = "InvestorKycSubmission",
+                RelatedEntityId = submission.SubmissionID,
+                ActionUrl = "/investor/verification"
+            });
+
             return ApiResponse<Investor>.SuccessResponse(investor, "Investor reviewed successfully");
         }
 

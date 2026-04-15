@@ -7,6 +7,8 @@ using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using AISEP.Application.DTOs.Notification;
+
 
 namespace AISEP.Infrastructure.Services;
 
@@ -15,12 +17,14 @@ public class MentorshipService : IMentorshipService
     private readonly ApplicationDbContext _db;
     private readonly IAuditService _audit;
     private readonly ILogger<MentorshipService> _logger;
+    private readonly INotificationDeliveryService _notifications;
 
-    public MentorshipService(ApplicationDbContext db, IAuditService audit, ILogger<MentorshipService> logger)
+    public MentorshipService(ApplicationDbContext db, IAuditService audit, ILogger<MentorshipService> logger, INotificationDeliveryService notifications)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _notifications = notifications;
     }
 
     // ================================================================
@@ -102,6 +106,22 @@ public class MentorshipService : IMentorshipService
             $"StartupId={startup.StartupID}, AdvisorId={request.AdvisorId}");
         _logger.LogInformation("Mentorship {MentorshipId} requested by startup {StartupId} for advisor {AdvisorId}",
             mentorship.MentorshipID, startup.StartupID, request.AdvisorId);
+
+        // Notify Advisor
+        var advisor = await _db.Advisors.AsNoTracking().FirstOrDefaultAsync(a => a.AdvisorID == request.AdvisorId);
+        if (advisor != null)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = advisor.UserID,
+                NotificationType = "CONSULTING",
+                Title = "Yêu cầu tư vấn mới",
+                Message = $"Startup '{startup.CompanyName}' đã gửi yêu cầu tư vấn cho bạn.",
+                RelatedEntityType = "Mentorship",
+                RelatedEntityId = mentorship.MentorshipID,
+                ActionUrl = $"/advisor/requests/{mentorship.MentorshipID}"
+            });
+        }
 
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
@@ -248,6 +268,27 @@ public class MentorshipService : IMentorshipService
         await _audit.LogAsync("ACCEPT_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId, null);
         _logger.LogInformation("Mentorship {MentorshipId} accepted by advisor", mentorshipId);
 
+        // Notify Startup
+        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+        if (startup != null)
+        {
+            var advisorName = await _db.Advisors.AsNoTracking()
+                .Where(a => a.AdvisorID == mentorship.AdvisorID)
+                .Select(a => a.FullName)
+                .FirstOrDefaultAsync();
+
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startup.UserID,
+                NotificationType = "CONSULTING",
+                Title = "Yêu cầu tư vấn được chấp nhận",
+                Message = $"Advisor {advisorName} đã chấp nhận yêu cầu tư vấn của bạn.",
+                RelatedEntityType = "Mentorship",
+                RelatedEntityId = mentorshipId,
+                ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+            });
+        }
+
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
 
@@ -275,6 +316,27 @@ public class MentorshipService : IMentorshipService
         await _audit.LogAsync("REJECT_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId,
             $"Reason={reason}");
         _logger.LogInformation("Mentorship {MentorshipId} rejected by advisor", mentorshipId);
+
+        // Notify Startup
+        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+        if (startup != null)
+        {
+            var advisorName = await _db.Advisors.AsNoTracking()
+                .Where(a => a.AdvisorID == mentorship.AdvisorID)
+                .Select(a => a.FullName)
+                .FirstOrDefaultAsync();
+
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startup.UserID,
+                NotificationType = "CONSULTING",
+                Title = "Yêu cầu tư vấn bị từ chối",
+                Message = $"Advisor {advisorName} đã từ chối yêu cầu tư vấn của bạn. Lý do: {reason ?? "Không có lý do cụ thể."}",
+                RelatedEntityType = "Mentorship",
+                RelatedEntityId = mentorshipId,
+                ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+            });
+        }
 
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
@@ -319,6 +381,60 @@ public class MentorshipService : IMentorshipService
 
         await _db.SaveChangesAsync();
         await _audit.LogAsync("CANCEL_MENTORSHIP", "StartupAdvisorMentorship", mentorship.MentorshipID, reason);
+
+        // Notify the other party about cancellation
+        try
+        {
+            int recipientUserId;
+            string cancellerName;
+            string actionUrl;
+            if (startup != null && mentorship.StartupID == startup.StartupID)
+            {
+                // Startup cancelled → notify Advisor
+                var advisorEntity = await _db.Advisors.AsNoTracking().FirstOrDefaultAsync(a => a.AdvisorID == mentorship.AdvisorID);
+                if (advisorEntity != null)
+                {
+                    recipientUserId = advisorEntity.UserID;
+                    cancellerName = startup.CompanyName;
+                    actionUrl = $"/advisor/requests/{mentorshipId}";
+                    await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                    {
+                        UserId = recipientUserId,
+                        NotificationType = "CONSULTING",
+                        Title = "Y\u00eau c\u1ea7u t\u01b0 v\u1ea5n \u0111\u00e3 b\u1ecb hu\u1ef7",
+                        Message = $"Startup '{cancellerName}' \u0111\u00e3 hu\u1ef7 y\u00eau c\u1ea7u t\u01b0 v\u1ea5n. L\u00fd do: {reason ?? "Kh\u00f4ng c\u00f3 l\u00fd do c\u1ee5 th\u1ec3."}",
+                        RelatedEntityType = "Mentorship",
+                        RelatedEntityId = mentorshipId,
+                        ActionUrl = actionUrl
+                    });
+                }
+            }
+            else if (advisor != null)
+            {
+                // Advisor cancelled → notify Startup
+                var startupEntity = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+                if (startupEntity != null)
+                {
+                    recipientUserId = startupEntity.UserID;
+                    cancellerName = advisor.FullName;
+                    actionUrl = $"/startup/mentorship-requests/{mentorshipId}";
+                    await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                    {
+                        UserId = recipientUserId,
+                        NotificationType = "CONSULTING",
+                        Title = "Y\u00eau c\u1ea7u t\u01b0 v\u1ea5n \u0111\u00e3 b\u1ecb hu\u1ef7",
+                        Message = $"Advisor {cancellerName} \u0111\u00e3 hu\u1ef7 y\u00eau c\u1ea7u t\u01b0 v\u1ea5n. L\u00fd do: {reason ?? "Kh\u00f4ng c\u00f3 l\u00fd do c\u1ee5 th\u1ec3."}",
+                        RelatedEntityType = "Mentorship",
+                        RelatedEntityId = mentorshipId,
+                        ActionUrl = actionUrl
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send cancellation notification for mentorship {MentorshipId}", mentorshipId);
+        }
 
         return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship));
     }
@@ -459,6 +575,32 @@ public class MentorshipService : IMentorshipService
         _logger.LogInformation("Session {SessionId} created for mentorship {MentorshipId}",
             session.SessionID, mentorshipId);
 
+        // Notify Startup about the new session
+        try
+        {
+            var startupEntity = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+            var advisorName = (await _db.Advisors.AsNoTracking().Where(a => a.UserID == userId).Select(a => a.FullName).FirstOrDefaultAsync()) ?? "Advisor";
+            if (startupEntity != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = startupEntity.UserID,
+                    NotificationType = "CONSULTING",
+                    Title = isCounterProposal ? "\u0110\u1ec1 xu\u1ea5t l\u1ecbch t\u01b0 v\u1ea5n m\u1edbi" : "L\u1ecbch t\u01b0 v\u1ea5n \u0111\u00e3 \u0111\u01b0\u1ee3c l\u00ean l\u1ecbch",
+                    Message = isCounterProposal
+                        ? $"Advisor {advisorName} \u0111\u00e3 \u0111\u1ec1 xu\u1ea5t l\u1ecbch t\u01b0 v\u1ea5n m\u1edbi. Vui l\u00f2ng x\u00e1c nh\u1eadn."
+                        : $"Advisor {advisorName} \u0111\u00e3 l\u00ean l\u1ecbch bu\u1ed5i t\u01b0 v\u1ea5n m\u1edbi.",
+                    RelatedEntityType = "MentorshipSession",
+                    RelatedEntityId = session.SessionID,
+                    ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send session notification for session {SessionId}", session.SessionID);
+        }
+
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
     }
 
@@ -569,6 +711,30 @@ public class MentorshipService : IMentorshipService
         _logger.LogInformation("Session {SessionId} accepted by advisor for mentorship {MentorshipId}",
             sessionId, mentorshipId);
 
+        // Notify Startup that advisor accepted their proposed session
+        try
+        {
+            var startupEntity = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+            var advisorName = (await _db.Advisors.AsNoTracking().Where(a => a.UserID == userId).Select(a => a.FullName).FirstOrDefaultAsync()) ?? "Advisor";
+            if (startupEntity != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = startupEntity.UserID,
+                    NotificationType = "CONSULTING",
+                    Title = "L\u1ecbch t\u01b0 v\u1ea5n \u0111\u00e3 \u0111\u01b0\u1ee3c ch\u1ed1t",
+                    Message = $"Advisor {advisorName} \u0111\u00e3 ch\u1ea5p nh\u1eadn l\u1ecbch t\u01b0 v\u1ea5n c\u1ee7a b\u1ea1n.",
+                    RelatedEntityType = "MentorshipSession",
+                    RelatedEntityId = sessionId,
+                    ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send session accept notification for session {SessionId}", sessionId);
+        }
+
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
     }
 
@@ -636,6 +802,30 @@ public class MentorshipService : IMentorshipService
         _logger.LogInformation("Session {SessionId} confirmed by startup for mentorship {MentorshipId}",
             sessionId, mentorshipId);
 
+        // Notify Advisor that startup confirmed a session
+        try
+        {
+            var advisorEntity = await _db.Advisors.AsNoTracking().FirstOrDefaultAsync(a => a.AdvisorID == mentorship.AdvisorID);
+            var startupName = startup?.CompanyName ?? "Startup";
+            if (advisorEntity != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = advisorEntity.UserID,
+                    NotificationType = "CONSULTING",
+                    Title = "L\u1ecbch t\u01b0 v\u1ea5n \u0111\u00e3 \u0111\u01b0\u1ee3c x\u00e1c nh\u1eadn",
+                    Message = $"Startup '{startupName}' \u0111\u00e3 x\u00e1c nh\u1eadn l\u1ecbch t\u01b0 v\u1ea5n c\u1ee7a b\u1ea1n.",
+                    RelatedEntityType = "MentorshipSession",
+                    RelatedEntityId = sessionId,
+                    ActionUrl = $"/advisor/requests/{mentorshipId}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send session confirm notification for session {SessionId}", sessionId);
+        }
+
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
     }
 
@@ -681,6 +871,22 @@ public class MentorshipService : IMentorshipService
             $"MentorshipId={mentorshipId}");
         _logger.LogInformation("Report {ReportId} created for mentorship {MentorshipId}",
             report.ReportID, mentorshipId);
+
+        // Notify Startup
+        var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
+        if (startup != null)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startup.UserID,
+                NotificationType = "CONSULTING",
+                Title = "Báo cáo tư vấn mới",
+                Message = $"Advisor đã gửi báo cáo cho buổi tư vấn của bạn.",
+                RelatedEntityType = "MentorshipReport",
+                RelatedEntityId = report.ReportID,
+                ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+            });
+        }
 
         return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report));
     }
@@ -757,6 +963,30 @@ public class MentorshipService : IMentorshipService
             $"MentorshipId={mentorshipId}, Rating={request.Rating}");
         _logger.LogInformation("Feedback {FeedbackId} created for mentorship {MentorshipId}",
             feedback.FeedbackID, mentorshipId);
+
+        // Notify Advisor about the feedback
+        try
+        {
+            var advisorEntity = await _db.Advisors.AsNoTracking().FirstOrDefaultAsync(a => a.AdvisorID == mentorship.AdvisorID);
+            var startupName = startup?.CompanyName ?? "Startup";
+            if (advisorEntity != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = advisorEntity.UserID,
+                    NotificationType = "CONSULTING",
+                    Title = "Ph\u1ea3n h\u1ed3i m\u1edbi t\u1eeb startup",
+                    Message = $"Startup '{startupName}' \u0111\u00e3 g\u1eedi ph\u1ea3n h\u1ed3i v\u1ec1 bu\u1ed5i t\u01b0 v\u1ea5n. \u0110\u00e1nh gi\u00e1: {request.Rating}/5.",
+                    RelatedEntityType = "MentorshipFeedback",
+                    RelatedEntityId = feedback.FeedbackID,
+                    ActionUrl = $"/advisor/requests/{mentorshipId}"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send feedback notification for feedback {FeedbackId}", feedback.FeedbackID);
+        }
 
         return ApiResponse<FeedbackDto>.SuccessResponse(MapFeedbackDto(feedback));
     }

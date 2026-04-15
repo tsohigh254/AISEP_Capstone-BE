@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text.Json;
+using AISEP.Application.DTOs.Notification;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -18,6 +19,7 @@ public class AiEvaluationService : IAiEvaluationService
     private readonly ICloudinaryService _cloudinary;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AiEvaluationService> _logger;
+    private readonly INotificationDeliveryService _notifications;
 
     // Terminal statuses — no further transitions allowed
     private static readonly HashSet<string> TerminalStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -41,13 +43,15 @@ public class AiEvaluationService : IAiEvaluationService
         PythonAiClient pythonClient,
         ICloudinaryService cloudinary,
         IServiceScopeFactory scopeFactory,
-        ILogger<AiEvaluationService> logger)
+        ILogger<AiEvaluationService> logger,
+        INotificationDeliveryService notifications)
     {
         _db = db;
         _pythonClient = pythonClient;
         _cloudinary = cloudinary;
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _notifications = notifications;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -161,7 +165,7 @@ public class AiEvaluationService : IAiEvaluationService
             try
             {
                 var pythonStatus = await _pythonClient.GetEvaluationStatusAsync(run.PythonRunId, run.CorrelationId);
-                ReconcileStatus(run, pythonStatus.Status, pythonStatus.OverallScore, pythonStatus.FailureReason, "poll");
+                await ReconcileStatus(run, pythonStatus.Status, pythonStatus.OverallScore, pythonStatus.FailureReason, "poll");
                 await _db.SaveChangesAsync();
             }
             catch (PythonAiException ex)
@@ -240,7 +244,7 @@ public class AiEvaluationService : IAiEvaluationService
 
             // Also reconcile status if report says completed
             if (!string.IsNullOrEmpty(report.Status))
-                ReconcileStatus(run, report.Status, run.OverallScore, null, "report-fetch");
+                await ReconcileStatus(run, report.Status, run.OverallScore, null, "report-fetch");
 
             await _db.SaveChangesAsync();
 
@@ -312,7 +316,7 @@ public class AiEvaluationService : IAiEvaluationService
         }
 
         // Reconcile state from webhook
-        ReconcileStatus(run, payload.TerminalStatus, payload.OverallScore, payload.FailureReason, "webhook");
+        await ReconcileStatus(run, payload.TerminalStatus, payload.OverallScore, payload.FailureReason, "webhook");
 
         delivery.Processed = true;
         delivery.ProcessingNote = $"Updated run {run.Id} to status={run.Status}";
@@ -376,7 +380,7 @@ public class AiEvaluationService : IAiEvaluationService
     ///   2. Use precedence to prevent stale overwrites (lower precedence cannot override higher).
     ///   3. Always update score/failure_reason if the incoming status wins.
     /// </summary>
-    private void ReconcileStatus(AiEvaluationRun run, string incomingStatus, double? score, string? failureReason, string source)
+    private async Task ReconcileStatus(AiEvaluationRun run, string incomingStatus, double? score, string? failureReason, string source)
     {
         var currentPrecedence = StatusPrecedence.GetValueOrDefault(run.Status, 0);
         var incomingPrecedence = StatusPrecedence.GetValueOrDefault(incomingStatus, 0);
@@ -414,6 +418,28 @@ public class AiEvaluationService : IAiEvaluationService
             _logger.LogInformation(
                 "Evaluation run {RunId} status reconciled: {Old} → {New} (source={Source})",
                 run.Id, oldStatus, incomingStatus, source);
+
+            // Notify Startup if completed
+            if (string.Equals(incomingStatus, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                    {
+                        UserId = run.Startup.UserID,
+                        NotificationType = "AI_EVALUATION",
+                        Title = "Đánh giá AI hoàn tất",
+                        Message = $"Tiến trình đánh giá AI cho startup '{run.Startup.CompanyName}' đã hoàn tất. Điểm số: {run.OverallScore:F1}",
+                        RelatedEntityType = "AiEvaluationRun",
+                        RelatedEntityId = run.Id,
+                        ActionUrl = $"/startup/evaluations/{run.Id}"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send notification for completed evaluation {RunId}", run.Id);
+                }
+            }
         }
     }
 
