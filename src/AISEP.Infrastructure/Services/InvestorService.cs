@@ -316,6 +316,8 @@ public class InvestorService : IInvestorService
         _db.InvestorWatchlists.Add(entry);
         await _db.SaveChangesAsync();
 
+        var aiScore = await GetLatestStartupAiScoreAsync(startup.StartupID);
+
         await _audit.LogAsync("ADD_WATCHLIST", "InvestorWatchlist", entry.WatchlistID, $"StartupId={request.StartupId}");
         _logger.LogInformation("Investor {InvestorId} added startup {StartupId} to watchlist",
             investor.InvestorID, request.StartupId);
@@ -329,7 +331,8 @@ public class InvestorService : IInvestorService
             Stage = startup.Stage?.ToString(),
             LogoURL = startup.LogoURL,
             Priority = (entry.Priority ?? WatchlistPriority.Medium).ToString(),
-            AddedAt = entry.AddedAt
+            AddedAt = entry.AddedAt,
+            AiScore = aiScore
         });
     }
 
@@ -367,7 +370,27 @@ public class InvestorService : IInvestorService
                 Stage = w.Startup.Stage != null ? w.Startup.Stage.ToString() : null,
                 LogoURL = w.Startup.LogoURL,
                 Priority = (w.Priority ?? WatchlistPriority.Medium).ToString(),
-                AddedAt = w.AddedAt
+                AddedAt = w.AddedAt,
+                AiScore = _db.AiEvaluationRuns
+                    .Where(r => r.StartupId == w.StartupID
+                             && r.OverallScore.HasValue
+                             && (r.Status == "completed"
+                              || r.Status == "COMPLETED"
+                              || r.Status == "partial_completed"
+                              || r.Status == "PARTIAL_COMPLETED"))
+                    .OrderByDescending(r => r.UpdatedAt)
+                    .Select(r => r.OverallScore)
+                    .FirstOrDefault()
+                    ?? _db.StartupPotentialScores
+                        .Where(p => p.StartupID == w.StartupID && p.IsCurrentScore)
+                        .OrderByDescending(p => p.CalculatedAt)
+                        .Select(p => (double?)p.OverallScore)
+                        .FirstOrDefault()
+                    ?? _db.StartupPotentialScores
+                        .Where(p => p.StartupID == w.StartupID)
+                        .OrderByDescending(p => p.CalculatedAt)
+                        .Select(p => (double?)p.OverallScore)
+                        .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -480,7 +503,27 @@ public class InvestorService : IInvestorService
                 UpdatedAt = s.UpdatedAt,
                 CreatedAt = s.CreatedAt,
                 FundingAmountSought = s.FundingAmountSought,
-                CurrentFundingRaised = s.CurrentFundingRaised
+                CurrentFundingRaised = s.CurrentFundingRaised,
+                AiScore = _db.AiEvaluationRuns
+                    .Where(r => r.StartupId == s.StartupID
+                             && r.OverallScore.HasValue
+                             && (r.Status == "completed"
+                              || r.Status == "COMPLETED"
+                              || r.Status == "partial_completed"
+                              || r.Status == "PARTIAL_COMPLETED"))
+                    .OrderByDescending(r => r.UpdatedAt)
+                    .Select(r => r.OverallScore)
+                    .FirstOrDefault()
+                    ?? _db.StartupPotentialScores
+                        .Where(p => p.StartupID == s.StartupID && p.IsCurrentScore)
+                        .OrderByDescending(p => p.CalculatedAt)
+                        .Select(p => (double?)p.OverallScore)
+                        .FirstOrDefault()
+                    ?? _db.StartupPotentialScores
+                        .Where(p => p.StartupID == s.StartupID)
+                        .OrderByDescending(p => p.CalculatedAt)
+                        .Select(p => (double?)p.OverallScore)
+                        .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -494,6 +537,41 @@ public class InvestorService : IInvestorService
                 TotalItems = totalItems,
             }
         });
+    }
+
+    private async Task<double?> GetLatestStartupAiScoreAsync(int startupId)
+    {
+        var runScore = await _db.AiEvaluationRuns
+            .AsNoTracking()
+            .Where(r => r.StartupId == startupId
+                     && r.OverallScore.HasValue
+                     && (r.Status == "completed"
+                      || r.Status == "COMPLETED"
+                      || r.Status == "partial_completed"
+                      || r.Status == "PARTIAL_COMPLETED"))
+            .OrderByDescending(r => r.UpdatedAt)
+            .Select(r => r.OverallScore)
+            .FirstOrDefaultAsync();
+
+        if (runScore.HasValue)
+            return runScore.Value;
+
+        var currentPotential = await _db.StartupPotentialScores
+            .AsNoTracking()
+            .Where(p => p.StartupID == startupId && p.IsCurrentScore)
+            .OrderByDescending(p => p.CalculatedAt)
+            .Select(p => (double?)p.OverallScore)
+            .FirstOrDefaultAsync();
+
+        if (currentPotential.HasValue)
+            return currentPotential.Value;
+
+        return await _db.StartupPotentialScores
+            .AsNoTracking()
+            .Where(p => p.StartupID == startupId)
+            .OrderByDescending(p => p.CalculatedAt)
+            .Select(p => (double?)p.OverallScore)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<ApiResponse<InvestorDto>> UploadPhotoAsync(int userId, IFormFile photo)

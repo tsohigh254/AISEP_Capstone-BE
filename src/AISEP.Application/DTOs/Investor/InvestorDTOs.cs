@@ -329,6 +329,7 @@ public class StartupSearchItemDto
     public DateTime? CreatedAt { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
+    public double? AiScore { get; set; }
 }
 
 // ========== INDUSTRY FOCUS DTOs ==========
@@ -416,4 +417,5 @@ public class WatchlistItemDto
     public string? LogoURL { get; set; }
     public string Priority { get; set; } = "Medium";
     public DateTime AddedAt { get; set; }
+    public double? AiScore { get; set; }
 }

@@ -211,6 +211,7 @@ public class StartupPublicDto
     public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
     public string? TeamSize { get; set; }
+    public double? AiScore { get; set; }
 
     /// <summary>
     /// Mã đăng ký doanh nghiệp từ KYC đã được duyệt (Approved).
