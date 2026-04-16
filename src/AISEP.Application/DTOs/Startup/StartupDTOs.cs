@@ -236,6 +236,14 @@ public class StartupListItemDto
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public string? StartupVerificationType { get; set; }
+    /// <summary>NONE | REQUESTED | ACCEPTED | IN_DISCUSSION. Null when caller is not an investor.</summary>
+    public string? ConnectionStatus { get; set; }
+    /// <summary>ID of the active connection record. Null when ConnectionStatus is NONE or caller is not investor.</summary>
+    public int? ConnectionId { get; set; }
+    /// <summary>Whether the current investor can send a new connection request.</summary>
+    public bool CanRequestConnection { get; set; }
+    /// <summary>"INVESTOR" if investor initiated, "STARTUP" if startup initiated. Null when no active connection.</summary>
+    public string? InitiatedByRole { get; set; }
 }
 
 // ========== TEAM MEMBER DTOs ==========

@@ -193,6 +193,64 @@ public class AdvisorDetailDto : AdvisorSearchItemDto
     public string? MentorshipPhilosophy { get; set; }
     public string? ExperiencesJson { get; set; }
     public List<string> Skills { get; set; } = new();
+    public List<AdvisorReviewDto> Reviews { get; set; } = new();
+    public List<TimeSlotDto> TimeSlots { get; set; } = new();
+}
+
+public class AdvisorReviewDto
+{
+    public string Author { get; set; } = string.Empty;
+    public string? Stage { get; set; }
+    public int Rating { get; set; }
+    public string? Text { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+}
+
+// ========== FEEDBACK MANAGEMENT DTOs ==========
+
+public class AdvisorFeedbackListItemDto
+{
+    public int Id { get; set; }
+    public int? SessionId { get; set; }
+    public FeedbackStartupSummaryDto Startup { get; set; } = new();
+    public FeedbackSessionSummaryDto? Session { get; set; }
+    public int Rating { get; set; }
+    public string? Comment { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public bool CanRespond { get; set; }
+    public string VisibilityStatus { get; set; } = string.Empty;
+    public FeedbackResponseDto? Response { get; set; }
+}
+
+public class FeedbackStartupSummaryDto
+{
+    public int Id { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+}
+
+public class FeedbackSessionSummaryDto
+{
+    public string? Topic { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class FeedbackResponseDto
+{
+    public int Id { get; set; }
+    public string ResponseText { get; set; } = string.Empty;
+    public DateTime? CreatedAt { get; set; }
+}
+
+public class AdvisorFeedbackSummaryDto
+{
+    public float? AverageRating { get; set; }
+    public int TotalReviews { get; set; }
+    public Dictionary<int, int> RatingBreakdown { get; set; } = new();
+}
+
+public class RespondToFeedbackRequest
+{
+    public string ResponseText { get; set; } = string.Empty;
 }
 
 public class AdvisorIndustryFocusDto

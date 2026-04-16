@@ -1,4 +1,5 @@
 using AISEP.Application.Const;
+using AISEP.Application.Configuration;
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Mentorship;
 using AISEP.Application.Interfaces;
@@ -16,11 +17,14 @@ public class MentorshipService : IMentorshipService
     private readonly IAuditService _audit;
     private readonly ILogger<MentorshipService> _logger;
 
-    public MentorshipService(ApplicationDbContext db, IAuditService audit, ILogger<MentorshipService> logger)
+        private readonly ICloudinaryService _cloudinary;
+
+    public MentorshipService(ApplicationDbContext db, IAuditService audit, ILogger<MentorshipService> logger, ICloudinaryService cloudinary)
     {
         _db = db;
         _audit = audit;
         _logger = logger;
+        _cloudinary = cloudinary;
     }
 
     // ================================================================
@@ -120,7 +124,8 @@ public class MentorshipService : IMentorshipService
             .AsNoTracking()
             .Include(m => m.Startup).ThenInclude(s => s.Industry)
             .Include(m => m.Advisor)
-            .Include(m => m.Reports);
+            .Include(m => m.Reports)
+            .Include(m => m.Sessions);
 
         if (userType == "Startup")
         {
@@ -167,10 +172,13 @@ public class MentorshipService : IMentorshipService
                 MentorshipID = m.MentorshipID,
                 StartupID = m.StartupID,
                 StartupName = m.Startup?.CompanyName ?? "Unknown",
+                StartupLogoUrl = m.Startup?.LogoURL,
                 StartupIndustry = m.Startup?.Industry?.IndustryName,
                 StartupStage = m.Startup?.Stage?.ToString(),
                 AdvisorID = m.AdvisorID,
                 AdvisorName = m.Advisor?.FullName ?? "Unknown",
+                AdvisorTitle = m.Advisor?.Title,
+                AdvisorPhotoURL = m.Advisor?.ProfilePhotoURL,
                 Status = m.MentorshipStatus.ToString(),
                 ChallengeDescription = m.ChallengeDescription,
                 PreferredFormat = m.PreferredFormat,
@@ -180,7 +188,8 @@ public class MentorshipService : IMentorshipService
                 ReportCount = m.Reports.Count,
                 LatestReportSubmittedAt = m.Reports.Any()
                     ? m.Reports.Max(r => r.SubmittedAt)
-                    : null
+                    : null,
+                HasAdvisorProposedSlot = m.Sessions.Any(s => s.SessionStatus == SessionStatusValues.ProposedByAdvisor)
             })
             .ToList();
 
@@ -206,7 +215,7 @@ public class MentorshipService : IMentorshipService
         var mentorship = await _db.StartupAdvisorMentorships
             .AsNoTracking()
             .AsSplitQuery()
-            .Include(m => m.Startup)
+            .Include(m => m.Startup).ThenInclude(s => s.Industry)
             .Include(m => m.Advisor)
             .Include(m => m.Sessions.OrderByDescending(s => s.ScheduledStartAt))
             .Include(m => m.Reports.OrderByDescending(r => r.CreatedAt))
@@ -222,7 +231,7 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<MentorshipDetailDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
                 "You do not have access to this mentorship.");
 
-        return ApiResponse<MentorshipDetailDto>.SuccessResponse(MapToDetailDto(mentorship));
+        return ApiResponse<MentorshipDetailDto>.SuccessResponse(MapToDetailDto(mentorship, userType));
     }
 
     // ================================================================
@@ -307,9 +316,15 @@ public class MentorshipService : IMentorshipService
         mentorship.LastUpdatedByRole = role;
         mentorship.UpdatedAt = DateTime.UtcNow;
 
-        // Cascade-cancel all sessions that haven't completed yet
+        // Cascade-cancel all sessions that haven't been conducted/completed yet
+        var nonCancellableStatuses = new[] {
+            SessionStatusValues.Completed,
+            SessionStatusValues.Conducted,
+            SessionStatusValues.InDispute,
+            SessionStatusValues.Resolved
+        };
         var pendingSessions = await _db.MentorshipSessions
-            .Where(s => s.MentorshipID == mentorshipId && s.SessionStatus != SessionStatusValues.Completed)
+            .Where(s => s.MentorshipID == mentorshipId && !nonCancellableStatuses.Contains(s.SessionStatus))
             .ToListAsync();
         foreach (var s in pendingSessions)
         {
@@ -359,6 +374,12 @@ public class MentorshipService : IMentorshipService
                     && s.Mentorship.MentorshipStatus != MentorshipStatus.Rejected);
             }
         }
+        else
+        {
+            // Default: exclude unconfirmed slot proposals — only return sessions that have a confirmed schedule
+            query = query.Where(s => s.SessionStatus != SessionStatusValues.ProposedByStartup
+                                  && s.SessionStatus != SessionStatusValues.ProposedByAdvisor);
+        }
 
         var totalItems = await query.CountAsync();
         var items = await query.OrderByDescending(s => s.ScheduledStartAt)
@@ -370,7 +391,9 @@ public class MentorshipService : IMentorshipService
                 ScheduledStartAt = s.ScheduledStartAt,
                 DurationMinutes = s.DurationMinutes,
                 SessionFormat = s.SessionFormat,
-                MeetingURL = s.MeetingURL,
+                MeetingURL = (userType == "Startup" && s.Mentorship.PaymentStatus != PaymentStatus.Completed)
+                    ? null
+                    : s.MeetingURL,
                 // If parent mentorship is Cancelled/Rejected, override session status so legacy
                 // rows (created before cascade-cancel was deployed) show correct status.
                 SessionStatus = (s.Mentorship.MentorshipStatus == MentorshipStatus.Cancelled
@@ -387,6 +410,13 @@ public class MentorshipService : IMentorshipService
                 AdvisorID = s.Mentorship.AdvisorID,
                 AdvisorName = s.Mentorship.Advisor.FullName,
                 AdvisorProfilePhotoURL = s.Mentorship.Advisor.ProfilePhotoURL,
+                Advisor = new SessionAdvisorDto
+                {
+                    AdvisorID = s.Mentorship.AdvisorID,
+                    FullName = s.Mentorship.Advisor.FullName,
+                    Title = s.Mentorship.Advisor.Title,
+                    ProfilePhotoURL = s.Mentorship.Advisor.ProfilePhotoURL
+                },
                 StartupID = s.Mentorship.StartupID,
                 StartupName = s.Mentorship.Startup.CompanyName,
                 MentorshipChallengeDescription = s.Mentorship.ChallengeDescription,
@@ -435,6 +465,7 @@ public class MentorshipService : IMentorshipService
             SessionFormat = request.SessionFormat,
             MeetingURL = resolvedMeetingUrl,
             SessionStatus = isCounterProposal ? SessionStatusValues.ProposedByAdvisor : SessionStatusValues.Scheduled,
+            Note = request.Note,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -449,6 +480,19 @@ public class MentorshipService : IMentorshipService
                 mentorship.InProgressAt = DateTime.UtcNow;
                 mentorship.LastUpdatedByRole = "Advisor";
                 mentorship.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Cancel all pending proposal slots — advisor is directly scheduling
+            var pendingSlots = await _db.MentorshipSessions
+                .Where(s => s.MentorshipID == mentorshipId
+                    && s.SessionID != session.SessionID
+                    && (s.SessionStatus == SessionStatusValues.ProposedByStartup
+                        || s.SessionStatus == SessionStatusValues.ProposedByAdvisor))
+                .ToListAsync();
+            foreach (var s in pendingSlots)
+            {
+                s.SessionStatus = SessionStatusValues.Cancelled;
+                s.UpdatedAt = DateTime.UtcNow;
             }
         }
 
@@ -636,7 +680,7 @@ public class MentorshipService : IMentorshipService
         _logger.LogInformation("Session {SessionId} confirmed by startup for mentorship {MentorshipId}",
             sessionId, mentorshipId);
 
-        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session));
+        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session, hideMeetingUrl: true));
     }
 
     // ================================================================
@@ -652,35 +696,82 @@ public class MentorshipService : IMentorshipService
         var advisor = await _db.Advisors.AsNoTracking()
             .FirstAsync(a => a.UserID == userId);
 
-        // If sessionId provided, validate it belongs to this mentorship
-        if (request.SessionId.HasValue)
+        // SessionID is required for new reports (BA chốt #2)
+        if (!request.SessionId.HasValue)
+            return ApiResponse<ReportDto>.ErrorResponse("SESSION_REQUIRED",
+                "SessionID is required when creating a report.");
+
+        var sessionExists = await _db.MentorshipSessions.AnyAsync(s =>
+            s.SessionID == request.SessionId.Value && s.MentorshipID == mentorshipId);
+        if (!sessionExists)
+            return ApiResponse<ReportDto>.ErrorResponse("SESSION_NOT_FOUND",
+                "Session not found or does not belong to this mentorship.");
+
+        // Guard: 1 active report (Draft or submitted) per session
+        var existingActiveReport = await _db.MentorshipReports
+            .Where(r => r.SessionID == request.SessionId.Value
+                     && r.MentorshipID == mentorshipId
+                     && r.SupersededByReportID == null)
+            .FirstOrDefaultAsync();
+
+        if (existingActiveReport != null)
         {
-            var sessionExists = await _db.MentorshipSessions.AnyAsync(s =>
-                s.SessionID == request.SessionId.Value && s.MentorshipID == mentorshipId);
-            if (!sessionExists)
-                return ApiResponse<ReportDto>.ErrorResponse("SESSION_NOT_FOUND",
-                    "Session not found or does not belong to this mentorship.");
+            if (existingActiveReport.ReportReviewStatus == ReportReviewStatus.Draft)
+                return ApiResponse<ReportDto>.ErrorResponse("DRAFT_ALREADY_EXISTS",
+                    "A draft already exists for this session. Use PATCH to update it.");
+            // Allow resubmit only when previous report was Failed or NeedsMoreInfo
+            if (existingActiveReport.ReportReviewStatus != ReportReviewStatus.Failed
+                && existingActiveReport.ReportReviewStatus != ReportReviewStatus.NeedsMoreInfo)
+                return ApiResponse<ReportDto>.ErrorResponse("REPORT_ALREADY_EXISTS",
+                    "A report already exists for this session. Cannot create another.");
         }
 
+        string? attachmentsUrl = null;
+        if (request.AttachmentFile != null && request.AttachmentFile.Length > 0)
+            attachmentsUrl = await _cloudinary.UploadDocument(request.AttachmentFile, CloudinaryFolderSaving.DocumentStorage);
+
+        var isDraft = request.IsDraft;
         var report = new MentorshipReport
         {
             MentorshipID = mentorshipId,
-            SessionID = request.SessionId,
+            SessionID = request.SessionId.Value,
             CreatedByAdvisorID = advisor.AdvisorID,
             ReportSummary = request.ReportSummary,
             DetailedFindings = request.DetailedFindings,
             Recommendations = request.Recommendations,
-            SubmittedAt = DateTime.UtcNow,
+            AttachmentsURL = attachmentsUrl,
+            ReportReviewStatus = isDraft ? ReportReviewStatus.Draft : ReportReviewStatus.PendingReview,
+            SubmittedAt = isDraft ? null : DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.MentorshipReports.Add(report);
         await _db.SaveChangesAsync();
 
-        await _audit.LogAsync("CREATE_REPORT", "MentorshipReport", report.ReportID,
-            $"MentorshipId={mentorshipId}");
-        _logger.LogInformation("Report {ReportId} created for mentorship {MentorshipId}",
-            report.ReportID, mentorshipId);
+        // Supersede chain on submit: link previous Failed or NeedsMoreInfo report
+        MentorshipReport? supersededReport = null;
+        if (!isDraft)
+        {
+            supersededReport = await _db.MentorshipReports
+                .Where(r => r.SessionID == request.SessionId.Value
+                         && r.MentorshipID == mentorshipId
+                         && (r.ReportReviewStatus == ReportReviewStatus.NeedsMoreInfo
+                             || r.ReportReviewStatus == ReportReviewStatus.Failed)
+                         && r.SupersededByReportID == null
+                         && r.ReportID != report.ReportID)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (supersededReport != null)
+            {
+                supersededReport.SupersededByReportID = report.ReportID;
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        await _audit.LogAsync(isDraft ? "CREATE_REPORT_DRAFT" : "CREATE_REPORT", "MentorshipReport", report.ReportID,
+            $"MentorshipId={mentorshipId}, SupersededReportId={supersededReport?.ReportID}");
+        _logger.LogInformation("Report {ReportId} created for mentorship {MentorshipId} (isDraft={IsDraft})",
+            report.ReportID, mentorshipId, isDraft);
 
         return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report));
     }
@@ -703,6 +794,70 @@ public class MentorshipService : IMentorshipService
         if (!await IsParticipantOrStaff(userId, userType, report.Mentorship))
             return ApiResponse<ReportDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
                 "You do not have access to this report.");
+
+        // Visibility gate: Startup only sees Passed reports
+        if (userType == "Startup" && report.ReportReviewStatus != ReportReviewStatus.Passed)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_AVAILABLE",
+                "No consulting report available yet.");
+
+        // Draft is only visible to the advisor who created it
+        if (report.ReportReviewStatus == ReportReviewStatus.Draft && userType != "Advisor")
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_AVAILABLE",
+                "No consulting report available yet.");
+
+        return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report, userType));
+    }
+
+    // ================================================================
+    // UPDATE REPORT DRAFT (Advisor)
+    // ================================================================
+
+    public async Task<ApiResponse<ReportDto>> UpdateReportAsync(int userId, int mentorshipId, int reportId, UpdateReportRequest request)
+    {
+        var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
+        if (mentorship == null)
+            return ApiResponse<ReportDto>.ErrorResponse(error!.Error!.Code, error.Error.Message);
+
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<ReportDto>.ErrorResponse("ADVISOR_NOT_FOUND", "Advisor profile not found.");
+
+        var report = await _db.MentorshipReports
+            .FirstOrDefaultAsync(r => r.ReportID == reportId && r.MentorshipID == mentorshipId);
+
+        if (report == null)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_FOUND", "Report not found.");
+
+        if (report.CreatedByAdvisorID != advisor.AdvisorID)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_OWNED", "You do not own this report.");
+
+        if (report.ReportReviewStatus != ReportReviewStatus.Draft
+            && report.ReportReviewStatus != ReportReviewStatus.NeedsMoreInfo)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_EDITABLE",
+                "Only Draft or NeedsMoreInfo reports can be updated via PATCH. For Failed reports, submit a new report via POST.");
+
+        if (request.ReportSummary != null) report.ReportSummary = request.ReportSummary;
+        if (request.DetailedFindings != null) report.DetailedFindings = request.DetailedFindings;
+        if (request.Recommendations != null) report.Recommendations = request.Recommendations;
+
+        if (request.AttachmentFile != null && request.AttachmentFile.Length > 0)
+            report.AttachmentsURL = await _cloudinary.UploadDocument(request.AttachmentFile, CloudinaryFolderSaving.DocumentStorage);
+
+        bool submitting = !request.IsDraft;
+        if (submitting)
+        {
+            report.ReportReviewStatus = ReportReviewStatus.PendingReview;
+            report.SubmittedAt = DateTime.UtcNow;
+
+            // Supersede chain only applies when creating new report (POST), not PATCH
+        }
+
+        report.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync(submitting ? "SUBMIT_REPORT_DRAFT" : "UPDATE_REPORT_DRAFT",
+            "MentorshipReport", report.ReportID, $"MentorshipId={mentorshipId}");
 
         return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report));
     }
@@ -747,11 +902,26 @@ public class MentorshipService : IMentorshipService
             Rating = request.Rating,
             Comment = request.Comment,
             SubmittedAt = DateTime.UtcNow,
-            IsPublic = false
+            IsPublic = true
         };
 
         _db.MentorshipFeedbacks.Add(feedback);
         await _db.SaveChangesAsync();
+
+        // Recalculate advisor's AverageRating and ReviewCount
+        var advisorId = mentorship.AdvisorID;
+        var allRatings = await _db.MentorshipFeedbacks
+            .Where(f => f.Mentorship.AdvisorID == advisorId && f.FromRole == "Startup" && f.IsPublic)
+            .Select(f => f.Rating)
+            .ToListAsync();
+
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
+        if (advisor != null)
+        {
+            advisor.ReviewCount = allRatings.Count;
+            advisor.AverageRating = allRatings.Count > 0 ? (float)allRatings.Average() : null;
+            await _db.SaveChangesAsync();
+        }
 
         await _audit.LogAsync("CREATE_FEEDBACK", "MentorshipFeedback", feedback.FeedbackID,
             $"MentorshipId={mentorshipId}, Rating={request.Rating}");
@@ -831,13 +1001,18 @@ public class MentorshipService : IMentorshipService
         UpdatedAt = m.UpdatedAt
     };
 
-    private static MentorshipDetailDto MapToDetailDto(StartupAdvisorMentorship m) => new()
+    private static MentorshipDetailDto MapToDetailDto(StartupAdvisorMentorship m, string? callerType = null) => new()
     {
         MentorshipID = m.MentorshipID,
         StartupID = m.StartupID,
         StartupName = m.Startup.CompanyName,
+        StartupLogoUrl = m.Startup.LogoURL,
+        StartupIndustry = m.Startup.Industry?.IndustryName,
+        StartupStage = m.Startup.Stage?.ToString(),
         AdvisorID = m.AdvisorID,
         AdvisorName = m.Advisor.FullName,
+        AdvisorTitle = m.Advisor.Title,
+        AdvisorPhotoURL = m.Advisor.ProfilePhotoURL,
         MentorshipStatus = m.MentorshipStatus.ToString(),
         ChallengeDescription = m.ChallengeDescription,
         SpecificQuestions = m.SpecificQuestions,
@@ -860,8 +1035,14 @@ public class MentorshipService : IMentorshipService
         PaidAt = m.PaidAt,
         CreatedAt = m.CreatedAt,
         UpdatedAt = m.UpdatedAt,
-        Sessions = m.Sessions.Select(MapSessionDto).ToList(),
-        Reports = m.Reports.Select(MapReportDto).ToList(),
+        Sessions = m.Sessions.Select(s => MapSessionDto(s,
+            callerType == "Startup" && m.PaymentStatus != PaymentStatus.Completed)).ToList(),
+        Reports = (callerType == "Startup"
+            ? m.Reports.Where(r => r.ReportReviewStatus == ReportReviewStatus.Passed)
+            : callerType is "Staff" or "Admin"
+                ? m.Reports.Where(r => r.ReportReviewStatus != ReportReviewStatus.Draft)
+                : m.Reports)  // Advisor sees all including own Drafts
+            .Select(r => MapReportDto(r, callerType)).ToList(),
         Feedbacks = m.Feedbacks.Select(MapFeedbackDto).ToList(),
         TimelineEvents = BuildTimeline(m)
     };
@@ -940,24 +1121,30 @@ public class MentorshipService : IMentorshipService
         return events.OrderBy(e => e.HappenedAt).ToList();
     }
 
-    private static SessionDto MapSessionDto(MentorshipSession s) => new()
+    private static SessionDto MapSessionDto(MentorshipSession s, bool hideMeetingUrl = false) => new()
     {
         SessionID = s.SessionID,
         MentorshipID = s.MentorshipID,
         ScheduledStartAt = s.ScheduledStartAt,
         DurationMinutes = s.DurationMinutes,
         SessionFormat = s.SessionFormat,
-        MeetingURL = s.MeetingURL,
+        MeetingURL = hideMeetingUrl ? null : s.MeetingURL,
         SessionStatus = s.SessionStatus,
         TopicsDiscussed = s.TopicsDiscussed,
         KeyInsights = s.KeyInsights,
         ActionItems = s.ActionItems,
         NextSteps = s.NextSteps,
+        Note = s.Note,
         CreatedAt = s.CreatedAt,
-        UpdatedAt = s.UpdatedAt
+        UpdatedAt = s.UpdatedAt,
+        StartupConfirmedConductedAt = s.StartupConfirmedConductedAt,
+        DisputeReason = s.DisputeReason,
+        ResolutionNote = s.ResolutionNote,
+        MarkedByStaffID = s.MarkedByStaffID,
+        MarkedAt = s.MarkedAt
     };
 
-    private static ReportDto MapReportDto(MentorshipReport r) => new()
+    private static ReportDto MapReportDto(MentorshipReport r, string? callerType = null) => new()
     {
         ReportID = r.ReportID,
         MentorshipID = r.MentorshipID,
@@ -968,7 +1155,11 @@ public class MentorshipService : IMentorshipService
         Recommendations = r.Recommendations,
         AttachmentsURL = r.AttachmentsURL,
         SubmittedAt = r.SubmittedAt,
-        CreatedAt = r.CreatedAt
+        CreatedAt = r.CreatedAt,
+        UpdatedAt = r.UpdatedAt,
+        ReviewStatus = r.ReportReviewStatus.ToString(),
+        StaffReviewNote = callerType == "Startup" ? null : r.StaffReviewNote,
+        ReviewedAt = r.ReviewedAt
     };
 
     private static FeedbackDto MapFeedbackDto(MentorshipFeedback f) => new()
@@ -983,44 +1174,13 @@ public class MentorshipService : IMentorshipService
     };
 
     // ================================================================
-    // COMPLETE MENTORSHIP (Advisor)
+    // COMPLETE MENTORSHIP (Advisor) — DISABLED (BR-09: only Staff marks completed)
     // ================================================================
 
     public async Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId)
     {
-        var (mentorship, error) = await GetMentorshipForAdvisor(userId, mentorshipId);
-        if (mentorship == null) return error!;
-
-        if (mentorship.MentorshipStatus != MentorshipStatus.InProgress
-            && mentorship.MentorshipStatus != MentorshipStatus.Accepted)
-            return ApiResponse<MentorshipDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                $"Cannot complete mentorship with status '{mentorship.MentorshipStatus}'. Must be 'InProgress' or 'Accepted'.");
-
-        // Must have paid before advisor can mark as complete
-        if (mentorship.PaymentStatus != PaymentStatus.Completed)
-            return ApiResponse<MentorshipDto>.ErrorResponse("PAYMENT_REQUIRED",
-                "Mentorship must be paid before it can be marked as completed.");
-
-        // Must have at least one session that is Scheduled or InProgress (not all cancelled/proposed)
-        var hasValidSession = await _db.MentorshipSessions
-            .AnyAsync(s => s.MentorshipID == mentorshipId
-                && (s.SessionStatus == SessionStatusValues.Scheduled
-                    || s.SessionStatus == SessionStatusValues.InProgress
-                    || s.SessionStatus == SessionStatusValues.Completed));
-        if (!hasValidSession)
-            return ApiResponse<MentorshipDto>.ErrorResponse("NO_VALID_SESSION",
-                "No confirmed session found for this mentorship.");
-
-        mentorship.MentorshipStatus = MentorshipStatus.Completed;
-        mentorship.CompletedAt = DateTime.UtcNow;
-        mentorship.CompletionConfirmedByAdvisor = true;
-        mentorship.LastUpdatedByRole = "Advisor";
-        mentorship.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-        await _audit.LogAsync("COMPLETE_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId, null);
-
-        return ApiResponse<MentorshipDto>.SuccessResponse(MapToDto(mentorship), "Mentorship completed");
+        return ApiResponse<MentorshipDto>.ErrorResponse("COMPLETION_BY_ADVISOR_DISABLED",
+            "Mentorship completion is now handled by Operations Staff. Please submit your report and wait for staff review.");
     }
 
     // ================================================================
@@ -1041,12 +1201,14 @@ public class MentorshipService : IMentorshipService
         if (!await IsParticipantOrStaff(userId, userType, mentorship))
             return ApiResponse<List<SessionDto>>.ErrorResponse("MENTORSHIP_NOT_OWNED", "Access denied.");
 
-        var sessions = await _db.MentorshipSessions
+        var rawSessions = await _db.MentorshipSessions
             .Where(s => s.MentorshipID == mentorshipId)
             .AsNoTracking()
             .OrderByDescending(s => s.ScheduledStartAt)
-            .Select(s => MapSessionDto(s))
             .ToListAsync();
+
+        bool hideMeetingUrl = userType == "Startup" && mentorship.PaymentStatus != PaymentStatus.Completed;
+        var sessions = rawSessions.Select(s => MapSessionDto(s, hideMeetingUrl)).ToList();
 
         return ApiResponse<List<SessionDto>>.SuccessResponse(sessions);
     }
@@ -1078,6 +1240,396 @@ public class MentorshipService : IMentorshipService
 
         return ApiResponse<List<FeedbackDto>>.SuccessResponse(feedbacks);
     }
+
+    // ================================================================
+    // STAFF OVERSIGHT — GET REPORTS FOR OVERSIGHT (SVC-1)
+    // ================================================================
+
+    public async Task<ApiResponse<PagedResponse<ReportOversightDto>>> GetReportsForOversightAsync(
+        string? reviewStatus, int? advisorId, int? startupId,
+        DateTime? from, DateTime? to, int page, int pageSize)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = _db.MentorshipReports
+            .Include(r => r.Mentorship).ThenInclude(m => m.Startup)
+            .Include(r => r.Mentorship).ThenInclude(m => m.Advisor)
+            .Include(r => r.Session)
+            .Where(r => r.SupersededByReportID == null
+                     && r.ReportReviewStatus != ReportReviewStatus.Draft)  // Draft never enters staff queue
+            .AsNoTracking();
+
+        if (string.IsNullOrEmpty(reviewStatus) || reviewStatus == "PendingReview")
+            query = query.Where(r => r.ReportReviewStatus == ReportReviewStatus.PendingReview);
+        else if (reviewStatus != "all" && Enum.TryParse<ReportReviewStatus>(reviewStatus, out var s))
+            query = query.Where(r => r.ReportReviewStatus == s);
+
+        if (advisorId.HasValue)
+            query = query.Where(r => r.CreatedByAdvisorID == advisorId.Value);
+        if (startupId.HasValue)
+            query = query.Where(r => r.Mentorship.StartupID == startupId.Value);
+        if (from.HasValue)
+            query = query.Where(r => r.SubmittedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(r => r.SubmittedAt <= to.Value);
+
+        query = query.OrderByDescending(r => r.SubmittedAt);
+
+        var totalItems = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new ReportOversightDto
+            {
+                ReportID = r.ReportID,
+                MentorshipID = r.MentorshipID,
+                SessionID = r.SessionID,
+                AdvisorID = r.CreatedByAdvisorID,
+                AdvisorName = r.Mentorship.Advisor.FullName,
+                StartupID = r.Mentorship.StartupID,
+                StartupName = r.Mentorship.Startup.CompanyName,
+                ReportSummary = r.ReportSummary,
+                DetailedFindings = r.DetailedFindings,
+                Recommendations = r.Recommendations,
+                AttachmentsURL = r.AttachmentsURL,
+                SubmittedAt = r.SubmittedAt,
+                ReviewStatus = r.ReportReviewStatus.ToString(),
+                ReviewedByStaffID = r.ReviewedByStaffID,
+                StaffReviewNote = r.StaffReviewNote,
+                ReviewedAt = r.ReviewedAt,
+                SupersededByReportID = r.SupersededByReportID,
+                IsLatestForSession = r.SupersededByReportID == null,
+                SessionStatus = r.Session != null ? r.Session.SessionStatus : null,
+                StartupConfirmedConductedAt = r.Session != null ? r.Session.StartupConfirmedConductedAt : null,
+                MentorshipStatus = r.Mentorship.MentorshipStatus.ToString(),
+                ChallengeDescription = r.Mentorship.ChallengeDescription
+            })
+            .ToListAsync();
+
+        return ApiResponse<PagedResponse<ReportOversightDto>>.SuccessResponse(
+            new PagedResponse<ReportOversightDto>
+            {
+                Items = items,
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = totalItems }
+            });
+    }
+
+    // ================================================================
+    // STAFF OVERSIGHT — REVIEW REPORT (SVC-2)
+    // ================================================================
+
+    public async Task<ApiResponse<ReportReviewResultDto>> ReviewReportAsync(
+        int staffUserId, int reportId, ReviewReportRequest request)
+    {
+        var report = await _db.MentorshipReports
+            .Include(r => r.Session)
+            .Include(r => r.Mentorship).ThenInclude(m => m.Reports)
+            .Include(r => r.Mentorship).ThenInclude(m => m.Sessions)
+            .FirstOrDefaultAsync(r => r.ReportID == reportId);
+
+        if (report == null)
+            return ApiResponse<ReportReviewResultDto>.ErrorResponse("REPORT_NOT_FOUND", "Report not found.");
+
+        if (!Enum.TryParse<ReportReviewStatus>(request.ReviewStatus, out var newStatus)
+            || newStatus == ReportReviewStatus.PendingReview)
+            return ApiResponse<ReportReviewResultDto>.ErrorResponse("INVALID_REVIEW_STATUS",
+                "Review status must be Passed, Failed, or NeedsMoreInfo.");
+
+        // Guard: session must be Conducted or beyond — cannot review a report for a session that hasn't happened yet
+        var allowedSessionStatuses = new[]
+        {
+            SessionStatusValues.Conducted,
+            SessionStatusValues.InDispute,
+            SessionStatusValues.Completed,
+            SessionStatusValues.Resolved
+        };
+        if (report.Session == null || !allowedSessionStatuses.Contains(report.Session.SessionStatus))
+            return ApiResponse<ReportReviewResultDto>.ErrorResponse("SESSION_NOT_CONDUCTED",
+                "Cannot review report — startup has not confirmed the session as conducted yet.");
+
+        report.ReportReviewStatus = newStatus;
+        report.ReviewedByStaffID = staffUserId;
+        report.StaffReviewNote = request.Note;
+        report.ReviewedAt = DateTime.UtcNow;
+
+        RecalculatePayoutEligibility(report.Mentorship);
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("REVIEW_REPORT", "MentorshipReport", reportId, $"Status={newStatus}");
+
+        return ApiResponse<ReportReviewResultDto>.SuccessResponse(new ReportReviewResultDto
+        {
+            ReportID = report.ReportID,
+            MentorshipID = report.MentorshipID,
+            ReviewStatus = newStatus.ToString(),
+            StaffReviewNote = report.StaffReviewNote,
+            ReviewedByStaffID = staffUserId,
+            ReviewedAt = report.ReviewedAt
+        }, "Report reviewed successfully.");
+    }
+
+    // ================================================================
+    // STARTUP — CONFIRM CONDUCTED (SVC-3)
+    // ================================================================
+
+    public async Task<ApiResponse<SessionDto>> ConfirmConductedAsync(int userId, int mentorshipId, int sessionId)
+    {
+        var startup = await _db.Startups.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<SessionDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+        var mentorship = await _db.StartupAdvisorMentorships
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+        if (mentorship == null)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
+        if (mentorship.StartupID != startup.StartupID)
+            return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
+                "You are not the startup for this mentorship.");
+
+        var session = await _db.MentorshipSessions
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId && s.MentorshipID == mentorshipId);
+        if (session == null)
+            return ApiResponse<SessionDto>.ErrorResponse("SESSION_NOT_FOUND", "Session not found.");
+
+        if (session.SessionStatus != SessionStatusValues.Scheduled
+            && session.SessionStatus != SessionStatusValues.InProgress)
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
+                "Session must be Scheduled or InProgress to confirm conducted.");
+
+        if (mentorship.PaymentStatus != PaymentStatus.Completed)
+            return ApiResponse<SessionDto>.ErrorResponse("PAYMENT_REQUIRED",
+                "Payment must be completed before confirming the session as conducted.");
+
+        session.SessionStatus = SessionStatusValues.Conducted;
+        session.StartupConfirmedConductedAt = DateTime.UtcNow;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("CONFIRM_CONDUCTED", "MentorshipSession", sessionId,
+            $"MentorshipId={mentorshipId}");
+
+        return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session),
+            "Session confirmed as conducted.");
+    }
+
+    // ================================================================
+    // STAFF — MARK SESSION COMPLETED (SVC-4)
+    // ================================================================
+
+    public async Task<ApiResponse<SessionOversightResultDto>> MarkSessionCompletedAsync(
+        int staffUserId, int mentorshipId, int sessionId, string? note)
+    {
+        var session = await _db.MentorshipSessions
+            .Include(s => s.Reports)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId);
+
+        if (session == null || session.MentorshipID != mentorshipId)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_FOUND",
+                "Session not found.");
+
+        if (session.SessionStatus != SessionStatusValues.Conducted)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_CONDUCTED",
+                "Startup must confirm conducted before staff can mark completed.");
+
+        var currentReports = session.Reports
+            .Where(r => r.SupersededByReportID == null).ToList();
+        if (!currentReports.Any())
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("NO_REPORT",
+                "Session must have at least one report.");
+        if (currentReports.Any(r => r.ReportReviewStatus != ReportReviewStatus.Passed))
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("REPORTS_NOT_ALL_PASSED",
+                "Cannot mark completed — not all reports have passed review.");
+
+        session.SessionStatus = SessionStatusValues.Completed;
+        session.MarkedByStaffID = staffUserId;
+        session.MarkedAt = DateTime.UtcNow;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        RecalculateMentorshipStatus(session.Mentorship);
+        RecalculatePayoutEligibility(session.Mentorship);
+
+        // Increment advisor's CompletedSessions counter
+        var advisor = await _db.Advisors
+            .FirstOrDefaultAsync(a => a.AdvisorID == session.Mentorship.AdvisorID);
+        if (advisor != null)
+        {
+            advisor.CompletedSessions = await _db.MentorshipSessions
+                .CountAsync(s => s.Mentorship.AdvisorID == advisor.AdvisorID
+                              && s.SessionStatus == SessionStatusValues.Completed) + 1;
+            // +1 because current session hasn't been SaveChanges yet
+        }
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("STAFF_MARK_SESSION_COMPLETED", "MentorshipSession", sessionId, note);
+
+        return ApiResponse<SessionOversightResultDto>.SuccessResponse(
+            MapSessionOversightResult(session), "Session marked as completed.");
+    }
+
+    // ================================================================
+    // STAFF — MARK SESSION DISPUTE (SVC-5)
+    // ================================================================
+
+    public async Task<ApiResponse<SessionOversightResultDto>> MarkSessionDisputeAsync(
+        int staffUserId, int mentorshipId, int sessionId, string reason)
+    {
+        var session = await _db.MentorshipSessions
+            .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId);
+
+        if (session == null || session.MentorshipID != mentorshipId)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_FOUND",
+                "Session not found.");
+
+        var allowedStatuses = new[] {
+            SessionStatusValues.Scheduled, SessionStatusValues.InProgress,
+            SessionStatusValues.Conducted, SessionStatusValues.Completed,
+            SessionStatusValues.Resolved
+        };
+        if (!allowedStatuses.Contains(session.SessionStatus))
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
+                "Session state transition is invalid.");
+
+        session.SessionStatus = SessionStatusValues.InDispute;
+        session.DisputeReason = reason;
+        session.ResolutionNote = null;
+        session.MarkedByStaffID = staffUserId;
+        session.MarkedAt = DateTime.UtcNow;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        RecalculateMentorshipStatus(session.Mentorship);
+        RecalculatePayoutEligibility(session.Mentorship);
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("STAFF_MARK_SESSION_DISPUTE", "MentorshipSession", sessionId, reason);
+
+        return ApiResponse<SessionOversightResultDto>.SuccessResponse(
+            MapSessionOversightResult(session), "Session marked as in dispute.");
+    }
+
+    // ================================================================
+    // STAFF — MARK SESSION RESOLVED (SVC-6)
+    // ================================================================
+
+    public async Task<ApiResponse<SessionOversightResultDto>> MarkSessionResolvedAsync(
+        int staffUserId, int mentorshipId, int sessionId, ResolveDisputeRequest request)
+    {
+        var session = await _db.MentorshipSessions
+            .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId);
+
+        if (session == null || session.MentorshipID != mentorshipId)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_FOUND",
+                "Session not found.");
+
+        if (session.SessionStatus != SessionStatusValues.InDispute)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
+                "Session must be InDispute to resolve.");
+
+        session.SessionStatus = request.RestoreCompleted
+            ? SessionStatusValues.Completed
+            : SessionStatusValues.Resolved;
+        session.ResolutionNote = request.Resolution;
+        session.MarkedByStaffID = staffUserId;
+        session.MarkedAt = DateTime.UtcNow;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        RecalculateMentorshipStatus(session.Mentorship);
+        RecalculatePayoutEligibility(session.Mentorship);
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("STAFF_RESOLVE_SESSION", "MentorshipSession", sessionId, request.Resolution);
+
+        return ApiResponse<SessionOversightResultDto>.SuccessResponse(
+            MapSessionOversightResult(session), "Dispute resolved.");
+    }
+
+    // ================================================================
+    // HELPER: Recalculate Mentorship Status from Sessions (SVC-7)
+    // ================================================================
+
+    private static void RecalculateMentorshipStatus(StartupAdvisorMentorship mentorship)
+    {
+        var sessions = mentorship.Sessions
+            .Where(s => s.SessionStatus != SessionStatusValues.Cancelled
+                      && s.SessionStatus != SessionStatusValues.ProposedByStartup
+                      && s.SessionStatus != SessionStatusValues.ProposedByAdvisor)
+            .ToList();
+
+        if (!sessions.Any()) return;
+
+        if (sessions.Any(s => s.SessionStatus == SessionStatusValues.InDispute))
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.InDispute;
+        }
+        else if (sessions.All(s => s.SessionStatus == SessionStatusValues.Completed))
+        {
+            mentorship.MentorshipStatus = MentorshipStatus.Completed;
+            mentorship.CompletedAt ??= DateTime.UtcNow;
+        }
+        else
+        {
+            // Mix: some Scheduled/InProgress/Conducted/Resolved → keep InProgress
+            // BA chốt #6: Resolved ≠ Completed — intentional
+            if (mentorship.MentorshipStatus == MentorshipStatus.InDispute
+                || mentorship.MentorshipStatus == MentorshipStatus.Completed)
+            {
+                mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+            }
+        }
+        mentorship.UpdatedAt = DateTime.UtcNow;
+    }
+
+    // ================================================================
+    // HELPER: Recalculate Payout Eligibility (SVC-8)
+    // ================================================================
+
+    private static void RecalculatePayoutEligibility(StartupAdvisorMentorship mentorship)
+    {
+        var activeSessions = mentorship.Sessions
+            .Where(s => s.SessionStatus != SessionStatusValues.Cancelled
+                      && s.SessionStatus != SessionStatusValues.ProposedByStartup
+                      && s.SessionStatus != SessionStatusValues.ProposedByAdvisor)
+            .ToList();
+
+        var allSessionsCompleted = activeSessions.Any()
+            && activeSessions.All(s => s.SessionStatus == SessionStatusValues.Completed);
+
+        var allStartupConfirmed = activeSessions.All(s => s.StartupConfirmedConductedAt != null);
+
+        var currentReports = mentorship.Reports
+            .Where(r => r.SupersededByReportID == null);
+        var allReportsPassed = currentReports.Any()
+            && currentReports.All(r => r.ReportReviewStatus == ReportReviewStatus.Passed);
+
+        var noDispute = !activeSessions.Any(s => s.SessionStatus == SessionStatusValues.InDispute);
+
+        mentorship.IsPayoutEligible =
+            allSessionsCompleted && allStartupConfirmed && allReportsPassed && noDispute;
+    }
+
+    // ================================================================
+    // HELPER: Map Session Oversight Result
+    // ================================================================
+
+    private static SessionOversightResultDto MapSessionOversightResult(MentorshipSession session) => new()
+    {
+        SessionID = session.SessionID,
+        SessionStatus = session.SessionStatus ?? string.Empty,
+        DisputeReason = session.DisputeReason,
+        ResolutionNote = session.ResolutionNote,
+        MentorshipID = session.MentorshipID,
+        MentorshipStatus = session.Mentorship.MentorshipStatus.ToString(),
+        IsPayoutEligible = session.Mentorship.IsPayoutEligible,
+        MarkedByStaffID = session.MarkedByStaffID,
+        MarkedAt = session.MarkedAt
+    };
 }
 
 

@@ -23,6 +23,15 @@ public static class SessionStatusValues
     /// <summary>Session đã bị hủy.</summary>
     public const string Cancelled = "Cancelled";
 
+    /// <summary>Startup đã xác nhận buổi tư vấn diễn ra. Prerequisite cho staff mark completed.</summary>
+    public const string Conducted = "Conducted";
+
+    /// <summary>Staff đánh dấu session đang tranh chấp.</summary>
+    public const string InDispute = "InDispute";
+
+    /// <summary>Staff đã giải quyết tranh chấp (không restore completed).</summary>
+    public const string Resolved = "Resolved";
+
     /// <summary>Tập hợp tất cả giá trị hợp lệ. Dùng để validate input từ advisor.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
@@ -31,6 +40,9 @@ public static class SessionStatusValues
         Scheduled,
         InProgress,
         Completed,
-        Cancelled
+        Cancelled,
+        Conducted,
+        InDispute,
+        Resolved
     };
 }

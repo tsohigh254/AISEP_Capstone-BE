@@ -22,6 +22,7 @@ public interface IMentorshipService
 
     // Reports
     Task<ApiResponse<ReportDto>> CreateReportAsync(int userId, int mentorshipId, CreateReportRequest request);
+    Task<ApiResponse<ReportDto>> UpdateReportAsync(int userId, int mentorshipId, int reportId, UpdateReportRequest request);
     Task<ApiResponse<ReportDto>> GetReportAsync(int userId, string userType, int reportId);
 
     // Feedback
@@ -31,4 +32,23 @@ public interface IMentorshipService
     Task<ApiResponse<List<SessionDto>>> GetMentorshipSessionsAsync(int userId, string userType, int mentorshipId);
     Task<ApiResponse<PagedResponse<SessionListItemDto>>> GetMySessionsAsync(int userId, string userType, string? status, int page, int pageSize);
     Task<ApiResponse<List<FeedbackDto>>> GetMentorshipFeedbacksAsync(int userId, string userType, int mentorshipId);
+
+    // Staff oversight — Report review
+    Task<ApiResponse<PagedResponse<ReportOversightDto>>> GetReportsForOversightAsync(
+        string? reviewStatus, int? advisorId, int? startupId,
+        DateTime? from, DateTime? to, int page, int pageSize);
+    Task<ApiResponse<ReportReviewResultDto>> ReviewReportAsync(
+        int staffUserId, int reportId, ReviewReportRequest request);
+
+    // Startup — Confirm conducted
+    Task<ApiResponse<SessionDto>> ConfirmConductedAsync(
+        int userId, int mentorshipId, int sessionId);
+
+    // Staff oversight — Session actions
+    Task<ApiResponse<SessionOversightResultDto>> MarkSessionCompletedAsync(
+        int staffUserId, int mentorshipId, int sessionId, string? note);
+    Task<ApiResponse<SessionOversightResultDto>> MarkSessionDisputeAsync(
+        int staffUserId, int mentorshipId, int sessionId, string reason);
+    Task<ApiResponse<SessionOversightResultDto>> MarkSessionResolvedAsync(
+        int staffUserId, int mentorshipId, int sessionId, ResolveDisputeRequest request);
 }

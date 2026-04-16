@@ -277,7 +277,7 @@ public class InvestorsController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         // minScore is accepted but ignored until AI module is implemented
-        var result = await _investorService.SearchStartupsAsync(q, industryId, stage, location, sortBy, page, pageSize);
+        var result = await _investorService.SearchStartupsAsync(q, industryId, stage, location, sortBy, page, pageSize, GetCurrentUserId());
         return result.ToActionResult();
     }
 

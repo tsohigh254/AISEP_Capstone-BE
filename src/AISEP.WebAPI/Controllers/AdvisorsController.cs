@@ -204,4 +204,48 @@ public class AdvisorsController : ControllerBase
         var result = await _advisorService.GetAdvisorDetailAsync(id);
         return result.ToActionResult();
     }
+
+    // ================================================================
+    // FEEDBACK MANAGEMENT (advisor-facing)
+    // ================================================================
+
+    [HttpGet("me/feedbacks")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<AdvisorFeedbackListItemDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyFeedbacks(
+        [FromQuery] int? rating,
+        [FromQuery] string? sort,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.GetMyFeedbacksAsync(userId, rating, sort, page, pageSize);
+        return result.ToActionResult();
+    }
+
+    [HttpGet("me/feedbacks/summary")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorFeedbackSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyFeedbackSummary(CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.GetMyFeedbackSummaryAsync(userId);
+        return result.ToActionResult();
+    }
+
+    [HttpPost("feedbacks/{feedbackId:int}/response")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<FeedbackResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<FeedbackResponseDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<FeedbackResponseDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RespondToFeedback(
+        int feedbackId,
+        [FromBody] RespondToFeedbackRequest request,
+        CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _advisorService.RespondToFeedbackAsync(userId, feedbackId, request);
+        return result.ToActionResult();
+    }
 }

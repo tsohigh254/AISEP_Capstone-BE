@@ -688,9 +688,10 @@ public class StartupService : IStartupService
         return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType)
+    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType, int callerUserId = 0)
     {
         var isStaff = userType == "Staff" || userType == "Admin";
+        var isInvestor = userType == "Investor";
 
         var query = _context.Startups.AsNoTracking()
             .Where(s => s.ProfileStatus == ProfileStatus.Approved
@@ -705,15 +706,15 @@ public class StartupService : IStartupService
             || (s.Industry != null && s.Industry.IndustryName.Trim().ToLower().Contains(key)));
         }
 
-
         // Filter by stage
         if (startupQuery.Stage.HasValue)
         {
             query = query.Where(s => s.Stage == startupQuery.Stage.Value);
         }
 
+        var totalItems = await query.CountAsync();
 
-        var items = query
+        var rawItems = await query
             .OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
             .Select(s => new StartupListItemDto
             {
@@ -724,16 +725,69 @@ public class StartupService : IStartupService
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt
-            }).Paging(startupQuery.Page, startupQuery.PageSize);
+            })
+            .Skip((startupQuery.Page <= 0 ? 0 : startupQuery.Page - 1) * (startupQuery.PageSize <= 0 ? 20 : startupQuery.PageSize))
+            .Take(startupQuery.PageSize <= 0 ? 20 : startupQuery.PageSize)
+            .ToListAsync();
+
+        // Enrich with connection state when caller is an Investor
+        if (isInvestor && callerUserId > 0 && rawItems.Count > 0)
+        {
+            var investorId = await _context.Investors
+                .AsNoTracking()
+                .Where(i => i.UserID == callerUserId)
+                .Select(i => (int?)i.InvestorID)
+                .FirstOrDefaultAsync();
+
+            if (investorId.HasValue)
+            {
+                var startupIds = rawItems.Select(s => s.StartupID).ToList();
+
+                // Fetch all active connections between this investor and the visible startups
+                var conns = await _context.StartupInvestorConnections
+                    .AsNoTracking()
+                    .Where(c => c.InvestorID == investorId.Value
+                             && startupIds.Contains(c.StartupID)
+                             && (c.ConnectionStatus == ConnectionStatus.Requested
+                              || c.ConnectionStatus == ConnectionStatus.Accepted
+                              || c.ConnectionStatus == ConnectionStatus.InDiscussion))
+                    .Select(c => new { c.StartupID, c.ConnectionID, c.ConnectionStatus, c.InitiatedBy })
+                    .ToListAsync();
+
+                var connByStartup = conns.ToDictionary(c => c.StartupID);
+
+                foreach (var item in rawItems)
+                {
+                    if (connByStartup.TryGetValue(item.StartupID, out var conn))
+                    {
+                        item.ConnectionStatus = conn.ConnectionStatus switch
+                        {
+                            ConnectionStatus.Requested    => "REQUESTED",
+                            ConnectionStatus.Accepted     => "ACCEPTED",
+                            ConnectionStatus.InDiscussion => "IN_DISCUSSION",
+                            _                             => "NONE"
+                        };
+                        item.ConnectionId       = conn.ConnectionID;
+                        item.CanRequestConnection = false;
+                        item.InitiatedByRole    = conn.InitiatedBy == callerUserId ? "INVESTOR" : "STARTUP";
+                    }
+                    else
+                    {
+                        item.ConnectionStatus     = "NONE";
+                        item.CanRequestConnection = true;
+                    }
+                }
+            }
+        }
 
         var result = new PagedResponse<StartupListItemDto>
         {
-            Items = await items.ToListAsync(),
+            Items = rawItems,
             Paging = new PagingInfo
             {
                 Page = startupQuery.Page,
                 PageSize = startupQuery.PageSize,
-                TotalItems = await query.CountAsync(),
+                TotalItems = totalItems,
             }
         };
 

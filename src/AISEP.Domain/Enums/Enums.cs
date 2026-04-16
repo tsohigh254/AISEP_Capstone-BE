@@ -359,3 +359,14 @@ public enum IncidentStatus : short
     Resolved = 2,
     RolledBack = 3
 }
+
+// ───────────────────── Report Review (Staff Oversight) ──────────────
+
+public enum ReportReviewStatus : short
+{
+    PendingReview = 0,
+    Passed        = 1,
+    Failed        = 2,
+    NeedsMoreInfo = 3,
+    Draft         = 4   // Advisor saved locally, not yet submitted for review
+}

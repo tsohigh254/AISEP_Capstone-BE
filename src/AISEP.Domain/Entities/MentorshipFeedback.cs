@@ -10,6 +10,8 @@ public class MentorshipFeedback
     public string? Comment { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public bool IsPublic { get; set; }
+    public string? AdvisorResponseText { get; set; }
+    public DateTime? AdvisorRespondedAt { get; set; }
 
     // Navigation properties
     public StartupAdvisorMentorship Mentorship { get; set; } = null!;

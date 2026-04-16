@@ -26,6 +26,7 @@ public class StartupAdvisorMentorship
     public string? ObligationSummary { get; set; }
     public bool CompletionConfirmedByStartup { get; set; }
     public bool CompletionConfirmedByAdvisor { get; set; }
+    public bool IsPayoutEligible { get; set; }
 
     // ===== PAYMENT FIELDS =====
     public decimal SessionAmount { get; set; }           // Giá gốc của mentorship

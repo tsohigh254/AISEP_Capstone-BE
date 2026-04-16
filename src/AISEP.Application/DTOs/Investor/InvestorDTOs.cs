@@ -329,6 +329,14 @@ public class StartupSearchItemDto
     public DateTime? CreatedAt { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
+    /// <summary>NONE | REQUESTED | ACCEPTED | IN_DISCUSSION. Null when caller is not investor.</summary>
+    public string? ConnectionStatus { get; set; }
+    /// <summary>ID of the active connection record. Null when no active connection.</summary>
+    public int? ConnectionId { get; set; }
+    /// <summary>Whether the current investor can send a new connection request.</summary>
+    public bool CanRequestConnection { get; set; }
+    /// <summary>"INVESTOR" if investor initiated, "STARTUP" if startup initiated.</summary>
+    public string? InitiatedByRole { get; set; }
 }
 
 // ========== INDUSTRY FOCUS DTOs ==========

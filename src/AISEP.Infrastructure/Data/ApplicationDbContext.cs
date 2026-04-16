@@ -231,6 +231,10 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<StartupAdvisorMentorship>().HasKey(sam => sam.MentorshipID);
         modelBuilder.Entity<MentorshipSession>().HasKey(ms => ms.SessionID);
         modelBuilder.Entity<MentorshipReport>().HasKey(mr => mr.ReportID);
+        modelBuilder.Entity<MentorshipReport>()
+            .Property(e => e.ReportReviewStatus)
+            .HasConversion<short>()
+            .HasDefaultValue(AISEP.Domain.Enums.ReportReviewStatus.PendingReview);
         modelBuilder.Entity<MentorshipFeedback>().HasKey(mf => mf.FeedbackID);
         modelBuilder.Entity<StartupInvestorConnection>().HasKey(sic => sic.ConnectionID);
         modelBuilder.Entity<InformationRequest>().HasKey(ir => ir.RequestID);

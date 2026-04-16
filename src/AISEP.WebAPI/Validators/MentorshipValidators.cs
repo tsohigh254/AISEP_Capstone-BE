@@ -121,6 +121,11 @@ public class CreateReportRequestValidator : AbstractValidator<CreateReportReques
 {
     public CreateReportRequestValidator()
     {
+        RuleFor(x => x.SessionId)
+            .NotNull().WithMessage("SessionID is required.")
+            .GreaterThan(0).WithMessage("SessionID must be a positive integer.")
+            .When(x => x.SessionId.HasValue);
+
         RuleFor(x => x.ReportSummary)
             .NotEmpty().WithMessage("Report summary is required.")
             .MaximumLength(2000).WithMessage("Report summary must not exceed 2000 characters.");
@@ -146,5 +151,40 @@ public class CreateFeedbackRequestValidator : AbstractValidator<CreateFeedbackRe
         RuleFor(x => x.Comment)
             .MaximumLength(2000).WithMessage("Comment must not exceed 2000 characters.")
             .When(x => x.Comment != null);
+    }
+}
+
+public class ReviewReportRequestValidator : AbstractValidator<ReviewReportRequest>
+{
+    public ReviewReportRequestValidator()
+    {
+        RuleFor(x => x.ReviewStatus)
+            .NotEmpty().WithMessage("Review status is required.")
+            .Must(s => s is "Passed" or "Failed" or "NeedsMoreInfo")
+            .WithMessage("Review status must be Passed, Failed, or NeedsMoreInfo.");
+
+        RuleFor(x => x.Note)
+            .MaximumLength(2000).WithMessage("Note must not exceed 2000 characters.")
+            .When(x => x.Note != null);
+    }
+}
+
+public class StaffMarkDisputeRequestValidator : AbstractValidator<StaffMarkDisputeRequest>
+{
+    public StaffMarkDisputeRequestValidator()
+    {
+        RuleFor(x => x.Reason)
+            .NotEmpty().WithMessage("Dispute reason is required.")
+            .MaximumLength(2000).WithMessage("Reason must not exceed 2000 characters.");
+    }
+}
+
+public class ResolveDisputeRequestValidator : AbstractValidator<ResolveDisputeRequest>
+{
+    public ResolveDisputeRequestValidator()
+    {
+        RuleFor(x => x.Resolution)
+            .NotEmpty().WithMessage("Resolution is required.")
+            .MaximumLength(2000).WithMessage("Resolution must not exceed 2000 characters.");
     }
 }

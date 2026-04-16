@@ -418,7 +418,7 @@ public class InvestorService : IInvestorService
 
     public async Task<ApiResponse<PagedResponse<StartupSearchItemDto>>> SearchStartupsAsync(
         string? q, int? industryId, string? stage, string? location,
-        string? sortBy, int page, int pageSize)
+        string? sortBy, int page, int pageSize, int callerUserId = 0)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
@@ -458,7 +458,7 @@ public class InvestorService : IInvestorService
         {
             "createdat" => query.OrderByDescending(s => s.CreatedAt),
             "name" => query.OrderBy(s => s.CompanyName),
-            _ => query.OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt) // default: updatedAt desc
+            _ => query.OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
         };
 
         var totalItems = await query.CountAsync();
@@ -483,6 +483,55 @@ public class InvestorService : IInvestorService
                 CurrentFundingRaised = s.CurrentFundingRaised
             })
             .ToListAsync();
+
+        // Enrich with connection state when caller is an investor
+        if (callerUserId > 0 && items.Count > 0)
+        {
+            var investorId = await _db.Investors
+                .AsNoTracking()
+                .Where(i => i.UserID == callerUserId)
+                .Select(i => (int?)i.InvestorID)
+                .FirstOrDefaultAsync();
+
+            if (investorId.HasValue)
+            {
+                var startupIds = items.Select(s => s.StartupID).ToList();
+
+                var conns = await _db.StartupInvestorConnections
+                    .AsNoTracking()
+                    .Where(c => c.InvestorID == investorId.Value
+                             && startupIds.Contains(c.StartupID)
+                             && (c.ConnectionStatus == ConnectionStatus.Requested
+                              || c.ConnectionStatus == ConnectionStatus.Accepted
+                              || c.ConnectionStatus == ConnectionStatus.InDiscussion))
+                    .Select(c => new { c.StartupID, c.ConnectionID, c.ConnectionStatus, c.InitiatedBy })
+                    .ToListAsync();
+
+                var connByStartup = conns.ToDictionary(c => c.StartupID);
+
+                foreach (var item in items)
+                {
+                    if (connByStartup.TryGetValue(item.StartupID, out var conn))
+                    {
+                        item.ConnectionStatus = conn.ConnectionStatus switch
+                        {
+                            ConnectionStatus.Requested    => "REQUESTED",
+                            ConnectionStatus.Accepted     => "ACCEPTED",
+                            ConnectionStatus.InDiscussion => "IN_DISCUSSION",
+                            _                             => "NONE"
+                        };
+                        item.ConnectionId        = conn.ConnectionID;
+                        item.CanRequestConnection = false;
+                        item.InitiatedByRole     = conn.InitiatedBy == callerUserId ? "INVESTOR" : "STARTUP";
+                    }
+                    else
+                    {
+                        item.ConnectionStatus     = "NONE";
+                        item.CanRequestConnection = true;
+                    }
+                }
+            }
+        }
 
         return ApiResponse<PagedResponse<StartupSearchItemDto>>.SuccessResponse(new PagedResponse<StartupSearchItemDto>
         {

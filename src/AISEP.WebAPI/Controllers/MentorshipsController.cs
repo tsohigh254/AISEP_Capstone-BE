@@ -275,15 +275,37 @@ public class MentorshipsController : ControllerBase
     /// </summary>
     [HttpPost("{id:int}/reports")]
     [Authorize(Policy = "AdvisorOnly")]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CreateReport(int id, [FromBody] CreateReportRequest request)
+    public async Task<IActionResult> CreateReport(int id, [FromForm] CreateReportRequest request)
     {
         var userId = GetCurrentUserId();
         var result = await _mentorshipService.CreateReportAsync(userId, id, request);
         if (!result.Success) return result.ToErrorResult();
         return result.ToCreatedEnvelope();
+    }
+
+    // ================================================================
+    // 8b) PATCH /api/mentorships/{id}/reports/{reportId} — Update draft (Advisor)
+    // ================================================================
+
+    /// <summary>
+    /// Update a draft report. Only allowed when reviewStatus = "Draft".
+    /// Set isDraft = false in the body to submit officially for staff review.
+    /// </summary>
+    [HttpPatch("{id:int}/reports/{reportId:int}")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<ReportDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateReport(int id, int reportId, [FromForm] UpdateReportRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.UpdateReportAsync(userId, id, reportId, request);
+        return result.ToActionResult();
     }
 
     // ================================================================
@@ -348,5 +370,123 @@ public class MentorshipsController : ControllerBase
         var result = await _mentorshipService.GetMentorshipFeedbacksAsync(
             GetCurrentUserId(), GetCurrentUserType(), id);
         return result.ToEnvelope();
+    }
+
+    // ================================================================
+    // OVERSIGHT — GET /api/mentorships/oversight/reports (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Get paginated reports for staff oversight/review.
+    /// Default filter: PendingReview. Pass reviewStatus=all to see all.
+    /// </summary>
+    [HttpGet("oversight/reports")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<ReportOversightDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetReportsForOversight(
+        [FromQuery] string? reviewStatus,
+        [FromQuery] int? advisorId,
+        [FromQuery] int? startupId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var result = await _mentorshipService.GetReportsForOversightAsync(
+            reviewStatus, advisorId, startupId, from, to, page, pageSize);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — PUT /api/mentorships/reports/{reportId}/review (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Review a mentorship report: Passed, Failed, or NeedsMoreInfo.
+    /// </summary>
+    [HttpPut("reports/{reportId:int}/review")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<ReportReviewResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReviewReport(int reportId, [FromBody] ReviewReportRequest request)
+    {
+        var staffUserId = GetCurrentUserId();
+        var result = await _mentorshipService.ReviewReportAsync(staffUserId, reportId, request);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — POST /api/mentorships/{id}/sessions/{sessionId}/confirm-conducted (Startup)
+    // ================================================================
+
+    /// <summary>
+    /// Startup confirms a session was actually conducted.
+    /// Session moves from Scheduled/InProgress → Conducted.
+    /// </summary>
+    [HttpPost("{id:int}/sessions/{sessionId:int}/confirm-conducted")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<SessionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ConfirmConducted(int id, int sessionId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.ConfirmConductedAsync(userId, id, sessionId);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — PUT /api/mentorships/{id}/sessions/{sessionId}/mark-completed (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Staff marks a session as completed after verifying reports are all Passed.
+    /// Triggers RecalculateMentorshipStatus + RecalculatePayoutEligibility.
+    /// </summary>
+    [HttpPut("{id:int}/sessions/{sessionId:int}/mark-completed")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<SessionOversightResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> MarkSessionCompleted(int id, int sessionId,
+        [FromBody] StaffSessionNoteRequest? request)
+    {
+        var staffUserId = GetCurrentUserId();
+        var result = await _mentorshipService.MarkSessionCompletedAsync(
+            staffUserId, id, sessionId, request?.Note);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — PUT /api/mentorships/{id}/sessions/{sessionId}/mark-dispute (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Staff marks a session as in dispute. Can be opened from multiple statuses.
+    /// </summary>
+    [HttpPut("{id:int}/sessions/{sessionId:int}/mark-dispute")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<SessionOversightResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> MarkSessionDispute(int id, int sessionId,
+        [FromBody] StaffMarkDisputeRequest request)
+    {
+        var staffUserId = GetCurrentUserId();
+        var result = await _mentorshipService.MarkSessionDisputeAsync(
+            staffUserId, id, sessionId, request.Reason);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — PUT /api/mentorships/{id}/sessions/{sessionId}/mark-resolved (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Staff resolves a dispute. If restoreCompleted=true → Completed, else → Resolved.
+    /// </summary>
+    [HttpPut("{id:int}/sessions/{sessionId:int}/mark-resolved")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<SessionOversightResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> MarkSessionResolved(int id, int sessionId,
+        [FromBody] ResolveDisputeRequest request)
+    {
+        var staffUserId = GetCurrentUserId();
+        var result = await _mentorshipService.MarkSessionResolvedAsync(
+            staffUserId, id, sessionId, request);
+        return result.ToActionResult();
     }
 }

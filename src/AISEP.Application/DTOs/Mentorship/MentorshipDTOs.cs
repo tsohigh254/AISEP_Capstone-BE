@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 namespace AISEP.Application.DTOs.Mentorship;
 
 // ============================= REQUEST DTOs =============================
@@ -46,6 +47,8 @@ public class CreateSessionRequest
     public int DurationMinutes { get; set; }
     public string? SessionFormat { get; set; }
     public string? MeetingUrl { get; set; }
+    /// <summary>Lời nhắn ghi chú của advisor khi đề xuất / lên lịch session.</summary>
+    public string? Note { get; set; }
 }
 
 /// <summary>
@@ -78,6 +81,24 @@ public class CreateReportRequest
     public string ReportSummary { get; set; } = null!;
     public string? DetailedFindings { get; set; }
     public string? Recommendations { get; set; }
+    /// <summary>Optional file attachment (PDF/DOCX/PNG, max 10 MB)</summary>
+    public IFormFile? AttachmentFile { get; set; }
+    /// <summary>If true, saves as Draft (reviewStatus = "Draft") and does not enter staff review queue.</summary>
+    public bool IsDraft { get; set; } = false;
+}
+
+/// <summary>
+/// Update a draft report. Only allowed when reviewStatus = "Draft".
+/// Set IsDraft = false to submit officially (moves to PendingReview).
+/// </summary>
+public class UpdateReportRequest
+{
+    public string? ReportSummary { get; set; }
+    public string? DetailedFindings { get; set; }
+    public string? Recommendations { get; set; }
+    public IFormFile? AttachmentFile { get; set; }
+    /// <summary>Set to false to submit the draft officially for staff review.</summary>
+    public bool IsDraft { get; set; } = true;
 }
 
 /// <summary>
@@ -119,12 +140,16 @@ public class MentorshipListItemDto
     public int MentorshipID { get; set; }
     public int StartupID { get; set; }
     public string StartupName { get; set; } = string.Empty;
+    /// <summary>URL logo của startup.</summary>
+    public string? StartupLogoUrl { get; set; }
     /// <summary>Tên ngành của startup (null nếu chưa set).</summary>
     public string? StartupIndustry { get; set; }
     /// <summary>Giai đoạn startup: Idea | PreSeed | Seed | SeriesA | SeriesB | SeriesC | Growth (null nếu chưa set).</summary>
     public string? StartupStage { get; set; }
     public int AdvisorID { get; set; }
     public string AdvisorName { get; set; } = string.Empty;
+    public string? AdvisorTitle { get; set; }
+    public string? AdvisorPhotoURL { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? ChallengeDescription { get; set; }
     public string? PreferredFormat { get; set; }
@@ -133,6 +158,8 @@ public class MentorshipListItemDto
     public bool HasReport { get; set; }
     public int ReportCount { get; set; }
     public DateTime? LatestReportSubmittedAt { get; set; }
+    /// <summary>true khi có ít nhất 1 session đang chờ startup chọn slot (ProposedByAdvisor).</summary>
+    public bool HasAdvisorProposedSlot { get; set; }
 }
 
 /// <summary>Detail DTO with sessions, reports, feedbacks.</summary>
@@ -142,7 +169,12 @@ public class MentorshipDetailDto
     public int StartupID { get; set; }
     public int AdvisorID { get; set; }
     public string StartupName { get; set; } = string.Empty;
+    public string? StartupLogoUrl { get; set; }
+    public string? StartupIndustry { get; set; }
+    public string? StartupStage { get; set; }
     public string AdvisorName { get; set; } = string.Empty;
+    public string? AdvisorTitle { get; set; }
+    public string? AdvisorPhotoURL { get; set; }
     public string MentorshipStatus { get; set; } = string.Empty;
     public string? ChallengeDescription { get; set; }
     public string? SpecificQuestions { get; set; }
@@ -186,8 +218,22 @@ public class SessionDto
     public string? KeyInsights { get; set; }
     public string? ActionItems { get; set; }
     public string? NextSteps { get; set; }
+    public string? Note { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public DateTime? StartupConfirmedConductedAt { get; set; }
+    public string? DisputeReason { get; set; }
+    public string? ResolutionNote { get; set; }
+    public int? MarkedByStaffID { get; set; }
+    public DateTime? MarkedAt { get; set; }
+}
+
+public class SessionAdvisorDto
+{
+    public int AdvisorID { get; set; }
+    public string? FullName { get; set; }
+    public string? Title { get; set; }
+    public string? ProfilePhotoURL { get; set; }
 }
 
 public class SessionListItemDto : SessionDto
@@ -195,6 +241,7 @@ public class SessionListItemDto : SessionDto
     public int AdvisorID { get; set; }
     public string? AdvisorName { get; set; }
     public string? AdvisorProfilePhotoURL { get; set; }
+    public SessionAdvisorDto? Advisor { get; set; }
     public int StartupID { get; set; }
     public string? StartupName { get; set; }
     /// <summary>Mô tả thách thức của mentorship cha — dùng làm displayTopic khi session chưa có topicsDiscussed.</summary>
@@ -218,6 +265,10 @@ public class ReportDto
     public string? AttachmentsURL { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string ReviewStatus { get; set; } = string.Empty;
+    public string? StaffReviewNote { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>Feedback DTO.</summary>
@@ -244,4 +295,84 @@ public class TimelineEventDto
     public string Description { get; set; } = string.Empty;
     public string Actor { get; set; } = string.Empty;
     public DateTime HappenedAt { get; set; }
+}
+
+// ============================= STAFF OVERSIGHT =============================
+
+/// <summary>Staff review report request.</summary>
+public class ReviewReportRequest
+{
+    public string ReviewStatus { get; set; } = null!;
+    public string? Note { get; set; }
+}
+
+/// <summary>Resolve dispute request (session-level).</summary>
+public class ResolveDisputeRequest
+{
+    public string Resolution { get; set; } = null!;
+    public bool RestoreCompleted { get; set; }
+}
+
+/// <summary>Staff mark session completed request.</summary>
+public class StaffSessionNoteRequest
+{
+    public string? Note { get; set; }
+}
+
+/// <summary>Staff mark session dispute request.</summary>
+public class StaffMarkDisputeRequest
+{
+    public string Reason { get; set; } = null!;
+}
+
+/// <summary>Report item in staff oversight queue.</summary>
+public class ReportOversightDto
+{
+    public int ReportID { get; set; }
+    public int MentorshipID { get; set; }
+    public int? SessionID { get; set; }
+    public int? AdvisorID { get; set; }
+    public string? AdvisorName { get; set; }
+    public int? StartupID { get; set; }
+    public string? StartupName { get; set; }
+    public string? ReportSummary { get; set; }
+    public string? DetailedFindings { get; set; }
+    public string? Recommendations { get; set; }
+    public string? AttachmentsURL { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public string ReviewStatus { get; set; } = string.Empty;
+    public int? ReviewedByStaffID { get; set; }
+    public string? StaffReviewNote { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public int? SupersededByReportID { get; set; }
+    public bool IsLatestForSession { get; set; }
+    public string? SessionStatus { get; set; }
+    public DateTime? StartupConfirmedConductedAt { get; set; }
+    public string? MentorshipStatus { get; set; }
+    public string? ChallengeDescription { get; set; }
+}
+
+/// <summary>Result after staff reviews report.</summary>
+public class ReportReviewResultDto
+{
+    public int ReportID { get; set; }
+    public int MentorshipID { get; set; }
+    public string ReviewStatus { get; set; } = string.Empty;
+    public string? StaffReviewNote { get; set; }
+    public int? ReviewedByStaffID { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+}
+
+/// <summary>Result after staff marks session completed/dispute/resolved.</summary>
+public class SessionOversightResultDto
+{
+    public int SessionID { get; set; }
+    public string SessionStatus { get; set; } = string.Empty;
+    public string? DisputeReason { get; set; }
+    public string? ResolutionNote { get; set; }
+    public int MentorshipID { get; set; }
+    public string MentorshipStatus { get; set; } = string.Empty;
+    public bool IsPayoutEligible { get; set; }
+    public int? MarkedByStaffID { get; set; }
+    public DateTime? MarkedAt { get; set; }
 }
