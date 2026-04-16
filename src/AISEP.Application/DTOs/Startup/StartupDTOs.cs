@@ -236,6 +236,8 @@ public class StartupListItemDto
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    // Indicates whether the requesting user (investor) has an Accepted connection with this startup
+    public bool IsConnected { get; set; }
     public string? StartupVerificationType { get; set; }
 }
 

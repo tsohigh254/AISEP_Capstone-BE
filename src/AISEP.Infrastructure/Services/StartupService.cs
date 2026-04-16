@@ -691,9 +691,19 @@ public class StartupService : IStartupService
         return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType)
+    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, int requestingUserId, string userType)
     {
         var isStaff = userType == "Staff" || userType == "Admin";
+
+        // If the requesting user is an investor, resolve their InvestorID so we can compute connection status
+        int investorId = -1;
+        if (userType == "Investor")
+        {
+            var investor = await _context.Investors
+                .AsNoTracking()
+                .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
+            if (investor != null) investorId = investor.InvestorID;
+        }
 
         var query = _context.Startups.AsNoTracking()
             .Where(s => s.ProfileStatus == ProfileStatus.Approved
@@ -726,7 +736,10 @@ public class StartupService : IStartupService
                 Stage = s.Stage != null ? s.Stage.ToString() : null,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
-                UpdatedAt = s.UpdatedAt
+                UpdatedAt = s.UpdatedAt,
+                // compute connection status for this startup for the requesting investor (if any)
+                IsConnected = investorId > 0 && _context.StartupInvestorConnections
+                    .Any(c => c.StartupID == s.StartupID && c.InvestorID == investorId && c.ConnectionStatus == ConnectionStatus.Accepted)
             }).Paging(startupQuery.Page, startupQuery.PageSize);
 
         var result = new PagedResponse<StartupListItemDto>
