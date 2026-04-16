@@ -9,7 +9,9 @@ using AISEP.Infrastructure.Jobs;
 using Hangfire;
 using Hangfire.PostgreSql;
 using AISEP.WebAPI.Hubs;
+using AISEP.WebAPI.Infrastructure.SignalR;
 using AISEP.WebAPI.Middlewares;
+using Microsoft.AspNetCore.SignalR;
 using CloudinaryDotNet;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -116,6 +118,9 @@ builder.Services.AddScoped<IMentorshipService, MentorshipService>();
 builder.Services.AddScoped<IConnectionsService, ConnectionsService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<AISEP.Application.Interfaces.INotificationDeliveryService, AISEP.WebAPI.Services.NotificationDeliveryService>();
+
+
 builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
@@ -185,6 +190,7 @@ var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
 
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
 // Hangfire Background Jobs setup
 builder.Services.AddHangfire(configuration => configuration
@@ -360,12 +366,23 @@ var app = builder.Build();
     app.UseAuthorization();
     app.MapControllers();
     app.MapHub<ChatHub>("/hubs/chat");
+    app.MapHub<NotificationHub>("/hubs/notifications");
 
-    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-    recurringJobManager.AddOrUpdate<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>(
-        "ResetExpiredSubscriptions",
-        job => job.ProcessExpiredSubscriptions(),
-        Cron.Daily);
+    // [TEMPORARY FIX] Ensure missing mentorship columns exist
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        try {
+            await context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE ""StartupAdvisorMentorships"" ADD COLUMN IF NOT EXISTS ""CancelledAt"" timestamp with time zone NULL;
+                ALTER TABLE ""StartupAdvisorMentorships"" ADD COLUMN IF NOT EXISTS ""CancelledBy"" text NULL;
+                ALTER TABLE ""StartupAdvisorMentorships"" ADD COLUMN IF NOT EXISTS ""CancellationReason"" text NULL;
+            ");
+            Log.Information("Applied manual database fix for mentorship columns");
+        } catch (Exception ex) {
+            Log.Warning("Manual database fix skipped or failed: {Message}", ex.Message);
+        }
+    }
 
     app.Run();
 }

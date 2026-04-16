@@ -332,6 +332,17 @@ public enum TransactionStatus : short
     Completed = 1,    // Hoàn thành
     Failed = 2        // Thất bại
 }
+// ───────────────────────── Document Visibility ───────────────
+// [Flags] — có thể combine nhiều role. OwnerOnly = 0 nghĩa là chỉ owner + Staff/Admin xem được.
+[Flags]
+public enum DocumentVisibility
+{
+    OwnerOnly = 0,
+    Investor  = 1 << 0, // 1
+    Advisor   = 1 << 1, // 2
+    Public    = 1 << 2  // 4 — mọi user đã authenticated
+}
+
 // ───────────────────────── Document Review ───────────────────
 
 public enum DocumentReviewStatus : short

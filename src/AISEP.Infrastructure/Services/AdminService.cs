@@ -7,6 +7,7 @@ using AISEP.Domain.Entities;
 using AISEP.Domain.Enums;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace AISEP.Infrastructure.Services;
@@ -16,15 +17,18 @@ public class AdminService : IAdminService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<AdminService> _logger;
     private readonly IAuditService _audit;
+    private readonly IHostEnvironment _env;
 
     public AdminService(
         ApplicationDbContext context,
         ILogger<AdminService> logger,
-        IAuditService audit)
+        IAuditService audit,
+        IHostEnvironment env)
     {
         _context = context;
         _logger = logger;
         _audit = audit;
+        _env = env;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -256,6 +260,88 @@ public class AdminService : IAdminService
         };
 
         return ApiResponse<SystemHealthDto>.SuccessResponse(dto);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Server Logs (Serilog files from ./logs)
+    // ═══════════════════════════════════════════════════════════════
+
+    private string GetLogDirectory()
+    {
+        return Path.Combine(_env.ContentRootPath, "logs");
+    }
+
+    public Task<ApiResponse<List<LogFileDto>>> ListLogFilesAsync()
+    {
+        var dir = GetLogDirectory();
+        if (!Directory.Exists(dir))
+        {
+            return Task.FromResult(ApiResponse<List<LogFileDto>>.SuccessResponse(new List<LogFileDto>()));
+        }
+
+        var files = new DirectoryInfo(dir)
+            .EnumerateFiles("*.log")
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .Select(f => new LogFileDto
+            {
+                FileName = f.Name,
+                SizeBytes = f.Length,
+                LastModifiedUtc = f.LastWriteTimeUtc
+            })
+            .ToList();
+
+        return Task.FromResult(ApiResponse<List<LogFileDto>>.SuccessResponse(files));
+    }
+
+    public async Task<ApiResponse<LogContentDto>> ReadLogFileAsync(string fileName, int tailLines)
+    {
+        // Chặn path traversal: chỉ cho phép tên file, không có path separator
+        if (string.IsNullOrWhiteSpace(fileName)
+            || fileName.Contains('/') || fileName.Contains('\\')
+            || fileName.Contains("..")
+            || !fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResponse<LogContentDto>.ErrorResponse("LOG_FILE_INVALID_NAME", "Invalid log file name.");
+        }
+
+        var dir = GetLogDirectory();
+        var fullPath = Path.GetFullPath(Path.Combine(dir, fileName));
+        var dirFullPath = Path.GetFullPath(dir);
+        if (!fullPath.StartsWith(dirFullPath, StringComparison.Ordinal))
+        {
+            return ApiResponse<LogContentDto>.ErrorResponse("LOG_FILE_INVALID_NAME", "Invalid log file name.");
+        }
+        if (!File.Exists(fullPath))
+        {
+            return ApiResponse<LogContentDto>.ErrorResponse("LOG_FILE_NOT_FOUND", "Log file not found.");
+        }
+
+        var take = Math.Clamp(tailLines <= 0 ? 500 : tailLines, 1, 5000);
+
+        // Đọc file đang được Serilog ghi: phải dùng FileShare.ReadWrite
+        var buffer = new LinkedList<string>();
+        using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = new StreamReader(stream))
+        {
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                buffer.AddLast(line);
+                if (buffer.Count > take) buffer.RemoveFirst();
+            }
+        }
+
+        var info = new FileInfo(fullPath);
+        var dto = new LogContentDto
+        {
+            FileName = info.Name,
+            SizeBytes = info.Length,
+            LastModifiedUtc = info.LastWriteTimeUtc,
+            TotalLinesReturned = buffer.Count,
+            Lines = buffer.ToList()
+        };
+
+        return ApiResponse<LogContentDto>.SuccessResponse(dto);
     }
 
     // ═══════════════════════════════════════════════════════════════

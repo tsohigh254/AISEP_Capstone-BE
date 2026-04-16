@@ -30,6 +30,9 @@ public class DocumentsController : ControllerBase
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
+    private string GetCurrentUserType()
+        => User.FindFirst("userType")?.Value ?? string.Empty;
+
     // ================================================================
     // 1) POST /api/documents — Upload document (multipart/form-data)
     // ================================================================
@@ -101,6 +104,71 @@ public class DocumentsController : ControllerBase
         var userId = GetCurrentUserId();
         var result = await _documentService.GetMyDocumentAsync(documentId, userId, ct);
         return result.ToActionResult();
+    }
+
+    // ================================================================
+    // GET /api/startups/{startupId}/documents — List startup's docs visible to caller
+    // ================================================================
+
+    /// <summary>
+    /// List a startup's documents filtered by the caller's role against each document's Visibility flags
+    /// (SRS UC54 — Investor/Advisor browse shared docs).
+    /// Owner + Staff/Admin see all non-archived docs; other roles see only those sharing a visibility flag.
+    /// </summary>
+    [HttpGet("/api/startups/{startupId:int}/documents")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentDto>>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetStartupDocuments(int startupId, CancellationToken ct = default)
+    {
+        var result = await _documentService.GetStartupDocumentsAsync(
+            startupId, GetCurrentUserId(), GetCurrentUserType(), ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 4) GET /api/documents/{documentId}/view — Cross-role view (visibility-aware)
+    // ================================================================
+
+    /// <summary>
+    /// Get a document as any authenticated user (Investor/Advisor/other Startup).
+    /// Access is controlled by the document's Visibility flags (SRS §2584/2749).
+    /// Returns 404 if not found; 403 wrapped if the user's role isn't allowed.
+    /// </summary>
+    [HttpGet("{documentId:int}/view")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<DocumentDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ViewDocument(int documentId, CancellationToken ct = default)
+    {
+        var result = await _documentService.GetViewableDocumentAsync(
+            documentId, GetCurrentUserId(), GetCurrentUserType(), ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // GET /api/documents/{documentId}/download — Download file (visibility-aware)
+    // ================================================================
+
+    /// <summary>
+    /// Download a document's file. Access enforced by DocumentVisibility flags
+    /// (owner + Staff/Admin bypass; Investor/Advisor/Public by flag match).
+    /// </summary>
+    [HttpGet("{documentId:int}/download")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Download(int documentId, CancellationToken ct = default)
+    {
+        var result = await _documentService.DownloadDocumentAsync(
+            documentId, GetCurrentUserId(), GetCurrentUserType(), ct);
+
+        if (!result.Success) return result.ToErrorResult();
+
+        var payload = result.Data!;
+        return File(payload.Content, payload.ContentType, payload.FileName);
     }
 
     // ================================================================
@@ -183,6 +251,24 @@ public class DocumentsController : ControllerBase
     {
         var userId = GetCurrentUserId();
         var result = await _documentService.GetVersionHistoryAsync(documentId, userId, ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 9) GET /api/documents/{documentId}/access-logs — Access logs (owner only)
+    // ================================================================
+
+    /// <summary>
+    /// Get access logs for a document. Only the startup owner can view who has accessed their documents.
+    /// (SRS p.5174 — "Access logs should be viewable by the startup")
+    /// </summary>
+    [HttpGet("{documentId:int}/access-logs")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentAccessLogDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<DocumentAccessLogDto>>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAccessLogs(int documentId, CancellationToken ct = default)
+    {
+        var result = await _documentService.GetDocumentAccessLogsAsync(documentId, GetCurrentUserId(), ct);
         return result.ToActionResult();
     }
 

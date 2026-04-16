@@ -21,6 +21,10 @@ public interface IAdminService
     // System Health
     Task<ApiResponse<SystemHealthDto>> GetSystemHealthAsync();
 
+    // Server Logs
+    Task<ApiResponse<List<LogFileDto>>> ListLogFilesAsync();
+    Task<ApiResponse<LogContentDto>> ReadLogFileAsync(string fileName, int tailLines);
+
     // Violation Reports
     Task<ApiResponse<PagedResponse<ViolationReportDto>>> GetViolationReportsAsync(ViolationQueryParams query);
     Task<ApiResponse<ViolationReportDto>> ResolveViolationAsync(int adminId, int flagId, ResolveViolationRequest request);

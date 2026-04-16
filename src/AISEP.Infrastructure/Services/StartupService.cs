@@ -683,8 +683,11 @@ public class StartupService : IStartupService
             .Select(k => k.EnterpriseCode)
             .FirstOrDefaultAsync();
 
+        var aiScore = await GetLatestStartupAiScoreAsync(startupId);
+
         var dto = MapToPublicDto(startup);
         dto.EnterpriseCode = enterpriseCode;
+        dto.AiScore = aiScore;
         return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
@@ -995,6 +998,41 @@ public class StartupService : IStartupService
                 ReviewedAt = d.ReviewedAt
             }).ToList() ?? new List<DocumentDto>(),
         };
+    }
+
+    private async Task<double?> GetLatestStartupAiScoreAsync(int startupId)
+    {
+        var runScore = await _context.AiEvaluationRuns
+            .AsNoTracking()
+            .Where(r => r.StartupId == startupId
+                     && r.OverallScore.HasValue
+                     && (r.Status == "completed"
+                      || r.Status == "COMPLETED"
+                      || r.Status == "partial_completed"
+                      || r.Status == "PARTIAL_COMPLETED"))
+            .OrderByDescending(r => r.UpdatedAt)
+            .Select(r => r.OverallScore)
+            .FirstOrDefaultAsync();
+
+        if (runScore.HasValue)
+            return runScore.Value;
+
+        var currentPotential = await _context.StartupPotentialScores
+            .AsNoTracking()
+            .Where(p => p.StartupID == startupId && p.IsCurrentScore)
+            .OrderByDescending(p => p.CalculatedAt)
+            .Select(p => (double?)p.OverallScore)
+            .FirstOrDefaultAsync();
+
+        if (currentPotential.HasValue)
+            return currentPotential.Value;
+
+        return await _context.StartupPotentialScores
+            .AsNoTracking()
+            .Where(p => p.StartupID == startupId)
+            .OrderByDescending(p => p.CalculatedAt)
+            .Select(p => (double?)p.OverallScore)
+            .FirstOrDefaultAsync();
     }
 
     private static StartupPublicDto MapToPublicDto(Startup s)

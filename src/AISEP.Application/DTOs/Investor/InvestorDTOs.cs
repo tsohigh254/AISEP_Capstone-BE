@@ -337,6 +337,7 @@ public class StartupSearchItemDto
     public bool CanRequestConnection { get; set; }
     /// <summary>"INVESTOR" if investor initiated, "STARTUP" if startup initiated.</summary>
     public string? InitiatedByRole { get; set; }
+    public double? AiScore { get; set; }
 }
 
 // ========== INDUSTRY FOCUS DTOs ==========
@@ -424,4 +425,5 @@ public class WatchlistItemDto
     public string? LogoURL { get; set; }
     public string Priority { get; set; } = "Medium";
     public DateTime AddedAt { get; set; }
+    public double? AiScore { get; set; }
 }

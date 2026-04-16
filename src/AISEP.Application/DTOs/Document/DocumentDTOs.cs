@@ -12,7 +12,7 @@ namespace AISEP.Application.DTOs.Document;
 /// The actual file is IFormFile bound separately in the controller.
 /// </summary>
 public class DocumentCreateRequest
-{   
+{
     public IFormFile File { get; set; } = null!;
     /// <summary>PitchDeck | BusinessPlan | Financials | Legal | Other</summary>
     public DocumentType DocumentType { get; set; }
@@ -22,6 +22,12 @@ public class DocumentCreateRequest
 
     /// <summary>Optional: explicit version string. If null, auto-incremented ("1", "2", …).</summary>
     public string? Version { get; set; }
+
+    /// <summary>
+    /// Optional: who can view this document. Flags enum — combine values.
+    /// 0 = OwnerOnly (default), 1 = Investor, 2 = Advisor, 3 = Investor+Advisor, 4 = Public.
+    /// </summary>
+    public DocumentVisibility? Visibility { get; set; }
 }
 
 /// <summary>
@@ -55,6 +61,12 @@ public class DocumentUpdateMetadataRequest
 
     /// <summary>Set archived state (optional).</summary>
     public bool? IsArchived { get; set; }
+
+    /// <summary>
+    /// Update visibility (optional). Flags enum — combine values.
+    /// 0 = OwnerOnly, 1 = Investor, 2 = Advisor, 3 = Investor+Advisor, 4 = Public.
+    /// </summary>
+    public DocumentVisibility? Visibility { get; set; }
 }
 
 // ──────────────────────────────────────────────
@@ -85,6 +97,12 @@ public class DocumentDto
     public int? ReviewedBy { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public string? ReviewNotes { get; set; }
+
+    /// <summary>Visibility flags value (int). Combine: 0=OwnerOnly, 1=Investor, 2=Advisor, 4=Public.</summary>
+    public int Visibility { get; set; }
+
+    /// <summary>Human-readable visibility label (e.g. "OwnerOnly", "Investor, Advisor", "Public").</summary>
+    public string? VisibilityLabel { get; set; }
 
     // Convenience fields for frontend compatibility (serialized as camelCase)
     public string Id => DocumentID.ToString();
@@ -121,6 +139,31 @@ public class DocumentUploadNewVersionRequest
 {
     public IFormFile File { get; set; } = null!;
     public string? Title { get; set; }
+}
+
+// ──────────────────────────────────────────────
+// Download
+// ──────────────────────────────────────────────
+
+public class DocumentDownloadResult
+{
+    public byte[] Content { get; set; } = Array.Empty<byte>();
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+}
+
+// ──────────────────────────────────────────────
+// Access Log
+// ──────────────────────────────────────────────
+
+public class DocumentAccessLogDto
+{
+    public int LogID { get; set; }
+    public int UserID { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string UserType { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public DateTime AccessedAt { get; set; }
 }
 
 public class DocumentVersionHistoryDto

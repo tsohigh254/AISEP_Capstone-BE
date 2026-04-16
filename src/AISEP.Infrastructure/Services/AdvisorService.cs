@@ -82,13 +82,6 @@ public class AdvisorService : IAdvisorService
                 }
             }
 
-            var wallet = new AdvisorWallet
-            {
-                Advisor = advisor,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _db.AdvisorWallets.AddAsync(wallet);
             await _db.Advisors.AddAsync(advisor);
             await _db.SaveChangesAsync();
 
