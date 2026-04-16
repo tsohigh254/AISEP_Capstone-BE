@@ -1247,6 +1247,35 @@ public class MentorshipService : IMentorshipService
         mentorship.LastUpdatedByRole = "Advisor";
         mentorship.UpdatedAt = DateTime.UtcNow;
 
+        if (mentorship.PaymentStatus == PaymentStatus.Completed && mentorship.ActualAmount > 0)
+        {
+            var wallet = await _db.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == mentorship.AdvisorID);
+            if (wallet != null)
+            {
+                var existingTransaction = await _db.WalletTransactions.FirstOrDefaultAsync(t => 
+                    t.MentorshipID == mentorship.MentorshipID && t.Type == TransactionType.Deposit && t.Status == TransactionStatus.Completed);
+                
+                if (existingTransaction == null)
+                {
+                    wallet.Balance += mentorship.ActualAmount;
+                    wallet.TotalEarned += mentorship.ActualAmount;
+
+                    var walletTransaction = new WalletTransaction
+                    {
+                        WalletId = wallet.WalletId,
+                        MentorshipID = mentorship.MentorshipID,
+                        Amount = mentorship.ActualAmount,
+                        Type = TransactionType.Deposit,
+                        Status = TransactionStatus.Completed,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _db.AdvisorWallets.Update(wallet);
+                    await _db.WalletTransactions.AddAsync(walletTransaction);
+                }
+            }
+        }
+
         await _db.SaveChangesAsync();
         await _audit.LogAsync("COMPLETE_MENTORSHIP", "StartupAdvisorMentorship", mentorshipId, null);
 

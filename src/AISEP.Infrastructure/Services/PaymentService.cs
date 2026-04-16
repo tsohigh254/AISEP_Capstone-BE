@@ -96,29 +96,7 @@ namespace AISEP.Infrastructure.Services
                 mentorship.PaidAt = DateTime.UtcNow;
                 mentorship.UpdatedAt = DateTime.UtcNow;
 
-                var wallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == mentorship.AdvisorID);
-
-                if (wallet == null)
-                    return ApiResponse<string>.ErrorResponse("WALLET_NOT_FOUND", "Wallet not found");
-
-                _logger.LogInformation("Wallet {id}", wallet.WalletId);
-
-                wallet.Balance += actualAmount;
-                wallet.TotalEarned += actualAmount;
-
-                var walletTransaction = new WalletTransaction
-                {
-                    WalletId = wallet.WalletId,
-                    MentorshipID = mentorship.MentorshipID,
-                    Amount = actualAmount,
-                    Type = TransactionType.Deposit,
-                    Status = TransactionStatus.Completed,
-                    CreatedAt = DateTime.UtcNow
-                };
-
                 _context.StartupAdvisorMentorships.Update(mentorship);
-                _context.AdvisorWallets.Update(wallet);
-                await _context.WalletTransactions.AddAsync(walletTransaction);
                 await _context.SaveChangesAsync();
 
                 return ApiResponse<string>.SuccessResponse("Webhook processed successfully for mentorship");
@@ -251,13 +229,23 @@ namespace AISEP.Infrastructure.Services
             transaction.Type = TransactionType.Withdrawal;
             transaction.CreatedAt = DateTime.UtcNow;
 
+            var accountNumber = wallet.BankAccountNumber;
+            var bin = wallet.BankBin;
+            var bankName = wallet.BankName;
+
+            if (string.IsNullOrEmpty(accountNumber) || string.IsNullOrEmpty(bin) || string.IsNullOrEmpty(bankName))
+                return ApiResponse<string>.ErrorResponse(
+                    "MISSING_BANK_INFO",
+                    "Thông tin tài khoản ngân hàng không đầy đủ. Vui lòng cập nhật vào hồ sơ ví."
+                );
+
             var payoutRequest = new PayoutRequest
             {
                 ReferenceId = Guid.NewGuid().ToString(),
                 Amount = (int)transaction.Amount,
                 Description = "Rút tiền",
-                ToAccountNumber = cashoutRequestDto.AccountNumber,
-                ToBin = cashoutRequestDto.Bin
+                ToAccountNumber = accountNumber,
+                ToBin = bin
             };
 
             var response = await _transferClient.Payouts.CreateAsync(payoutRequest);

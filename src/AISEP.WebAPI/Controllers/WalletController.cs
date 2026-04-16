@@ -47,4 +47,26 @@ public class WalletController : ControllerBase
         var result = await _walletService.GetTransactionsAsync(walletId, queryParams);
         return result.ToActionResult();
     }
+
+    [HttpPut("bank-info")]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateBankInfo([FromBody] UpdateBankInfoDto request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _walletService.UpdateBankInfoAsync(userId, request);
+        return result.ToActionResult();
+    }
+
+    [HttpPost]
+    [Authorize(Policy = "AdvisorOnly")]
+    [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateWallet([FromBody] CreateWalletDto request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _walletService.CreateWalletAsync(userId, request);
+        return result.ToActionResult();
+    }
 }
