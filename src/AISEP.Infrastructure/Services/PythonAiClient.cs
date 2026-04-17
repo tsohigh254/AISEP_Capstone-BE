@@ -142,7 +142,7 @@ public class PythonAiClient
         await EnsureSuccessOrThrow(resp, ct);
 
         var result = await resp.Content.ReadFromJsonAsync<PythonReindexResponse>(JsonOpts, ct);
-        return result ?? new PythonReindexResponse { Status = "ok" };
+        return result ?? new PythonReindexResponse { Success = true };
     }
 
     public async Task<PythonReindexResponse> ReindexInvestorAsync(
@@ -156,7 +156,7 @@ public class PythonAiClient
         await EnsureSuccessOrThrow(resp, ct);
 
         var result = await resp.Content.ReadFromJsonAsync<PythonReindexResponse>(JsonOpts, ct);
-        return result ?? new PythonReindexResponse { Status = "ok" };
+        return result ?? new PythonReindexResponse { Success = true };
     }
 
     // ═══════════════════════════════════════════════════════════

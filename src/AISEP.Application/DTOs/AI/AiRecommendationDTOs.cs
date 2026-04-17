@@ -9,9 +9,6 @@ namespace AISEP.Application.DTOs.AI;
 
 public class PythonReindexStartupRequest
 {
-    [JsonPropertyName("startup_id")]
-    public string StartupId { get; set; } = string.Empty;
-
     [JsonPropertyName("profile_version")]
     public string ProfileVersion { get; set; } = string.Empty;
 
@@ -30,23 +27,20 @@ public class PythonReindexStartupRequest
     [JsonPropertyName("primary_industry")]
     public string? PrimaryIndustry { get; set; }
 
-    [JsonPropertyName("sub_industry")]
-    public string? SubIndustry { get; set; }
-
-    [JsonPropertyName("description")]
-    public string? Description { get; set; }
-
     [JsonPropertyName("location")]
     public string? Location { get; set; }
 
-    [JsonPropertyName("country")]
-    public string? Country { get; set; }
+    [JsonPropertyName("website")]
+    public string? Website { get; set; }
 
-    [JsonPropertyName("market_scope")]
-    public string? MarketScope { get; set; }
+    [JsonPropertyName("product_link")]
+    public string? ProductLink { get; set; }
 
-    [JsonPropertyName("product_status")]
-    public string? ProductStatus { get; set; }
+    [JsonPropertyName("demo_link")]
+    public string? DemoLink { get; set; }
+
+    [JsonPropertyName("logo_url")]
+    public string? LogoUrl { get; set; }
 
     [JsonPropertyName("problem_statement")]
     public string? ProblemStatement { get; set; }
@@ -54,14 +48,29 @@ public class PythonReindexStartupRequest
     [JsonPropertyName("solution_summary")]
     public string? SolutionSummary { get; set; }
 
-    [JsonPropertyName("funding_amount_sought")]
-    public decimal? FundingAmountSought { get; set; }
+    [JsonPropertyName("market_scope")]
+    public string? MarketScope { get; set; }
 
-    [JsonPropertyName("current_funding_raised")]
-    public decimal? CurrentFundingRaised { get; set; }
+    [JsonPropertyName("product_status")]
+    public string? ProductStatus { get; set; }
+
+    [JsonPropertyName("current_needs")]
+    public List<string>? CurrentNeeds { get; set; }
+
+    [JsonPropertyName("founder_names")]
+    public List<string>? FounderNames { get; set; }
+
+    [JsonPropertyName("founder_roles")]
+    public List<string>? FounderRoles { get; set; }
 
     [JsonPropertyName("team_size")]
     public string? TeamSize { get; set; }
+
+    [JsonPropertyName("validation_status")]
+    public string? ValidationStatus { get; set; }
+
+    [JsonPropertyName("optional_short_metric_summary")]
+    public string? OptionalShortMetricSummary { get; set; }
 
     [JsonPropertyName("is_profile_visible_to_investors")]
     public bool IsProfileVisibleToInvestors { get; set; }
@@ -90,6 +99,9 @@ public class PythonReindexStartupRequest
 
     [JsonPropertyName("ai_dimension_scores")]
     public Dictionary<string, double>? AiDimensionScores { get; set; }
+
+    [JsonPropertyName("tags")]
+    public List<string>? Tags { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -99,6 +111,12 @@ public class PythonReindexStartupRequest
 
 public class PythonReindexInvestorRequest
 {
+    [JsonPropertyName("profile_version")]
+    public string ProfileVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("source_updated_at")]
+    public DateTime SourceUpdatedAt { get; set; }
+
     // ── Core identity ─────────────────────────────────────────
     [JsonPropertyName("investor_name")]
     public string InvestorName { get; set; } = string.Empty;
@@ -198,8 +216,20 @@ public class PythonAiScoreRange
 
 public class PythonReindexResponse
 {
-    [JsonPropertyName("status")]
-    public string Status { get; set; } = string.Empty;
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("startup_id")]
+    public string? StartupId { get; set; }
+
+    [JsonPropertyName("investor_id")]
+    public string? InvestorId { get; set; }
+
+    [JsonPropertyName("profile_version")]
+    public string? ProfileVersion { get; set; }
+
+    [JsonPropertyName("source_updated_at")]
+    public DateTime? SourceUpdatedAt { get; set; }
 
     [JsonPropertyName("message")]
     public string? Message { get; set; }
@@ -214,11 +244,14 @@ public class PythonRecommendationListResponse
     [JsonPropertyName("investor_id")]
     public string InvestorId { get; set; } = string.Empty;
 
-    [JsonPropertyName("matches")]
-    public List<PythonRecommendationMatch> Matches { get; set; } = new();
+    [JsonPropertyName("items")]
+    public List<PythonRecommendationMatch> Items { get; set; } = new();
 
     [JsonPropertyName("warnings")]
     public List<string>? Warnings { get; set; }
+
+    [JsonPropertyName("internal_warnings")]
+    public List<string>? InternalWarnings { get; set; }
 
     [JsonPropertyName("generated_at")]
     public DateTime? GeneratedAt { get; set; }
@@ -263,13 +296,28 @@ public class PythonRecommendationMatch
     public List<string>? MatchReasons { get; set; }
 
     [JsonPropertyName("positive_reasons")]
-    public List<string>? PositiveReasons { get; set; }
+    public List<PythonRecommendationReasonItem>? PositiveReasons { get; set; }
 
     [JsonPropertyName("caution_reasons")]
-    public List<string>? CautionReasons { get; set; }
+    public List<PythonRecommendationReasonItem>? CautionReasons { get; set; }
 
     [JsonPropertyName("warning_flags")]
     public List<string>? WarningFlags { get; set; }
+
+    [JsonPropertyName("generated_at")]
+    public DateTime? GeneratedAt { get; set; }
+}
+
+public class PythonRecommendationReasonItem
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
+
+    [JsonPropertyName("code")]
+    public string Code { get; set; } = string.Empty;
+
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -284,8 +332,8 @@ public class PythonRecommendationExplanation
     [JsonPropertyName("startup_id")]
     public string StartupId { get; set; } = string.Empty;
 
-    [JsonPropertyName("explanation")]
-    public JsonElement? Explanation { get; set; }
+    [JsonPropertyName("result")]
+    public PythonRecommendationMatch? Result { get; set; }
 
     [JsonPropertyName("generated_at")]
     public DateTime? GeneratedAt { get; set; }

@@ -148,7 +148,7 @@ public class AiRecommendationService : IAiRecommendationService
                 InvestorId = investorId,
                 GeneratedAt = pythonResult.GeneratedAt,
                 Warnings = pythonResult.Warnings,
-                Matches = pythonResult.Matches.Select(m => new RecommendationMatchResult
+                Matches = pythonResult.Items.Select(m => new RecommendationMatchResult
                 {
                     StartupId = int.TryParse(m.StartupId, out var sid) ? sid : 0,
                     StartupName = m.StartupName,
@@ -156,8 +156,8 @@ public class AiRecommendationService : IAiRecommendationService
                     MatchBand = m.MatchBand,
                     FitSummaryLabel = m.FitSummaryLabel,
                     MatchReasons = m.MatchReasons,
-                    PositiveReasons = m.PositiveReasons,
-                    CautionReasons = m.CautionReasons,
+                    PositiveReasons = m.PositiveReasons?.Select(r => r.Text).ToList(),
+                    CautionReasons = m.CautionReasons?.Select(r => r.Text).ToList(),
                     WarningFlags = m.WarningFlags,
                 }).ToList()
             };
@@ -206,18 +206,11 @@ public class AiRecommendationService : IAiRecommendationService
         {
             var pythonResult = await _pythonClient.GetMatchExplanationAsync(investorId, startupId, correlationId);
 
-            object? explanation = null;
-            if (pythonResult.Explanation.HasValue &&
-                pythonResult.Explanation.Value.ValueKind != JsonValueKind.Null)
-            {
-                explanation = JsonSerializer.Deserialize<object>(pythonResult.Explanation.Value.GetRawText());
-            }
-
             var result = new RecommendationExplanationResult
             {
                 InvestorId = investorId,
                 StartupId = startupId,
-                Explanation = explanation,
+                Explanation = pythonResult.Result,
                 GeneratedAt = pythonResult.GeneratedAt,
             };
 
@@ -323,25 +316,30 @@ public class AiRecommendationService : IAiRecommendationService
             }
         }
 
+        static List<string>? SplitCsv(string? value) =>
+            string.IsNullOrWhiteSpace(value)
+                ? null
+                : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                       .Where(s => !string.IsNullOrEmpty(s))
+                       .ToList();
+
         return new PythonReindexStartupRequest
         {
-            StartupId = startup.StartupID.ToString(),
             ProfileVersion = Guid.NewGuid().ToString("N")[..8],
             SourceUpdatedAt = startup.UpdatedAt ?? startup.CreatedAt,
             StartupName = startup.CompanyName,
             Tagline = startup.OneLiner,
             Stage = startup.Stage?.ToString(),
             PrimaryIndustry = startup.Industry?.IndustryName,
-            SubIndustry = startup.SubIndustry,
-            Description = startup.Description,
             Location = startup.Location,
-            Country = startup.Country,
+            Website = startup.Website,
+            LogoUrl = startup.LogoURL,
             MarketScope = startup.MarketScope,
             ProductStatus = startup.ProductStatus,
             ProblemStatement = startup.ProblemStatement,
             SolutionSummary = startup.SolutionSummary,
-            FundingAmountSought = startup.FundingAmountSought,
-            CurrentFundingRaised = startup.CurrentFundingRaised,
+            CurrentNeeds = SplitCsv(startup.CurrentNeeds),
+            OptionalShortMetricSummary = startup.MetricSummary,
             TeamSize = startup.TeamSize,
             IsProfileVisibleToInvestors = startup.IsVisible,
             VerificationLabel = startup.StartupTag.ToString(),
@@ -380,6 +378,8 @@ public class AiRecommendationService : IAiRecommendationService
 
         return new PythonReindexInvestorRequest
         {
+            ProfileVersion    = Guid.NewGuid().ToString("N")[..8],
+            SourceUpdatedAt   = investor.UpdatedAt ?? investor.CreatedAt,
             InvestorName      = investor.FullName,
             InvestorType      = activeKyc?.InvestorCategory?.ToLowerInvariant(),
             Organization      = investor.FirmName,
