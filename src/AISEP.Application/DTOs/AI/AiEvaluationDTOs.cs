@@ -165,6 +165,39 @@ public class PythonCanonicalReport
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Report Response Wrapper (Python wraps report in an outer object)
+// ═══════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Outer wrapper returned by Python GET /api/v1/evaluations/{id}/report.
+/// The actual canonical report lives inside the "report" property.
+/// </summary>
+public class PythonReportWrapperResponse
+{
+    [JsonPropertyName("report_mode")]
+    public string? ReportMode { get; set; }
+
+    [JsonPropertyName("evaluation_mode")]
+    public string? EvaluationMode { get; set; }
+
+    [JsonPropertyName("has_merged_result")]
+    public bool HasMergedResult { get; set; }
+
+    [JsonPropertyName("available_sources")]
+    public List<string>? AvailableSources { get; set; }
+
+    [JsonPropertyName("source_document_type")]
+    public string? SourceDocumentType { get; set; }
+
+    [JsonPropertyName("merge_status")]
+    public string? MergeStatus { get; set; }
+
+    /// <summary>The actual canonical report — this is what .NET should read.</summary>
+    [JsonPropertyName("report")]
+    public PythonCanonicalReport? Report { get; set; }
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Webhook Callback Payload
 // ═══════════════════════════════════════════════════════════════
 

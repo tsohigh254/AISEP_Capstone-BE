@@ -266,6 +266,74 @@ public class AiEvaluationService : IAiEvaluationService
     }
 
     // ═══════════════════════════════════════════════════════════
+    //  Source Report (per-document in combined-mode runs)
+    // ═══════════════════════════════════════════════════════════
+
+    private static readonly HashSet<string> ValidDocumentTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "pitch_deck", "business_plan" };
+
+    public async Task<ApiResponse<EvaluationReportResult>> GetSourceReportAsync(
+        int runId, string documentType, int currentUserId = 0)
+    {
+        // Validate document type before any DB call (matches Python's validation order)
+        if (string.IsNullOrWhiteSpace(documentType) || !ValidDocumentTypes.Contains(documentType))
+            return ApiResponse<EvaluationReportResult>.ErrorResponse(
+                "INVALID_DOCUMENT_TYPE",
+                $"Invalid document type '{documentType}'. Allowed values: pitch_deck, business_plan.");
+
+        var run = await _db.AiEvaluationRuns
+            .Include(r => r.Startup)
+            .FirstOrDefaultAsync(r => r.Id == runId);
+        if (run == null)
+            return ApiResponse<EvaluationReportResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
+
+        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+            return ApiResponse<EvaluationReportResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
+
+        try
+        {
+            var (report, statusCode) = await _pythonClient.GetSourceReportAsync(
+                run.PythonRunId, documentType.ToLowerInvariant(), run.CorrelationId);
+
+            if (statusCode == HttpStatusCode.Accepted || report == null)
+                return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
+                {
+                    RunId = run.Id,
+                    StartupId = run.StartupId,
+                    Status = run.Status,
+                    IsReportValid = false,
+                    ValidationMessage = "Source report is not ready yet. Please retry shortly."
+                }, "Report not ready");
+
+            var (isValid, validationMsg) = ValidateReport(report);
+
+            var reportObj = JsonSerializer.Deserialize<object>(JsonSerializer.Serialize(report));
+            return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
+            {
+                RunId = run.Id,
+                StartupId = run.StartupId,
+                Status = run.Status,
+                IsReportValid = isValid,
+                Report = reportObj,
+                ValidationMessage = validationMsg
+            });
+        }
+        catch (PythonAiException ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch source report for run {RunId} / {DocType}: {Code}",
+                runId, documentType, ex.Code);
+
+            var msg = ex.HttpStatus switch
+            {
+                HttpStatusCode.NotFound => $"Document '{documentType}' not found for this evaluation run.",
+                HttpStatusCode.BadRequest => $"Invalid document type: {ex.Message}",
+                _ => $"AI Service error: {ex.Message}"
+            };
+            return ApiResponse<EvaluationReportResult>.ErrorResponse(ex.Code, msg);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     //  Webhook Processing (idempotent)
     // ═══════════════════════════════════════════════════════════
 
