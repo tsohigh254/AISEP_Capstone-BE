@@ -16,9 +16,16 @@ public class MentorshipSession
     public string? KeyInsights { get; set; }
     public string? ActionItems { get; set; }
     public string? NextSteps { get; set; }
+    public string? Note { get; set; }
+    /// <summary>"Startup" | "Advisor" — ai là người đề xuất slot này ban đầu.</summary>
+    public string? ProposedBy { get; set; }
     public string? RecommendedResources { get; set; }
     public string? AdvisorInternalNotes { get; set; }
     public string? StartupNotes { get; set; }
+    public string? DisputeReason { get; set; }
+    public string? ResolutionNote { get; set; }
+    public int? MarkedByStaffID { get; set; }
+    public DateTime? MarkedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

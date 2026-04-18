@@ -12,5 +12,6 @@ namespace AISEP.Application.Const
         public static string Profile = "ProfilePic";
         public static string Member = "MemberPic";
         public static string DocumentStorage = "Document";
+        public static string IssueReport = "IssueReports";
     }
 }

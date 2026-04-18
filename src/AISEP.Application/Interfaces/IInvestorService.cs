@@ -29,7 +29,7 @@ public interface IInvestorService
     // Search startups
     Task<ApiResponse<PagedResponse<StartupSearchItemDto>>> SearchStartupsAsync(
         string? q, int? industryId, string? stage, string? location,
-        string? sortBy, int page, int pageSize);
+        string? sortBy, int page, int pageSize, int callerUserId = 0);
 
     // Industry focus
     Task<ApiResponse<List<IndustryFocusDto>>> GetIndustryFocusAsync(int userId);

@@ -205,6 +205,7 @@ public static class ApiEnvelopeExtensions
             case "INVALID_STATUS_TRANSITION":
                 return StatusCodes.Status409Conflict;
             case "ACCESS_DENIED":
+            case "REPORT_NOT_AVAILABLE":
                 return StatusCodes.Status403Forbidden;
             case "NOT_FOUND":
                 return StatusCodes.Status404NotFound;

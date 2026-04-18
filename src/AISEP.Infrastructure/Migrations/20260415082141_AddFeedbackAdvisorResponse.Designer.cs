@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260415082141_AddFeedbackAdvisorResponse")]
+    partial class AddFeedbackAdvisorResponse
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -315,15 +318,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<decimal>("Balance")
                         .HasColumnType("numeric");
 
-                    b.Property<string>("BankAccountNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankBin")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankName")
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -557,11 +551,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("Version")
                         .HasColumnType("text");
 
-                    b.Property<int>("Visibility")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.HasKey("DocumentID");
 
                     b.HasIndex("ParentDocumentID");
@@ -571,44 +560,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.HasIndex("StartupID");
 
                     b.ToTable("Documents");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.DocumentAccessLog", b =>
-                {
-                    b.Property<int>("LogID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("LogID"));
-
-                    b.Property<DateTime>("AccessedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("DocumentID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("text");
-
-                    b.Property<int>("UserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("UserType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("LogID");
-
-                    b.HasIndex("UserID");
-
-                    b.HasIndex("DocumentID", "AccessedAt")
-                        .IsDescending(false, true);
-
-                    b.ToTable("DocumentAccessLogs");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.DocumentBlockchainProof", b =>
@@ -1294,92 +1245,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("InvestorWatchlists");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.IssueReport", b =>
-                {
-                    b.Property<int>("IssueReportID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IssueReportID"));
-
-                    b.Property<int?>("AssignedToStaffID")
-                        .HasColumnType("integer");
-
-                    b.Property<short>("Category")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("RelatedEntityID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RelatedEntityType")
-                        .HasColumnType("text");
-
-                    b.Property<int>("ReporterUserID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StaffNote")
-                        .HasColumnType("text");
-
-                    b.Property<short>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("IssueReportID");
-
-                    b.HasIndex("AssignedToStaffID");
-
-                    b.HasIndex("ReporterUserID");
-
-                    b.ToTable("IssueReports");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.IssueReportAttachment", b =>
-                {
-                    b.Property<int>("AttachmentID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("AttachmentID"));
-
-                    b.Property<string>("FileName")
-                        .HasColumnType("text");
-
-                    b.Property<long?>("FileSize")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FileUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("IssueReportID")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("MimeType")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.HasKey("AttachmentID");
-
-                    b.HasIndex("IssueReportID");
-
-                    b.ToTable("IssueReportAttachments");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipFeedback", b =>
                 {
                     b.Property<int>("FeedbackID")
@@ -1474,17 +1339,11 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("StaffReviewNote")
                         .HasColumnType("text");
 
-                    b.Property<DateTime?>("StartupAcknowledgedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime?>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("SupersededByReportID")
                         .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("ReportID");
 
@@ -1540,12 +1399,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("NextSteps")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProposedBy")
                         .HasColumnType("text");
 
                     b.Property<string>("RecommendedResources")
@@ -2338,9 +2191,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasDefaultValue((short)0);
 
-                    b.Property<DateTime?>("PayoutReleasedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<decimal>("PlatformFeeAmount")
                         .HasColumnType("numeric");
 
@@ -3033,25 +2883,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Startup");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.DocumentAccessLog", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Document", "Document")
-                        .WithMany()
-                        .HasForeignKey("DocumentID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AISEP.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.DocumentBlockchainProof", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "AnchoredByUser")
@@ -3251,35 +3082,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Investor");
 
                     b.Navigation("Startup");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.IssueReport", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.User", "AssignedStaff")
-                        .WithMany()
-                        .HasForeignKey("AssignedToStaffID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("AISEP.Domain.Entities.User", "Reporter")
-                        .WithMany()
-                        .HasForeignKey("ReporterUserID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AssignedStaff");
-
-                    b.Navigation("Reporter");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.IssueReportAttachment", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.IssueReport", "IssueReport")
-                        .WithMany("Attachments")
-                        .HasForeignKey("IssueReportID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("IssueReport");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipFeedback", b =>
@@ -3741,11 +3543,6 @@ namespace AISEP.Infrastructure.Migrations
             modelBuilder.Entity("AISEP.Domain.Entities.InvestorKycSubmission", b =>
                 {
                     b.Navigation("EvidenceFiles");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.IssueReport", b =>
-                {
-                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.MentorshipSession", b =>

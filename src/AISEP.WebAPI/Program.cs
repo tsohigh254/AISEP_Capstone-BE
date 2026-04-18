@@ -125,10 +125,12 @@ builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IIssueReportService, IssueReportService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.AddScoped<AISEP.Infrastructure.Jobs.SubscriptionExpirationJob>();
+builder.Services.AddScoped<AISEP.Infrastructure.Jobs.SessionAutoConfirmJob>();
 builder.Services.AddHttpClient<IAIService, AIService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://ai:8000");
@@ -359,6 +361,12 @@ var app = builder.Build();
         app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "AISEP API v1"));
         app.UseHangfireDashboard("/hangfire");
     }
+
+    // Recurring job: auto-confirm sessions that ended > 24h ago without Startup confirmation
+    RecurringJob.AddOrUpdate<AISEP.Infrastructure.Jobs.SessionAutoConfirmJob>(
+        "session-auto-confirm",
+        job => job.RunAsync(),
+        "*/15 * * * *");  // every 15 minutes
 
     app.UseHttpsRedirection();
     app.UseCors("Frontend");

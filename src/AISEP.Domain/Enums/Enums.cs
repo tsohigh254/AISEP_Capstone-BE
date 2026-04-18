@@ -370,3 +370,37 @@ public enum IncidentStatus : short
     Resolved = 2,
     RolledBack = 3
 }
+
+// ───────────────────── Report Review (Staff Oversight) ──────────────
+
+public enum ReportReviewStatus : short
+{
+    PendingReview = 0,
+    Passed        = 1,
+    Failed        = 2,
+    NeedsMoreInfo = 3,
+    Draft         = 4   // Advisor saved locally, not yet submitted for review
+}
+
+// ───────────────────────── Issue Report ──────────────────────
+
+public enum IssueCategory : short
+{
+    PaymentIssue            = 0,
+    ConsultingIssue         = 1,
+    MessagingIssue          = 2,
+    OfferOrConnectionIssue  = 3,
+    VerificationIssue       = 4,
+    DocumentIssue           = 5,
+    HarassmentOrMisconduct  = 6,
+    TechnicalProblem        = 7,
+    Other                   = 8
+}
+
+public enum IssueReportStatus : short
+{
+    New         = 0,
+    UnderReview = 1,
+    Resolved    = 2,
+    Dismissed   = 3
+}

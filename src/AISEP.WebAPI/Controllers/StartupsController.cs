@@ -218,7 +218,7 @@ public class StartupsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<StartupListItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchStartups([FromQuery] StartupQueryParams startupQuery)
     {
-        var result = await _startupService.SearchStartupsAsync(startupQuery, GetCurrentUserId(), GetCurrentUserType());
+        var result = await _startupService.SearchStartupsAsync(startupQuery, GetCurrentUserType(), GetCurrentUserId());
         return result.ToActionResult();
     }
 

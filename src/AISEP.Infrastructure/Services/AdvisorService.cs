@@ -303,16 +303,45 @@ public class AdvisorService : IAdvisorService
             .Where(a => a.ProfileStatus == ProfileStatus.Approved || a.ProfileStatus == ProfileStatus.PendingKYC)
             .AsQueryable();
 
-        // Keyword search on FullName
-        if (!string.IsNullOrWhiteSpace(advisorQueryParams.Key))
+        // Availability filter — default: only show advisors accepting new mentees
+        if (!advisorQueryParams.IncludeUnavailable)
+            query = query.Where(a => a.Availability != null && a.Availability.IsAcceptingNewMentees);
+
+        // Keyword search — prefer ?search=, fallback to ?key=
+        var keyword = advisorQueryParams.Search ?? advisorQueryParams.Key;
+        if (!string.IsNullOrWhiteSpace(keyword))
         {
-            query = query.Where(q => q.FullName.ToLower().Trim().Contains(advisorQueryParams.Key.ToLower().Trim()) ||
-            q.IndustryFocus.Any(i => i.Industry.IndustryName == advisorQueryParams.Key));
+            var kw = keyword.ToLower().Trim();
+            query = query.Where(a =>
+                a.FullName.ToLower().Contains(kw) ||
+                (a.Title != null && a.Title.ToLower().Contains(kw)) ||
+                (a.Bio != null && a.Bio.ToLower().Contains(kw)) ||
+                (a.Expertise != null && a.Expertise.ToLower().Contains(kw)) ||
+                a.IndustryFocus.Any(i => i.Industry.IndustryName.ToLower().Contains(kw)));
         }
 
+        // Expertise filter
+        if (!string.IsNullOrWhiteSpace(advisorQueryParams.Expertise))
+        {
+            var exp = advisorQueryParams.Expertise.ToLower().Trim();
+            query = query.Where(a => a.Expertise != null && a.Expertise.ToLower().Contains(exp));
+        }
 
-        // Order by UpdatedAt desc
-        query = query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt);
+        // Minimum years of experience
+        if (advisorQueryParams.Experience.HasValue)
+            query = query.Where(a => a.YearsOfExperience >= advisorQueryParams.Experience.Value);
+
+        // Minimum average rating
+        if (advisorQueryParams.Rating.HasValue)
+            query = query.Where(a => a.AverageRating >= advisorQueryParams.Rating.Value);
+
+        // Sort
+        query = advisorQueryParams.Sort switch
+        {
+            "rating_desc" => query.OrderByDescending(a => a.AverageRating ?? 0),
+            "best_match"  => query.OrderByDescending(a => a.CompletedSessions).ThenByDescending(a => a.AverageRating ?? 0),
+            _             => query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt)
+        };
 
         var items = query.Select(a => new AdvisorSearchItemDto
         {
@@ -357,8 +386,26 @@ public class AdvisorService : IAdvisorService
             .Include(a => a.IndustryFocus)
                 .ThenInclude(i => i.Industry)
             .Include(a => a.Availability)
+            .Include(a => a.TimeSlots)
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
+
+        var reviews = await _db.MentorshipFeedbacks
+            .Where(f => f.Mentorship.AdvisorID == advisorId
+                     && f.FromRole == "Startup"
+                     && f.IsPublic)
+            .Include(f => f.Mentorship).ThenInclude(m => m.Startup)
+            .AsNoTracking()
+            .OrderByDescending(f => f.SubmittedAt)
+            .Select(f => new AdvisorReviewDto
+            {
+                Author      = f.Mentorship.Startup.CompanyName,
+                Stage       = f.Mentorship.Startup.Stage != null ? f.Mentorship.Startup.Stage.ToString() : null,
+                Rating      = f.Rating,
+                Text        = f.Comment,
+                SubmittedAt = f.SubmittedAt
+            })
+            .ToListAsync();
 
         if (advisor == null || (advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
         {
@@ -391,7 +438,12 @@ public class AdvisorService : IAdvisorService
 
             MentorshipPhilosophy = advisor.MentorshipPhilosophy,
             ExperiencesJson = advisor.ExperiencesJson,
-            Skills = string.IsNullOrEmpty(advisor.Skills) ? new List<string>() : advisor.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+            Skills = string.IsNullOrEmpty(advisor.Skills) ? new List<string>() : advisor.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+            Reviews = reviews,
+            TimeSlots = advisor.TimeSlots
+                .OrderBy(t => t.DayOfWeek).ThenBy(t => t.StartTime)
+                .Select(t => new TimeSlotDto { DayOfWeek = t.DayOfWeek, StartTime = t.StartTime, EndTime = t.EndTime })
+                .ToList()
         };
 
         return ApiResponse<AdvisorDetailDto>.SuccessResponse(dto);
@@ -732,4 +784,133 @@ public class AdvisorService : IAdvisorService
     }
 
     #endregion
+
+    // ================================================================
+    // FEEDBACK MANAGEMENT (advisor-facing)
+    // ================================================================
+
+    public async Task<ApiResponse<PagedResponse<AdvisorFeedbackListItemDto>>> GetMyFeedbacksAsync(
+        int userId, int? ratingFilter, string? sort, int page, int pageSize)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<PagedResponse<AdvisorFeedbackListItemDto>>.ErrorResponse(
+                "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        var query = _db.MentorshipFeedbacks
+            .Where(f => f.Mentorship.AdvisorID == advisor.AdvisorID && f.FromRole == "Startup")
+            .Include(f => f.Mentorship).ThenInclude(m => m.Startup)
+            .Include(f => f.Session)
+            .AsNoTracking();
+
+        if (ratingFilter.HasValue)
+            query = query.Where(f => f.Rating == ratingFilter.Value);
+
+        query = sort switch
+        {
+            "rating_asc"  => query.OrderBy(f => f.Rating).ThenByDescending(f => f.SubmittedAt),
+            "rating_desc" => query.OrderByDescending(f => f.Rating).ThenByDescending(f => f.SubmittedAt),
+            _             => query.OrderByDescending(f => f.SubmittedAt)
+        };
+
+        var total = await query.CountAsync();
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+        var dtos = items.Select(f => new AdvisorFeedbackListItemDto
+        {
+            Id        = f.FeedbackID,
+            SessionId = f.SessionID,
+            Startup   = new FeedbackStartupSummaryDto
+            {
+                Id          = f.Mentorship.StartupID,
+                DisplayName = f.Mentorship.Startup.CompanyName,
+                LogoUrl     = f.Mentorship.Startup.LogoURL
+            },
+            Session = f.Session == null ? null : new FeedbackSessionSummaryDto
+            {
+                Topic       = f.Session.TopicsDiscussed,
+                CompletedAt = f.Session.StartupConfirmedConductedAt
+            },
+            Rating           = f.Rating,
+            Comment          = f.Comment,
+            CreatedAt        = f.SubmittedAt,
+            CanRespond       = f.AdvisorResponseText == null,
+            VisibilityStatus = f.IsPublic ? "Public" : "Private",
+            Response = f.AdvisorResponseText == null ? null : new FeedbackResponseDto
+            {
+                Id           = f.FeedbackID,
+                ResponseText = f.AdvisorResponseText,
+                CreatedAt    = f.AdvisorRespondedAt
+            }
+        }).ToList();
+
+        return ApiResponse<PagedResponse<AdvisorFeedbackListItemDto>>.SuccessResponse(
+            new PagedResponse<AdvisorFeedbackListItemDto>
+            {
+                Items = dtos,
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
+            });
+    }
+
+    public async Task<ApiResponse<AdvisorFeedbackSummaryDto>> GetMyFeedbackSummaryAsync(int userId)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<AdvisorFeedbackSummaryDto>.ErrorResponse(
+                "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        var ratings = await _db.MentorshipFeedbacks
+            .Where(f => f.Mentorship.AdvisorID == advisor.AdvisorID
+                     && f.FromRole == "Startup"
+                     && f.IsPublic)
+            .Select(f => f.Rating)
+            .ToListAsync();
+
+        var breakdown = Enumerable.Range(1, 5)
+            .ToDictionary(star => star, star => ratings.Count(r => r == star));
+
+        return ApiResponse<AdvisorFeedbackSummaryDto>.SuccessResponse(new AdvisorFeedbackSummaryDto
+        {
+            AverageRating   = ratings.Count > 0 ? (float)ratings.Average() : null,
+            TotalReviews    = ratings.Count,
+            RatingBreakdown = breakdown
+        });
+    }
+
+    public async Task<ApiResponse<FeedbackResponseDto>> RespondToFeedbackAsync(
+        int userId, int feedbackId, RespondToFeedbackRequest request)
+    {
+        var advisor = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (advisor == null)
+            return ApiResponse<FeedbackResponseDto>.ErrorResponse(
+                "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
+
+        var feedback = await _db.MentorshipFeedbacks
+            .Include(f => f.Mentorship)
+            .FirstOrDefaultAsync(f => f.FeedbackID == feedbackId);
+        if (feedback == null)
+            return ApiResponse<FeedbackResponseDto>.ErrorResponse("FEEDBACK_NOT_FOUND", "Feedback not found.");
+
+        if (feedback.Mentorship.AdvisorID != advisor.AdvisorID)
+            return ApiResponse<FeedbackResponseDto>.ErrorResponse("FEEDBACK_NOT_OWNED",
+                "This feedback does not belong to your mentorship.");
+
+        if (feedback.AdvisorResponseText != null)
+            return ApiResponse<FeedbackResponseDto>.ErrorResponse("ALREADY_EXISTS",
+                "You have already responded to this feedback.");
+
+        feedback.AdvisorResponseText = request.ResponseText.Trim();
+        feedback.AdvisorRespondedAt  = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ApiResponse<FeedbackResponseDto>.SuccessResponse(new FeedbackResponseDto
+        {
+            Id           = feedback.FeedbackID,
+            ResponseText = feedback.AdvisorResponseText,
+            CreatedAt    = feedback.AdvisorRespondedAt
+        });
+    }
 }

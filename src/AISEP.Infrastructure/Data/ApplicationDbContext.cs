@@ -83,6 +83,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<DocumentAccessLog> DocumentAccessLogs => Set<DocumentAccessLog>();
     public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<IssueReport> IssueReports => Set<IssueReport>();
+    public DbSet<IssueReportAttachment> IssueReportAttachments => Set<IssueReportAttachment>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
@@ -236,6 +238,10 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<StartupAdvisorMentorship>().HasKey(sam => sam.MentorshipID);
         modelBuilder.Entity<MentorshipSession>().HasKey(ms => ms.SessionID);
         modelBuilder.Entity<MentorshipReport>().HasKey(mr => mr.ReportID);
+        modelBuilder.Entity<MentorshipReport>()
+            .Property(e => e.ReportReviewStatus)
+            .HasConversion<short>()
+            .HasDefaultValue(AISEP.Domain.Enums.ReportReviewStatus.PendingReview);
         modelBuilder.Entity<MentorshipFeedback>().HasKey(mf => mf.FeedbackID);
         modelBuilder.Entity<StartupInvestorConnection>().HasKey(sic => sic.ConnectionID);
         modelBuilder.Entity<InformationRequest>().HasKey(ir => ir.RequestID);
@@ -520,6 +526,32 @@ public class ApplicationDbContext : DbContext
             .WithMany(d => d.ChildVersions)
             .HasForeignKey(d => d.ParentDocumentID)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ── Issue Reports ─────────────────────────────────────
+        modelBuilder.Entity<IssueReport>().HasKey(r => r.IssueReportID);
+        modelBuilder.Entity<IssueReport>()
+            .HasOne(r => r.Reporter)
+            .WithMany()
+            .HasForeignKey(r => r.ReporterUserID)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<IssueReport>()
+            .HasOne(r => r.AssignedStaff)
+            .WithMany()
+            .HasForeignKey(r => r.AssignedToStaffID)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<IssueReport>()
+            .Property(r => r.CreatedAt)
+            .HasDefaultValueSql("NOW()");
+
+        modelBuilder.Entity<IssueReportAttachment>().HasKey(a => a.AttachmentID);
+        modelBuilder.Entity<IssueReportAttachment>()
+            .HasOne(a => a.IssueReport)
+            .WithMany(r => r.Attachments)
+            .HasForeignKey(a => a.IssueReportID)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<IssueReportAttachment>()
+            .Property(a => a.UploadedAt)
+            .HasDefaultValueSql("NOW()");
 
     }
 }

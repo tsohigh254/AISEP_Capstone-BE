@@ -26,6 +26,9 @@ public class StartupAdvisorMentorship
     public string? ObligationSummary { get; set; }
     public bool CompletionConfirmedByStartup { get; set; }
     public bool CompletionConfirmedByAdvisor { get; set; }
+    public bool IsPayoutEligible { get; set; }
+    /// <summary>Thời điểm Staff release payout vào AdvisorWallet. Null = chưa release.</summary>
+    public DateTime? PayoutReleasedAt { get; set; }
 
     // ===== PAYMENT FIELDS =====
     public decimal SessionAmount { get; set; }           // Giá gốc của mentorship

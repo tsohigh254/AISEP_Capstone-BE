@@ -651,27 +651,47 @@ public class StartupService : IStartupService
         if (!startup.IsVisible)
         {
             var isStaff = userType == "Staff" || userType == "Admin";
-            if (!isStaff)
+            // Owner: Startup user viewing their own profile
+            var isOwner = userType == "Startup" && startup.UserID == requestingUserId;
+
+            if (!isStaff && !isOwner)
             {
-                // Investor exception: still visible if they have an Accepted connection
+                bool canView = false;
+
                 if (userType == "Investor")
                 {
+                    // Investor: có connection Pending hoặc Accepted
                     var investor = await _context.Investors
                         .AsNoTracking()
                         .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
 
-                    var hasAcceptedConnection = investor != null && await _context.StartupInvestorConnections
+                    canView = investor != null && await _context.StartupInvestorConnections
                         .AnyAsync(c => c.StartupID == startupId
                                     && c.InvestorID == investor.InvestorID
-                                    && c.ConnectionStatus == ConnectionStatus.Accepted);
-
-                    if (!hasAcceptedConnection)
-                        return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                                    && (c.ConnectionStatus == ConnectionStatus.Requested
+                                        || c.ConnectionStatus == ConnectionStatus.Accepted
+                                        || c.ConnectionStatus == ConnectionStatus.InDiscussion));
                 }
-                else
+                else if (userType == "Advisor")
                 {
-                    return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                    // Advisor: có mentorship request active (Requested / Accepted / InProgress / InDispute)
+                    var advisor = await _context.Advisors
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(a => a.UserID == requestingUserId);
+
+                    canView = advisor != null && await _context.StartupAdvisorMentorships
+                        .AnyAsync(m => m.StartupID == startupId
+                                    && m.AdvisorID == advisor.AdvisorID
+                                    && (m.MentorshipStatus == MentorshipStatus.Requested
+                                        || m.MentorshipStatus == MentorshipStatus.Accepted
+                                        || m.MentorshipStatus == MentorshipStatus.InProgress
+                                        || m.MentorshipStatus == MentorshipStatus.InDispute
+                                        || m.MentorshipStatus == MentorshipStatus.Completed
+                                        || m.MentorshipStatus == MentorshipStatus.Resolved));
                 }
+
+                if (!canView)
+                    return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
             }
         }
 
@@ -691,19 +711,10 @@ public class StartupService : IStartupService
         return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
-    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, int requestingUserId, string userType)
+    public async Task<ApiResponse<PagedResponse<StartupListItemDto>>> SearchStartupsAsync(StartupQueryParams startupQuery, string userType, int callerUserId = 0)
     {
         var isStaff = userType == "Staff" || userType == "Admin";
-
-        // If the requesting user is an investor, resolve their InvestorID so we can compute connection status
-        int investorId = -1;
-        if (userType == "Investor")
-        {
-            var investor = await _context.Investors
-                .AsNoTracking()
-                .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
-            if (investor != null) investorId = investor.InvestorID;
-        }
+        var isInvestor = userType == "Investor";
 
         var query = _context.Startups.AsNoTracking()
             .Where(s => s.ProfileStatus == ProfileStatus.Approved
@@ -718,15 +729,15 @@ public class StartupService : IStartupService
             || (s.Industry != null && s.Industry.IndustryName.Trim().ToLower().Contains(key)));
         }
 
-
         // Filter by stage
         if (startupQuery.Stage.HasValue)
         {
             query = query.Where(s => s.Stage == startupQuery.Stage.Value);
         }
 
+        var totalItems = await query.CountAsync();
 
-        var items = query
+        var rawItems = await query
             .OrderByDescending(s => s.UpdatedAt ?? s.CreatedAt)
             .Select(s => new StartupListItemDto
             {
@@ -736,20 +747,70 @@ public class StartupService : IStartupService
                 Stage = s.Stage != null ? s.Stage.ToString() : null,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
-                UpdatedAt = s.UpdatedAt,
-                // compute connection status for this startup for the requesting investor (if any)
-                IsConnected = investorId > 0 && _context.StartupInvestorConnections
-                    .Any(c => c.StartupID == s.StartupID && c.InvestorID == investorId && c.ConnectionStatus == ConnectionStatus.Accepted)
-            }).Paging(startupQuery.Page, startupQuery.PageSize);
+                UpdatedAt = s.UpdatedAt
+            })
+            .Skip((startupQuery.Page <= 0 ? 0 : startupQuery.Page - 1) * (startupQuery.PageSize <= 0 ? 20 : startupQuery.PageSize))
+            .Take(startupQuery.PageSize <= 0 ? 20 : startupQuery.PageSize)
+            .ToListAsync();
+
+        // Enrich with connection state when caller is an Investor
+        if (isInvestor && callerUserId > 0 && rawItems.Count > 0)
+        {
+            var investorId = await _context.Investors
+                .AsNoTracking()
+                .Where(i => i.UserID == callerUserId)
+                .Select(i => (int?)i.InvestorID)
+                .FirstOrDefaultAsync();
+
+            if (investorId.HasValue)
+            {
+                var startupIds = rawItems.Select(s => s.StartupID).ToList();
+
+                // Fetch all active connections between this investor and the visible startups
+                var conns = await _context.StartupInvestorConnections
+                    .AsNoTracking()
+                    .Where(c => c.InvestorID == investorId.Value
+                             && startupIds.Contains(c.StartupID)
+                             && (c.ConnectionStatus == ConnectionStatus.Requested
+                              || c.ConnectionStatus == ConnectionStatus.Accepted
+                              || c.ConnectionStatus == ConnectionStatus.InDiscussion))
+                    .Select(c => new { c.StartupID, c.ConnectionID, c.ConnectionStatus, c.InitiatedBy })
+                    .ToListAsync();
+
+                var connByStartup = conns.ToDictionary(c => c.StartupID);
+
+                foreach (var item in rawItems)
+                {
+                    if (connByStartup.TryGetValue(item.StartupID, out var conn))
+                    {
+                        item.ConnectionStatus = conn.ConnectionStatus switch
+                        {
+                            ConnectionStatus.Requested    => "REQUESTED",
+                            ConnectionStatus.Accepted     => "ACCEPTED",
+                            ConnectionStatus.InDiscussion => "IN_DISCUSSION",
+                            _                             => "NONE"
+                        };
+                        item.ConnectionId       = conn.ConnectionID;
+                        item.CanRequestConnection = false;
+                        item.InitiatedByRole    = conn.InitiatedBy == callerUserId ? "INVESTOR" : "STARTUP";
+                    }
+                    else
+                    {
+                        item.ConnectionStatus     = "NONE";
+                        item.CanRequestConnection = true;
+                    }
+                }
+            }
+        }
 
         var result = new PagedResponse<StartupListItemDto>
         {
-            Items = await items.ToListAsync(),
+            Items = rawItems,
             Paging = new PagingInfo
             {
                 Page = startupQuery.Page,
                 PageSize = startupQuery.PageSize,
-                TotalItems = await query.CountAsync(),
+                TotalItems = totalItems,
             }
         };
 
