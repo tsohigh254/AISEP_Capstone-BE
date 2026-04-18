@@ -363,7 +363,10 @@ var app = builder.Build();
     }
 
     // Recurring job: auto-confirm sessions that ended > 24h ago without Startup confirmation
-    RecurringJob.AddOrUpdate<AISEP.Infrastructure.Jobs.SessionAutoConfirmJob>(
+    // Use IRecurringJobManager (DI-based) instead of static RecurringJob to avoid
+    // "JobStorage not initialized" crash when Hangfire server starts as a hosted service
+    var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobs.AddOrUpdate<AISEP.Infrastructure.Jobs.SessionAutoConfirmJob>(
         "session-auto-confirm",
         job => job.RunAsync(),
         "*/15 * * * *");  // every 15 minutes
