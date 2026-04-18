@@ -716,6 +716,16 @@ public class StartupService : IStartupService
         var isStaff = userType == "Staff" || userType == "Admin";
         var isInvestor = userType == "Investor";
 
+        // If the requesting user is an investor, resolve their InvestorID so we can compute connection status
+        int investorId = -1;
+        if (userType == "Investor")
+        {
+            var investor = await _context.Investors
+                .AsNoTracking()
+                .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
+            if (investor != null) investorId = investor.InvestorID;
+        }
+
         var query = _context.Startups.AsNoTracking()
             .Where(s => s.ProfileStatus == ProfileStatus.Approved
                      && (isStaff || s.IsVisible))
