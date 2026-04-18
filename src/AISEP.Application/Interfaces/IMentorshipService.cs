@@ -9,7 +9,7 @@ public interface IMentorshipService
     // Mentorship lifecycle
     Task<ApiResponse<MentorshipDto>> CreateRequestAsync(int userId, CreateMentorshipRequest request);
     Task<ApiResponse<PagedResponse<MentorshipListItemDto>>> GetMyMentorshipsAsync(
-        int userId, string userType, string? status, int page, int pageSize);
+        int userId, string userType, string? status, int page, int pageSize, bool? isPayoutEligible = null);
     Task<ApiResponse<MentorshipDetailDto>> GetDetailAsync(int userId, string userType, int mentorshipId);
     Task<ApiResponse<MentorshipDto>> AcceptAsync(int userId, int mentorshipId);
     Task<ApiResponse<MentorshipDto>> RejectAsync(int userId, int mentorshipId, string? reason);
@@ -24,6 +24,7 @@ public interface IMentorshipService
     Task<ApiResponse<ReportDto>> CreateReportAsync(int userId, int mentorshipId, CreateReportRequest request);
     Task<ApiResponse<ReportDto>> UpdateReportAsync(int userId, int mentorshipId, int reportId, UpdateReportRequest request);
     Task<ApiResponse<ReportDto>> GetReportAsync(int userId, string userType, int reportId);
+    Task<ApiResponse<ReportDto>> AcknowledgeReportAsync(int userId, int mentorshipId, int reportId);
 
     // Feedback
     Task<ApiResponse<FeedbackDto>> CreateFeedbackAsync(int userId, int mentorshipId, CreateFeedbackRequest request);
@@ -43,6 +44,9 @@ public interface IMentorshipService
     // Startup — Confirm conducted
     Task<ApiResponse<SessionDto>> ConfirmConductedAsync(
         int userId, int mentorshipId, int sessionId);
+
+    // Staff oversight — Payout release
+    Task<ApiResponse<ReleasePayoutResultDto>> ReleasePayoutAsync(int staffUserId, int mentorshipId);
 
     // Staff oversight — Session actions
     Task<ApiResponse<SessionOversightResultDto>> MarkSessionCompletedAsync(

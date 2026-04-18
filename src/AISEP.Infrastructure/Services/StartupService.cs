@@ -651,27 +651,47 @@ public class StartupService : IStartupService
         if (!startup.IsVisible)
         {
             var isStaff = userType == "Staff" || userType == "Admin";
-            if (!isStaff)
+            // Owner: Startup user viewing their own profile
+            var isOwner = userType == "Startup" && startup.UserID == requestingUserId;
+
+            if (!isStaff && !isOwner)
             {
-                // Investor exception: still visible if they have an Accepted connection
+                bool canView = false;
+
                 if (userType == "Investor")
                 {
+                    // Investor: có connection Pending hoặc Accepted
                     var investor = await _context.Investors
                         .AsNoTracking()
                         .FirstOrDefaultAsync(i => i.UserID == requestingUserId);
 
-                    var hasAcceptedConnection = investor != null && await _context.StartupInvestorConnections
+                    canView = investor != null && await _context.StartupInvestorConnections
                         .AnyAsync(c => c.StartupID == startupId
                                     && c.InvestorID == investor.InvestorID
-                                    && c.ConnectionStatus == ConnectionStatus.Accepted);
-
-                    if (!hasAcceptedConnection)
-                        return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                                    && (c.ConnectionStatus == ConnectionStatus.Requested
+                                        || c.ConnectionStatus == ConnectionStatus.Accepted
+                                        || c.ConnectionStatus == ConnectionStatus.InDiscussion));
                 }
-                else
+                else if (userType == "Advisor")
                 {
-                    return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
+                    // Advisor: có mentorship request active (Requested / Accepted / InProgress / InDispute)
+                    var advisor = await _context.Advisors
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(a => a.UserID == requestingUserId);
+
+                    canView = advisor != null && await _context.StartupAdvisorMentorships
+                        .AnyAsync(m => m.StartupID == startupId
+                                    && m.AdvisorID == advisor.AdvisorID
+                                    && (m.MentorshipStatus == MentorshipStatus.Requested
+                                        || m.MentorshipStatus == MentorshipStatus.Accepted
+                                        || m.MentorshipStatus == MentorshipStatus.InProgress
+                                        || m.MentorshipStatus == MentorshipStatus.InDispute
+                                        || m.MentorshipStatus == MentorshipStatus.Completed
+                                        || m.MentorshipStatus == MentorshipStatus.Resolved));
                 }
+
+                if (!canView)
+                    return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
             }
         }
 

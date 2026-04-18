@@ -824,7 +824,8 @@ public class AdvisorService : IAdvisorService
             Startup   = new FeedbackStartupSummaryDto
             {
                 Id          = f.Mentorship.StartupID,
-                DisplayName = f.Mentorship.Startup.CompanyName
+                DisplayName = f.Mentorship.Startup.CompanyName,
+                LogoUrl     = f.Mentorship.Startup.LogoURL
             },
             Session = f.Session == null ? null : new FeedbackSessionSummaryDto
             {

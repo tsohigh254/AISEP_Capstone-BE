@@ -160,6 +160,16 @@ public class MentorshipListItemDto
     public DateTime? LatestReportSubmittedAt { get; set; }
     /// <summary>true khi có ít nhất 1 session đang chờ startup chọn slot (ProposedByAdvisor).</summary>
     public bool HasAdvisorProposedSlot { get; set; }
+    /// <summary>Giá gốc Startup thanh toán.</summary>
+    public decimal SessionAmount { get; set; }
+    /// <summary>Phí nền tảng 15%.</summary>
+    public decimal PlatformFeeAmount { get; set; }
+    /// <summary>Số tiền Advisor thực nhận (= SessionAmount - PlatformFeeAmount). Đây là field dùng cho payout.</summary>
+    public decimal ActualAmount { get; set; }
+    /// <summary>true khi đủ điều kiện payout (all sessions Completed, all reports Passed, no dispute).</summary>
+    public bool IsPayoutEligible { get; set; }
+    /// <summary>Thời điểm Staff release payout. Null = chưa release.</summary>
+    public DateTime? PayoutReleasedAt { get; set; }
 }
 
 /// <summary>Detail DTO with sessions, reports, feedbacks.</summary>
@@ -198,6 +208,10 @@ public class MentorshipDetailDto
     public DateTime? PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    /// <summary>true khi tất cả sessions đã Completed, Startup đã xác nhận, và tất cả reports đã Passed — advisor đủ điều kiện nhận payout.</summary>
+    public bool IsPayoutEligible { get; set; }
+    /// <summary>Thời điểm Staff release payout vào AdvisorWallet. Null = chưa release, !null = đã release.</summary>
+    public DateTime? PayoutReleasedAt { get; set; }
     public List<SessionDto> Sessions { get; set; } = new();
     public List<ReportDto> Reports { get; set; } = new();
     public List<FeedbackDto> Feedbacks { get; set; } = new();
@@ -214,6 +228,8 @@ public class SessionDto
     public string? SessionFormat { get; set; }
     public string? MeetingURL { get; set; }
     public string? SessionStatus { get; set; }
+    /// <summary>"Startup" | "Advisor" — ai là người đề xuất slot này ban đầu.</summary>
+    public string? ProposedBy { get; set; }
     public string? TopicsDiscussed { get; set; }
     public string? KeyInsights { get; set; }
     public string? ActionItems { get; set; }
@@ -264,11 +280,17 @@ public class ReportDto
     public string? Recommendations { get; set; }
     public string? AttachmentsURL { get; set; }
     public DateTime? SubmittedAt { get; set; }
+    public DateTime? StartupAcknowledgedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool IsLatestForSession { get; set; }
     public string ReviewStatus { get; set; } = string.Empty;
     public string? StaffReviewNote { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    /// <summary>= SubmittedAt + 24h. Null if report not yet submitted.</summary>
+    public DateTime? IssueReportDeadlineAt { get; set; }
+    /// <summary>True if now is within the 24h issue-report window.</summary>
+    public bool CanSubmitIssueReport { get; set; }
 }
 
 /// <summary>Feedback DTO.</summary>
@@ -348,6 +370,7 @@ public class ReportOversightDto
     public bool IsLatestForSession { get; set; }
     public string? SessionStatus { get; set; }
     public DateTime? StartupConfirmedConductedAt { get; set; }
+    public DateTime? StartupAcknowledgedAt { get; set; }
     public string? MentorshipStatus { get; set; }
     public string? ChallengeDescription { get; set; }
 }
@@ -375,4 +398,17 @@ public class SessionOversightResultDto
     public bool IsPayoutEligible { get; set; }
     public int? MarkedByStaffID { get; set; }
     public DateTime? MarkedAt { get; set; }
+}
+
+/// <summary>Result after staff releases payout to AdvisorWallet.</summary>
+public class ReleasePayoutResultDto
+{
+    public int MentorshipID { get; set; }
+    /// <summary>Số tiền được credit vào AdvisorWallet (= ActualAmount của mentorship).</summary>
+    public decimal CreditedAmount { get; set; }
+    /// <summary>Thời điểm release. Luôn != null sau khi thành công.</summary>
+    public DateTime PayoutReleasedAt { get; set; }
+    /// <summary>isPayoutEligible vẫn = true sau release — dùng PayoutReleasedAt để phân biệt "eligible chưa release" vs "đã release".</summary>
+    public bool IsPayoutEligible { get; set; }
+    public int ReleasedByStaffID { get; set; }
 }

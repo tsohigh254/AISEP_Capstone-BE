@@ -19,6 +19,7 @@ public class MentorshipReport
     public string? StaffReviewNote { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public int? SupersededByReportID { get; set; }
+    public DateTime? StartupAcknowledgedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

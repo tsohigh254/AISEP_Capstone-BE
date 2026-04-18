@@ -97,6 +97,7 @@ public class MentorshipService : IMentorshipService
                     ScheduledStartAt = slot.StartAt.ToUniversalTime(),
                     DurationMinutes = (int)(slot.EndAt - slot.StartAt).TotalMinutes,
                     SessionStatus = "ProposedByStartup",
+                    ProposedBy = "Startup",
                     CreatedAt = DateTime.UtcNow
                 });
             }
@@ -134,7 +135,7 @@ public class MentorshipService : IMentorshipService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<MentorshipListItemDto>>> GetMyMentorshipsAsync(
-        int userId, string userType, string? status, int page, int pageSize)
+        int userId, string userType, string? status, int page, int pageSize, bool? isPayoutEligible = null)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(page, 1);
@@ -177,6 +178,9 @@ public class MentorshipService : IMentorshipService
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<MentorshipStatus>(status, true, out var statusEnum))
             query = query.Where(m => m.MentorshipStatus == statusEnum);
 
+        if (isPayoutEligible.HasValue)
+            query = query.Where(m => m.IsPayoutEligible == isPayoutEligible.Value);
+
         query = query.OrderByDescending(m => m.CreatedAt);
 
         var totalItems = await query.CountAsync();
@@ -208,7 +212,12 @@ public class MentorshipService : IMentorshipService
                 LatestReportSubmittedAt = m.Reports.Any()
                     ? m.Reports.Max(r => r.SubmittedAt)
                     : null,
-                HasAdvisorProposedSlot = m.Sessions.Any(s => s.SessionStatus == SessionStatusValues.ProposedByAdvisor)
+                HasAdvisorProposedSlot = m.Sessions.Any(s => s.SessionStatus == SessionStatusValues.ProposedByAdvisor),
+                SessionAmount = m.SessionAmount,
+                PlatformFeeAmount = m.PlatformFeeAmount,
+                ActualAmount = m.ActualAmount,
+                IsPayoutEligible = m.IsPayoutEligible,
+                PayoutReleasedAt = m.PayoutReleasedAt,
             })
             .ToList();
 
@@ -565,26 +574,41 @@ public class MentorshipService : IMentorshipService
         // Mentorship stays Requested — does NOT auto-advance.
         bool isCounterProposal = mentorship.MentorshipStatus == MentorshipStatus.Requested;
 
-        // Auto-fill meeting URL from advisor profile if not explicitly provided
+        // SessionFormat luôn lấy từ mentorship.PreferredFormat — Advisor không được override
+        var resolvedFormat = mentorship.PreferredFormat;
+
+        // Auto-fill meeting URL: pick link matching the resolved format
         var advisor = await _db.Advisors.AsNoTracking()
             .FirstOrDefaultAsync(a => a.UserID == userId);
         var resolvedMeetingUrl = request.MeetingUrl
-            ?? advisor?.GoogleMeetLink
-            ?? advisor?.MsTeamsLink;
+            ?? ResolveAdvisorMeetingUrl(advisor, resolvedFormat);
 
         var session = new MentorshipSession
         {
             MentorshipID = mentorshipId,
             ScheduledStartAt = scheduledAt,
             DurationMinutes = request.DurationMinutes,
-            SessionFormat = request.SessionFormat,
+            SessionFormat = resolvedFormat,
             MeetingURL = resolvedMeetingUrl,
             SessionStatus = isCounterProposal ? SessionStatusValues.ProposedByAdvisor : SessionStatusValues.Scheduled,
+            ProposedBy = "Advisor",
             Note = request.Note,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.MentorshipSessions.Add(session);
+
+        // Cancel tất cả ProposedByStartup slots cũ đang pending — dù Advisor counter-propose hay direct schedule
+        // Đảm bảo detail response sạch, FE không cần infer slot nào còn hiệu lực
+        var pendingSlotsToCancel = await _db.MentorshipSessions
+            .Where(s => s.MentorshipID == mentorshipId
+                && s.SessionStatus == SessionStatusValues.ProposedByStartup)
+            .ToListAsync();
+        foreach (var s in pendingSlotsToCancel)
+        {
+            s.SessionStatus = SessionStatusValues.Cancelled;
+            s.UpdatedAt = DateTime.UtcNow;
+        }
 
         // Only advance mentorship status when advisor is scheduling directly (not counter-proposing)
         if (!isCounterProposal)
@@ -597,14 +621,13 @@ public class MentorshipService : IMentorshipService
                 mentorship.UpdatedAt = DateTime.UtcNow;
             }
 
-            // Cancel all pending proposal slots — advisor is directly scheduling
-            var pendingSlots = await _db.MentorshipSessions
+            // Cancel any remaining ProposedByAdvisor slots too (direct schedule supersedes all pending)
+            var pendingAdvisorSlots = await _db.MentorshipSessions
                 .Where(s => s.MentorshipID == mentorshipId
                     && s.SessionID != session.SessionID
-                    && (s.SessionStatus == SessionStatusValues.ProposedByStartup
-                        || s.SessionStatus == SessionStatusValues.ProposedByAdvisor))
+                    && s.SessionStatus == SessionStatusValues.ProposedByAdvisor)
                 .ToListAsync();
-            foreach (var s in pendingSlots)
+            foreach (var s in pendingAdvisorSlots)
             {
                 s.SessionStatus = SessionStatusValues.Cancelled;
                 s.UpdatedAt = DateTime.UtcNow;
@@ -673,7 +696,7 @@ public class MentorshipService : IMentorshipService
 
         if (request.ScheduledStartAt.HasValue) session.ScheduledStartAt = request.ScheduledStartAt.Value;
         if (request.DurationMinutes.HasValue) session.DurationMinutes = request.DurationMinutes.Value;
-        if (request.SessionFormat != null) session.SessionFormat = request.SessionFormat;
+        // SessionFormat không cho Advisor override — luôn giữ theo mentorship.PreferredFormat
         if (request.MeetingUrl != null) session.MeetingURL = request.MeetingUrl;
         if (request.SessionStatus != null) session.SessionStatus = request.SessionStatus;
         if (request.TopicsDiscussed != null) session.TopicsDiscussed = request.TopicsDiscussed;
@@ -708,13 +731,13 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"Only sessions with status '{SessionStatusValues.ProposedByStartup}' can be accepted by advisor.");
 
-        // Auto-fill meeting URL from advisor profile if session has none
-        if (string.IsNullOrEmpty(session.MeetingURL))
-        {
-            var advisorProfile = await _db.Advisors.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.UserID == userId);
-            session.MeetingURL = advisorProfile?.GoogleMeetLink ?? advisorProfile?.MsTeamsLink;
-        }
+        // Luôn enforce SessionFormat theo mentorship.PreferredFormat — không cho data cũ ghi đè
+        session.SessionFormat = mentorship.PreferredFormat;
+
+        // Luôn re-resolve meeting URL theo đúng format
+        var advisorProfile = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        session.MeetingURL = ResolveAdvisorMeetingUrl(advisorProfile, session.SessionFormat);
 
         // Accept the chosen slot
         session.SessionStatus = SessionStatusValues.Scheduled;
@@ -806,6 +829,12 @@ public class MentorshipService : IMentorshipService
         if (session.SessionStatus != SessionStatusValues.ProposedByAdvisor)
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"Only sessions with status '{SessionStatusValues.ProposedByAdvisor}' can be confirmed by startup.");
+
+        // Luôn enforce SessionFormat và re-resolve MeetingURL theo mentorship.PreferredFormat
+        session.SessionFormat = mentorship.PreferredFormat;
+        var advisorProfile2 = await _db.Advisors.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AdvisorID == mentorship.AdvisorID);
+        session.MeetingURL = ResolveAdvisorMeetingUrl(advisorProfile2, session.SessionFormat);
 
         // Confirm the chosen slot
         session.SessionStatus = SessionStatusValues.Scheduled;
@@ -920,6 +949,7 @@ public class MentorshipService : IMentorshipService
             attachmentsUrl = await _cloudinary.UploadDocument(request.AttachmentFile, CloudinaryFolderSaving.DocumentStorage);
 
         var isDraft = request.IsDraft;
+        var now = DateTime.UtcNow;
         var report = new MentorshipReport
         {
             MentorshipID = mentorshipId,
@@ -929,9 +959,11 @@ public class MentorshipService : IMentorshipService
             DetailedFindings = request.DetailedFindings,
             Recommendations = request.Recommendations,
             AttachmentsURL = attachmentsUrl,
-            ReportReviewStatus = isDraft ? ReportReviewStatus.Draft : ReportReviewStatus.PendingReview,
-            SubmittedAt = isDraft ? null : DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow
+            // Auto-approve: submitted report tự động Passed, không cần Staff duyệt thủ công
+            ReportReviewStatus = isDraft ? ReportReviewStatus.Draft : ReportReviewStatus.Passed,
+            SubmittedAt = isDraft ? null : now,
+            ReviewedAt = isDraft ? null : now,
+            CreatedAt = now
         };
 
         _db.MentorshipReports.Add(report);
@@ -953,25 +985,48 @@ public class MentorshipService : IMentorshipService
             if (supersededReport != null)
             {
                 supersededReport.SupersededByReportID = report.ReportID;
-                await _db.SaveChangesAsync();
             }
+
+            // Auto-complete session nếu Startup đã confirm (Conducted).
+            // Nếu chưa confirm (Scheduled/InProgress), để session nguyên —
+            // khi Startup confirm sau sẽ tự động Completed (xử lý trong ConfirmConductedAsync).
+            var session = await _db.MentorshipSessions
+                .FirstOrDefaultAsync(s => s.SessionID == request.SessionId.Value);
+            if (session != null && session.SessionStatus == SessionStatusValues.Conducted)
+            {
+                session.SessionStatus = SessionStatusValues.Completed;
+                session.UpdatedAt = now;
+            }
+
+            // Recalculate eligibility sau khi report Passed + session Completed
+            var mentorshipFull = await _db.StartupAdvisorMentorships
+                .Include(m => m.Sessions)
+                .Include(m => m.Reports)
+                .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+            if (mentorshipFull != null)
+            {
+                RecalculateMentorshipStatus(mentorshipFull);
+                RecalculatePayoutEligibility(mentorshipFull);
+            }
+
+            await _db.SaveChangesAsync();
         }
 
-        await _audit.LogAsync(isDraft ? "CREATE_REPORT_DRAFT" : "CREATE_REPORT", "MentorshipReport", report.ReportID,
+        await _audit.LogAsync(isDraft ? "CREATE_REPORT_DRAFT" : "CREATE_REPORT_AUTO_APPROVED", "MentorshipReport", report.ReportID,
             $"MentorshipId={mentorshipId}, SupersededReportId={supersededReport?.ReportID}");
         _logger.LogInformation("Report {ReportId} created for mentorship {MentorshipId} (isDraft={IsDraft})",
             report.ReportID, mentorshipId, isDraft);
 
-        // Notify Startup
+        // Notify Startup — report đã được duyệt tự động, Startup xem được ngay
         var startup = await _db.Startups.AsNoTracking().FirstOrDefaultAsync(s => s.StartupID == mentorship.StartupID);
-        if (startup != null)
+        if (startup != null && !isDraft)
         {
             await _notifications.CreateAndPushAsync(new CreateNotificationRequest
             {
                 UserId = startup.UserID,
                 NotificationType = "CONSULTING",
-                Title = "Báo cáo tư vấn mới",
-                Message = $"Advisor đã gửi báo cáo cho buổi tư vấn của bạn.",
+                Title = "Báo cáo tư vấn đã sẵn sàng",
+                Message = "Advisor đã hoàn thành báo cáo buổi tư vấn. Bạn có thể xem ngay.",
                 RelatedEntityType = "MentorshipReport",
                 RelatedEntityId = report.ReportID,
                 ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
@@ -1050,21 +1105,116 @@ public class MentorshipService : IMentorshipService
             report.AttachmentsURL = await _cloudinary.UploadDocument(request.AttachmentFile, CloudinaryFolderSaving.DocumentStorage);
 
         bool submitting = !request.IsDraft;
+        var now2 = DateTime.UtcNow;
+
         if (submitting)
         {
-            report.ReportReviewStatus = ReportReviewStatus.PendingReview;
-            report.SubmittedAt = DateTime.UtcNow;
+            // Auto-approve: submitted report tự động Passed
+            report.ReportReviewStatus = ReportReviewStatus.Passed;
+            report.SubmittedAt = now2;
+            report.ReviewedAt = now2;
 
-            // Supersede chain only applies when creating new report (POST), not PATCH
+            // Auto-complete session nếu Startup đã confirm (Conducted).
+            // Nếu chưa confirm, để nguyên — ConfirmConductedAsync sẽ xử lý sau.
+            if (report.SessionID.HasValue)
+            {
+                var session2 = await _db.MentorshipSessions
+                    .FirstOrDefaultAsync(s => s.SessionID == report.SessionID.Value);
+                if (session2 != null && session2.SessionStatus == SessionStatusValues.Conducted)
+                {
+                    session2.SessionStatus = SessionStatusValues.Completed;
+                    session2.UpdatedAt = now2;
+                }
+            }
+
+            // Recalculate eligibility
+            var mentorshipFull2 = await _db.StartupAdvisorMentorships
+                .Include(m => m.Sessions)
+                .Include(m => m.Reports)
+                .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+            if (mentorshipFull2 != null)
+            {
+                RecalculateMentorshipStatus(mentorshipFull2);
+                RecalculatePayoutEligibility(mentorshipFull2);
+            }
+
+            // Notify Startup
+            var mentorshipForNotify = mentorshipFull2 ?? mentorship;
+            var startup2 = await _db.Startups.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.StartupID == mentorshipForNotify.StartupID);
+            if (startup2 != null)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = startup2.UserID,
+                    NotificationType = "CONSULTING",
+                    Title = "Báo cáo tư vấn đã sẵn sàng",
+                    Message = "Advisor đã hoàn thành báo cáo buổi tư vấn. Bạn có thể xem ngay.",
+                    RelatedEntityType = "MentorshipReport",
+                    RelatedEntityId = report.ReportID,
+                    ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+                });
+            }
         }
 
-        report.UpdatedAt = DateTime.UtcNow;
+        report.UpdatedAt = now2;
         await _db.SaveChangesAsync();
 
-        await _audit.LogAsync(submitting ? "SUBMIT_REPORT_DRAFT" : "UPDATE_REPORT_DRAFT",
+        await _audit.LogAsync(submitting ? "SUBMIT_REPORT_DRAFT_AUTO_APPROVED" : "UPDATE_REPORT_DRAFT",
             "MentorshipReport", report.ReportID, $"MentorshipId={mentorshipId}");
 
         return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report));
+    }
+
+    // ================================================================
+    // ACKNOWLEDGE REPORT (Startup)
+    // ================================================================
+
+    public async Task<ApiResponse<ReportDto>> AcknowledgeReportAsync(int userId, int mentorshipId, int reportId)
+    {
+        var startup = await _db.Startups.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+        if (startup == null)
+            return ApiResponse<ReportDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
+
+        var mentorship = await _db.StartupAdvisorMentorships
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId && m.StartupID == startup.StartupID);
+        if (mentorship == null)
+            return ApiResponse<ReportDto>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
+
+        var report = await _db.MentorshipReports
+            .FirstOrDefaultAsync(r => r.ReportID == reportId && r.MentorshipID == mentorshipId);
+        if (report == null)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_FOUND", "Report not found.");
+
+        if (report.ReportReviewStatus != ReportReviewStatus.Passed)
+            return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_PASSED",
+                "Only Passed reports can be acknowledged.");
+
+        if (report.StartupAcknowledgedAt != null)
+            return ApiResponse<ReportDto>.ErrorResponse("ALREADY_ACKNOWLEDGED",
+                $"Report already acknowledged at {report.StartupAcknowledgedAt:o}.");
+
+        var now = DateTime.UtcNow;
+        report.StartupAcknowledgedAt = now;
+        report.UpdatedAt = now;
+
+        // Recalculate payout eligibility
+        var mentorshipFull = await _db.StartupAdvisorMentorships
+            .Include(m => m.Sessions)
+            .Include(m => m.Reports)
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+        if (mentorshipFull != null)
+        {
+            RecalculateMentorshipStatus(mentorshipFull);
+            RecalculatePayoutEligibility(mentorshipFull);
+        }
+
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("ACKNOWLEDGE_REPORT", "MentorshipReport", reportId,
+            $"MentorshipId={mentorshipId}");
+
+        return ApiResponse<ReportDto>.SuccessResponse(MapReportDto(report), "Report acknowledged successfully.");
     }
 
     // ================================================================
@@ -1186,6 +1336,22 @@ public class MentorshipService : IMentorshipService
         return (mentorship, null);
     }
 
+    /// <summary>Picks the advisor's meeting link that matches the session format.
+    /// Falls back to whichever link is available if format is ambiguous or null.</summary>
+    private static string? ResolveAdvisorMeetingUrl(Domain.Entities.Advisor? advisor, string? format)
+    {
+        if (advisor == null) return null;
+        if (!string.IsNullOrEmpty(format))
+        {
+            var f = format.ToLowerInvariant();
+            if (f.Contains("google") || f.Contains("meet"))
+                return advisor.GoogleMeetLink ?? advisor.MsTeamsLink;
+            if (f.Contains("teams") || f.Contains("microsoft"))
+                return advisor.MsTeamsLink ?? advisor.GoogleMeetLink;
+        }
+        return advisor.GoogleMeetLink ?? advisor.MsTeamsLink;
+    }
+
     private async Task<bool> IsParticipantOrStaff(int userId, string userType, StartupAdvisorMentorship mentorship)
     {
         if (userType == "Staff" || userType == "Admin") return true;
@@ -1264,6 +1430,8 @@ public class MentorshipService : IMentorshipService
         PaidAt = m.PaidAt,
         CreatedAt = m.CreatedAt,
         UpdatedAt = m.UpdatedAt,
+        IsPayoutEligible = m.IsPayoutEligible,
+        PayoutReleasedAt = m.PayoutReleasedAt,
         Sessions = m.Sessions.Select(s => MapSessionDto(s,
             callerType == "Startup" && m.PaymentStatus != PaymentStatus.Completed)).ToList(),
         Reports = (callerType == "Startup"
@@ -1271,6 +1439,7 @@ public class MentorshipService : IMentorshipService
             : callerType is "Staff" or "Admin"
                 ? m.Reports.Where(r => r.ReportReviewStatus != ReportReviewStatus.Draft)
                 : m.Reports)  // Advisor sees all including own Drafts
+            .OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt)
             .Select(r => MapReportDto(r, callerType)).ToList(),
         Feedbacks = m.Feedbacks.Select(MapFeedbackDto).ToList(),
         TimelineEvents = BuildTimeline(m)
@@ -1364,6 +1533,7 @@ public class MentorshipService : IMentorshipService
         ActionItems = s.ActionItems,
         NextSteps = s.NextSteps,
         Note = s.Note,
+        ProposedBy = s.ProposedBy,
         CreatedAt = s.CreatedAt,
         UpdatedAt = s.UpdatedAt,
         StartupConfirmedConductedAt = s.StartupConfirmedConductedAt,
@@ -1384,11 +1554,15 @@ public class MentorshipService : IMentorshipService
         Recommendations = r.Recommendations,
         AttachmentsURL = r.AttachmentsURL,
         SubmittedAt = r.SubmittedAt,
+        StartupAcknowledgedAt = r.StartupAcknowledgedAt,
         CreatedAt = r.CreatedAt,
         UpdatedAt = r.UpdatedAt,
+        IsLatestForSession = r.SupersededByReportID == null,
         ReviewStatus = r.ReportReviewStatus.ToString(),
         StaffReviewNote = callerType == "Startup" ? null : r.StaffReviewNote,
-        ReviewedAt = r.ReviewedAt
+        ReviewedAt = r.ReviewedAt,
+        IssueReportDeadlineAt = r.SubmittedAt.HasValue ? r.SubmittedAt.Value.AddHours(24) : null,
+        CanSubmitIssueReport = r.SubmittedAt.HasValue && DateTime.UtcNow <= r.SubmittedAt.Value.AddHours(24)
     };
 
     private static FeedbackDto MapFeedbackDto(MentorshipFeedback f) => new()
@@ -1489,9 +1663,10 @@ public class MentorshipService : IMentorshipService
                      && r.ReportReviewStatus != ReportReviewStatus.Draft)  // Draft never enters staff queue
             .AsNoTracking();
 
-        if (string.IsNullOrEmpty(reviewStatus) || reviewStatus == "PendingReview")
-            query = query.Where(r => r.ReportReviewStatus == ReportReviewStatus.PendingReview);
-        else if (reviewStatus != "all" && Enum.TryParse<ReportReviewStatus>(reviewStatus, out var s))
+        // PendingReview không còn xuất hiện trong luồng bình thường (auto-approve).
+        // Default: show all (Staff tự filter theo nhu cầu).
+        if (!string.IsNullOrEmpty(reviewStatus) && reviewStatus != "all"
+            && Enum.TryParse<ReportReviewStatus>(reviewStatus, out var s))
             query = query.Where(r => r.ReportReviewStatus == s);
 
         if (advisorId.HasValue)
@@ -1531,6 +1706,7 @@ public class MentorshipService : IMentorshipService
                 IsLatestForSession = r.SupersededByReportID == null,
                 SessionStatus = r.Session != null ? r.Session.SessionStatus : null,
                 StartupConfirmedConductedAt = r.Session != null ? r.Session.StartupConfirmedConductedAt : null,
+                StartupAcknowledgedAt = r.StartupAcknowledgedAt,
                 MentorshipStatus = r.Mentorship.MentorshipStatus.ToString(),
                 ChallengeDescription = r.Mentorship.ChallengeDescription
             })
@@ -1631,13 +1807,34 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<SessionDto>.ErrorResponse("PAYMENT_REQUIRED",
                 "Payment must be completed before confirming the session as conducted.");
 
+        var confirmNow = DateTime.UtcNow;
         session.SessionStatus = SessionStatusValues.Conducted;
-        session.StartupConfirmedConductedAt = DateTime.UtcNow;
-        session.UpdatedAt = DateTime.UtcNow;
+        session.StartupConfirmedConductedAt = confirmNow;
+        session.UpdatedAt = confirmNow;
+
+        // Nếu Advisor đã submit report Passed trước — auto-complete ngay
+        var hasPassedReport = await _db.MentorshipReports
+            .AnyAsync(r => r.SessionID == sessionId
+                        && r.MentorshipID == mentorshipId
+                        && r.ReportReviewStatus == ReportReviewStatus.Passed
+                        && r.SupersededByReportID == null);
+        if (hasPassedReport)
+        {
+            session.SessionStatus = SessionStatusValues.Completed;
+            var mentorshipFull = await _db.StartupAdvisorMentorships
+                .Include(m => m.Sessions)
+                .Include(m => m.Reports)
+                .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+            if (mentorshipFull != null)
+            {
+                RecalculateMentorshipStatus(mentorshipFull);
+                RecalculatePayoutEligibility(mentorshipFull);
+            }
+        }
 
         await _db.SaveChangesAsync();
         await _audit.LogAsync("CONFIRM_CONDUCTED", "MentorshipSession", sessionId,
-            $"MentorshipId={mentorshipId}");
+            $"MentorshipId={mentorshipId}, AutoCompleted={hasPassedReport}");
 
         return ApiResponse<SessionDto>.SuccessResponse(MapSessionDto(session),
             "Session confirmed as conducted.");
@@ -1780,6 +1977,77 @@ public class MentorshipService : IMentorshipService
     }
 
     // ================================================================
+    // STAFF — RELEASE PAYOUT (SVC-9)
+    // ================================================================
+
+    public async Task<ApiResponse<ReleasePayoutResultDto>> ReleasePayoutAsync(
+        int staffUserId, int mentorshipId)
+    {
+        var mentorship = await _db.StartupAdvisorMentorships
+            .Include(m => m.Advisor)
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+
+        if (mentorship == null)
+            return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("MENTORSHIP_NOT_FOUND",
+                "Mentorship not found.");
+
+        if (!mentorship.IsPayoutEligible)
+            return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("NOT_ELIGIBLE",
+                "Mentorship is not yet eligible for payout.");
+
+        // Guard idempotency — tránh credit 2 lần nếu staff bấm 2 lần
+        if (mentorship.PayoutReleasedAt != null)
+            return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("PAYOUT_ALREADY_RELEASED",
+                $"Payout was already released at {mentorship.PayoutReleasedAt:O}.");
+
+        // Tìm hoặc tạo AdvisorWallet
+        var wallet = await _db.AdvisorWallets
+            .FirstOrDefaultAsync(w => w.AdvisorId == mentorship.AdvisorID);
+
+        if (wallet == null)
+            return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("WALLET_NOT_FOUND",
+                "Advisor does not have a wallet. Please ask advisor to create one first.");
+
+        var releasedAt = DateTime.UtcNow;
+        var amount = mentorship.ActualAmount;
+
+        // Credit vào wallet
+        wallet.Balance += amount;
+        wallet.TotalEarned += amount;
+
+        // Tạo WalletTransaction ghi nhận khoản deposit
+        var transaction = new WalletTransaction
+        {
+            WalletId = wallet.WalletId,
+            MentorshipID = mentorshipId,
+            Amount = amount,
+            Type = TransactionType.Deposit,
+            Status = TransactionStatus.Completed,
+            CreatedAt = releasedAt
+        };
+
+        // Đánh dấu mentorship đã release
+        mentorship.PayoutReleasedAt = releasedAt;
+        mentorship.UpdatedAt = releasedAt;
+
+        _db.AdvisorWallets.Update(wallet);
+        _db.WalletTransactions.Add(transaction);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("STAFF_RELEASE_PAYOUT", "StartupAdvisorMentorship", mentorshipId,
+            $"Credited {amount} to wallet {wallet.WalletId} for advisor {mentorship.AdvisorID}");
+
+        return ApiResponse<ReleasePayoutResultDto>.SuccessResponse(new ReleasePayoutResultDto
+        {
+            MentorshipID = mentorshipId,
+            CreditedAmount = amount,
+            PayoutReleasedAt = releasedAt,
+            IsPayoutEligible = mentorship.IsPayoutEligible,
+            ReleasedByStaffID = staffUserId
+        }, "Payout released successfully.");
+    }
+
+    // ================================================================
     // HELPER: Recalculate Mentorship Status from Sessions (SVC-7)
     // ================================================================
 
@@ -1837,10 +2105,15 @@ public class MentorshipService : IMentorshipService
         var allReportsPassed = currentReports.Any()
             && currentReports.All(r => r.ReportReviewStatus == ReportReviewStatus.Passed);
 
+        var allReportsAcknowledged = currentReports.Any()
+            && currentReports
+                .Where(r => r.ReportReviewStatus == ReportReviewStatus.Passed)
+                .All(r => r.StartupAcknowledgedAt != null);
+
         var noDispute = !activeSessions.Any(s => s.SessionStatus == SessionStatusValues.InDispute);
 
         mentorship.IsPayoutEligible =
-            allSessionsCompleted && allStartupConfirmed && allReportsPassed && noDispute;
+            allSessionsCompleted && allStartupConfirmed && allReportsPassed && allReportsAcknowledged && noDispute;
     }
 
     // ================================================================

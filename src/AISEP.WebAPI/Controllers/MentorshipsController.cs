@@ -66,12 +66,13 @@ public class MentorshipsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<MentorshipListItemDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyMentorships(
         [FromQuery] string? status,
+        [FromQuery] bool? isPayoutEligible,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         var userId = GetCurrentUserId();
         var userType = GetCurrentUserType();
-        var result = await _mentorshipService.GetMyMentorshipsAsync(userId, userType, status, page, pageSize);
+        var result = await _mentorshipService.GetMyMentorshipsAsync(userId, userType, status, page, pageSize, isPayoutEligible);
         return result.ToActionResult();
     }
 
@@ -373,6 +374,16 @@ public class MentorshipsController : ControllerBase
     }
 
     // ================================================================
+    // 9b) POST /api/mentorships/{id}/reports/{reportId}/acknowledge — Startup acknowledges report
+    [HttpPost("{id:int}/reports/{reportId:int}/acknowledge")]
+    [Authorize(Policy = "StartupOnly")]
+    public async Task<IActionResult> AcknowledgeReport(int id, int reportId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _mentorshipService.AcknowledgeReportAsync(userId, id, reportId);
+        return result.ToActionResult();
+    }
+
     // OVERSIGHT — GET /api/mentorships/oversight/reports (Staff/Admin)
     // ================================================================
 
@@ -487,6 +498,25 @@ public class MentorshipsController : ControllerBase
         var staffUserId = GetCurrentUserId();
         var result = await _mentorshipService.MarkSessionResolvedAsync(
             staffUserId, id, sessionId, request);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // OVERSIGHT — POST /api/mentorships/{id}/release-payout (Staff/Admin)
+    // ================================================================
+
+    /// <summary>
+    /// Staff releases payout: credits ActualAmount into AdvisorWallet and records a WalletTransaction.
+    /// Guard: returns PAYOUT_ALREADY_RELEASED if called more than once (idempotent).
+    /// </summary>
+    [HttpPost("{id:int}/release-payout")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    [ProducesResponseType(typeof(ApiResponse<ReleasePayoutResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<ReleasePayoutResultDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ReleasePayout(int id)
+    {
+        var staffUserId = GetCurrentUserId();
+        var result = await _mentorshipService.ReleasePayoutAsync(staffUserId, id);
         return result.ToActionResult();
     }
 }
