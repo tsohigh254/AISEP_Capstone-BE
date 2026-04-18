@@ -7,5 +7,6 @@ public class EmailOtp
     public User User { get; set; } = null!;
     public string Otp { get; set; } = null!;
     public bool IsUsed { get; set; }
+    public DateTime CreatedAt { get; set; }
     public DateTime ExpiredAt { get; set; }
 }

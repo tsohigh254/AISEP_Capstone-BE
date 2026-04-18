@@ -482,6 +482,9 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse<string>> ResendVerificationAsync(ResendEmailRequest resendEmailRequest)
     {
+        const int ResendCooldownSeconds = 60;
+        const int MaxResendPer24h = 5;
+
         var normalizedEmail = resendEmailRequest.Email.Trim().ToLowerInvariant();
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
 
@@ -492,12 +495,54 @@ public class AuthService : IAuthService
                 Message = "User does not exists"
             };
 
+        if (!user.IsActive)
+        {
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = "Account is locked or deactivated"
+            };
+        }
+
         if (user.EmailVerified)
         {
             return new AuthResponse<string>
             {
                 Success = false,
                 Message = "Email is already verified"
+            };
+        }
+
+        var now = DateTime.UtcNow;
+
+        var lastCreatedAt = await _context.EmailOtps
+            .Where(o => o.UserId == user.UserID)
+            .MaxAsync(o => (DateTime?)o.CreatedAt);
+
+        if (lastCreatedAt.HasValue)
+        {
+            var elapsed = (now - lastCreatedAt.Value).TotalSeconds;
+            if (elapsed < ResendCooldownSeconds)
+            {
+                var waitSeconds = (int)Math.Ceiling(ResendCooldownSeconds - elapsed);
+                return new AuthResponse<string>
+                {
+                    Success = false,
+                    Message = $"Please wait {waitSeconds}s before requesting another verification email"
+                };
+            }
+        }
+
+        var windowStart = now.AddHours(-24);
+        var recentCount = await _context.EmailOtps
+            .CountAsync(o => o.UserId == user.UserID && o.CreatedAt >= windowStart);
+
+        if (recentCount >= MaxResendPer24h)
+        {
+            return new AuthResponse<string>
+            {
+                Success = false,
+                Message = $"You have reached the maximum of {MaxResendPer24h} verification emails per 24 hours. Please try again later."
             };
         }
 
@@ -540,12 +585,14 @@ public class AuthService : IAuthService
     {
         var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
+        var now = DateTime.UtcNow;
         var emailOtp = new EmailOtp
         {
             UserId = userId,
             IsUsed = false,
             Otp = otp,
-            ExpiredAt = DateTime.UtcNow.AddMinutes(5)
+            CreatedAt = now,
+            ExpiredAt = now.AddMinutes(5)
         };
 
         _context.EmailOtps.Add(emailOtp);
