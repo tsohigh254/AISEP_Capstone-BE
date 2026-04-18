@@ -87,6 +87,23 @@ public class AiEvaluationController : ControllerBase
     }
 
     /// <summary>
+    /// Get the source-specific report for a single document type (combined-mode runs only).
+    /// <paramref name="documentType"/> must be snake_case: <c>pitch_deck</c> or <c>business_plan</c>.
+    /// Returns 404 if the document was not part of this run.
+    /// </summary>
+    [HttpGet("{runId:int}/report/source/{documentType}")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiEnvelope<EvaluationReportResult>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiEnvelope<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSourceReport(int runId, string documentType)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _service.GetSourceReportAsync(runId, documentType, userId);
+        return result.ToEnvelope();
+    }
+
+    /// <summary>
     /// Get evaluation history for a startup.
     /// </summary>
     [HttpGet("history/{startupId:int}")]

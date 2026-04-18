@@ -105,8 +105,36 @@ public class PythonAiClient
 
         await EnsureSuccessOrThrow(resp, ct);
 
-        var report = await resp.Content.ReadFromJsonAsync<PythonCanonicalReport>(JsonOpts, ct);
+        // Python wraps the canonical report inside a { "report": {...}, "report_mode": "..." } object.
+        // Deserialize the wrapper first, then unwrap the inner report.
+        var wrapper = await resp.Content.ReadFromJsonAsync<PythonReportWrapperResponse>(JsonOpts, ct);
+        var report = wrapper?.Report;
         return (report, resp.StatusCode);
+    }
+
+    /// <summary>
+    /// Fetches the per-source report for a specific document type (combined-mode runs only).
+    /// <paramref name="documentType"/> must be snake_case — e.g. <c>pitch_deck</c> or <c>business_plan</c>.
+    /// Returns null + 202 if not ready. Throws PythonAiException on 404 (doc not found) / 400 (invalid type) / 500.
+    /// </summary>
+    public async Task<(PythonCanonicalReport? Report, HttpStatusCode StatusCode)> GetSourceReportAsync(
+        int pythonRunId, string documentType, string? correlationId = null, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/evaluations/{pythonRunId}/report/source/{documentType}");
+        AttachHeaders(req, correlationId);
+
+        using var resp = await _http.SendAsync(req, ct);
+
+        if (resp.StatusCode == HttpStatusCode.Accepted)
+            return (null, HttpStatusCode.Accepted);
+
+        await EnsureSuccessOrThrow(resp, ct);
+
+        // Same ReportEnvelope wrapper as /report — report_mode will be "source".
+        var wrapper = await resp.Content.ReadFromJsonAsync<PythonReportWrapperResponse>(JsonOpts, ct);
+        return (wrapper?.Report, resp.StatusCode);
     }
 
     // ═══════════════════════════════════════════════════════════

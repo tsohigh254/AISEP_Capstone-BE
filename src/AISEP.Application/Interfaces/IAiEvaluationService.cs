@@ -18,6 +18,12 @@ public interface IAiEvaluationService
     /// <summary>Get the full evaluation report (fetch from Python if not cached locally).</summary>
     Task<ApiResponse<EvaluationReportResult>> GetEvaluationReportAsync(int runId, int currentUserId = 0);
 
+    /// <summary>
+    /// Get the source-specific report for a single document type when the run used combined mode.
+    /// <paramref name="documentType"/> must be snake_case: <c>pitch_deck</c> or <c>business_plan</c>.
+    /// </summary>
+    Task<ApiResponse<EvaluationReportResult>> GetSourceReportAsync(int runId, string documentType, int currentUserId = 0);
+
     /// <summary>Process an incoming webhook callback from the Python AI Service.</summary>
     Task ProcessWebhookAsync(EvaluationWebhookPayload payload);
 
