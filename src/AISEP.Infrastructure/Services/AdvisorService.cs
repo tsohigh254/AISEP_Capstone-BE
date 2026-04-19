@@ -85,6 +85,21 @@ public class AdvisorService : IAdvisorService
             await _db.Advisors.AddAsync(advisor);
             await _db.SaveChangesAsync();
 
+            // Auto-create wallet for the new advisor
+            var wallet = new AdvisorWallet
+            {
+                AdvisorId = advisor.AdvisorID,
+                Balance = 0M,
+                TotalEarned = 0M,
+                TotalWithdrawn = 0M,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _db.AdvisorWallets.AddAsync(wallet);
+            await _db.SaveChangesAsync();
+
+            advisor.WalletId = wallet.WalletId;
+            await _db.SaveChangesAsync();
+
             await _audit.LogAsync("CREATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
             _logger.LogInformation("Advisor profile {AdvisorId} created for user {UserId}", advisor.AdvisorID, userId);
 
@@ -436,6 +451,7 @@ public class AdvisorService : IAdvisorService
                 Industry = i.Industry.IndustryName
             }).ToList(),
 
+            LinkedInURL = advisor.LinkedInURL,
             MentorshipPhilosophy = advisor.MentorshipPhilosophy,
             ExperiencesJson = advisor.ExperiencesJson,
             Skills = string.IsNullOrEmpty(advisor.Skills) ? new List<string>() : advisor.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),

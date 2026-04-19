@@ -48,11 +48,11 @@ public class Advisor
     public bool RequiresNewEvidence { get; set; }
     public string? RejectionRemarks { get; set; }
 
-    public int WalletId { get; set; }
+    public int? WalletId { get; set; }
 
 
     // Navigation properties
-    public AdvisorWallet AdvisorWallet { get; set; } = null!;
+    public AdvisorWallet? AdvisorWallet { get; set; }
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }
     public AdvisorAvailability? Availability { get; set; }
