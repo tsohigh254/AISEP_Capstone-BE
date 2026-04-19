@@ -170,6 +170,10 @@ public class MentorshipListItemDto
     public bool IsPayoutEligible { get; set; }
     /// <summary>Thời điểm Staff release payout. Null = chưa release.</summary>
     public DateTime? PayoutReleasedAt { get; set; }
+    /// <summary>Thời lượng dự kiến (ví dụ: "60 minutes"). Dùng để tính giá dự kiến nếu SessionAmount = 0.</summary>
+    public string? ExpectedDuration { get; set; }
+    /// <summary>Phí tư vấn theo giờ của cố vấn tại thời điểm lấy danh sách.</summary>
+    public decimal? AdvisorHourlyRate { get; set; }
 }
 
 /// <summary>Detail DTO with sessions, reports, feedbacks.</summary>

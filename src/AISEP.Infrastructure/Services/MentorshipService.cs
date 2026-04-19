@@ -218,6 +218,8 @@ public class MentorshipService : IMentorshipService
                 ActualAmount = m.ActualAmount,
                 IsPayoutEligible = m.IsPayoutEligible,
                 PayoutReleasedAt = m.PayoutReleasedAt,
+                ExpectedDuration = m.ExpectedDuration,
+                AdvisorHourlyRate = m.Advisor?.HourlyRate,
             })
             .ToList();
 
