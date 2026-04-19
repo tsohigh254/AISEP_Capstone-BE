@@ -190,6 +190,7 @@ public class AdvisorSearchItemDto
 // Added Detail Dto
 public class AdvisorDetailDto : AdvisorSearchItemDto
 {
+    public string? LinkedInURL { get; set; }
     public string? MentorshipPhilosophy { get; set; }
     public string? ExperiencesJson { get; set; }
     public List<string> Skills { get; set; } = new();
