@@ -127,6 +127,16 @@ HTTP 401
 ```
 
 > `document_type` Python chấp nhận: `PitchDeck`, `BusinessPlan`, `pitch_deck`, `business_plan` (case-insensitive).
+>
+> **Document filtering (sau fix 2026-04-19):** Python tự lọc — document nào có `document_type` không thuộc `{pitch_deck, business_plan}` sẽ bị **ignore silently** (log warning, không reject). .NET tiếp tục gửi tất cả document như hiện tại, không cần filter trước.
+>
+> ⚠️ **Exception duy nhất vẫn reject (422):** Nếu toàn bộ payload không có document hợp lệ nào (ví dụ chỉ gửi `"unknown"`):
+>
+> ```json
+> {
+>   "msg": "No processable documents in request. document_type must be one of: pitch_deck, business_plan"
+> }
+> ```
 
 **Response Python trả:**
 

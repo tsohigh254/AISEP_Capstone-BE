@@ -92,12 +92,9 @@ public class AiEvaluationService : IAiEvaluationService
             {
                 DocumentId = d.DocumentID.ToString(),
                 DocumentType = MapDocumentType(d.DocumentType),
-                // Generate signed URL valid for 2 hours (enough for Python to download & process)
-                FileUrlOrPath = _cloudinary.GenerateSignedDocumentUrl(
-                    storageKey: null,
-                    fallbackUrl: d.FileURL,
-                    fileName: null,
-                    expiresInMinutes: 120)
+                // Prefer signed URL; fall back to plain FileURL if signing fails
+                // (e.g. non-Cloudinary URL or extraction failure)
+                FileUrlOrPath = GenerateDocumentUrl(d.FileURL)
             }).ToList()
         };
 
@@ -591,4 +588,42 @@ public class AiEvaluationService : IAiEvaluationService
         Domain.Enums.DocumentType.Bussiness_Plan => "business_plan",
         _ => "unknown"
     };
+
+    /// <summary>
+    /// Generate a signed Cloudinary URL for Python to download.
+    /// Falls back to the raw FileURL if signing fails (e.g. URL is not a Cloudinary URL,
+    /// or resource_type mismatch would make the signed URL invalid anyway).
+    /// </summary>
+    private string GenerateDocumentUrl(string fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl))
+            return fileUrl;
+
+        try
+        {
+            var signed = _cloudinary.GenerateSignedDocumentUrl(
+                storageKey: null,
+                fallbackUrl: fileUrl,
+                fileName: null,
+                expiresInMinutes: 120);
+
+            // If signing returned the same original URL (fallback path — public_id extraction failed),
+            // log a warning so we know Python will receive an unsigned URL.
+            if (signed == fileUrl || string.IsNullOrWhiteSpace(signed))
+            {
+                _logger.LogWarning(
+                    "Could not extract Cloudinary public_id from FileURL '{FileUrl}'. " +
+                    "Python will receive unsigned URL — download may fail if resource is private.",
+                    fileUrl);
+                return fileUrl;
+            }
+
+            return signed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Signed URL generation failed for '{FileUrl}'. Falling back to plain URL.", fileUrl);
+            return fileUrl;
+        }
+    }
 }
