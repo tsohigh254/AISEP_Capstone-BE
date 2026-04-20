@@ -8,24 +8,24 @@ public class CreateAdvisorRequestValidator : AbstractValidator<CreateAdvisorRequ
     public CreateAdvisorRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("Full name is required.")
-            .MaximumLength(120).WithMessage("Full name must not exceed 120 characters.");
+            .NotEmpty().WithMessage("Họ tên không được để trống.")
+            .MaximumLength(120).WithMessage("Họ tên không được vượt quá 120 ký tự.");
 
         RuleFor(x => x.Title)
-            .MaximumLength(120).WithMessage("Title must not exceed 120 characters.")
+            .MaximumLength(120).WithMessage("Chức danh không được vượt quá 120 ký tự.")
             .When(x => x.Title != null);
 
         RuleFor(x => x.Bio)
-            .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters.")
+            .MaximumLength(2000).WithMessage("Tiểu sử không được vượt quá 2000 ký tự.")
             .When(x => x.Bio != null);
 
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
+            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL phải là URL hợp lệ.")
             .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
 
         RuleFor(x => x.MentorshipPhilosophy)
-            .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")
+            .MaximumLength(2000).WithMessage("Triết lý cố vấn không được vượt quá 2000 ký tự.")
             .When(x => x.MentorshipPhilosophy != null);
     }
 
@@ -42,23 +42,23 @@ public class UpdateAdvisorRequestValidator : AbstractValidator<UpdateAdvisorRequ
     public UpdateAdvisorRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .MaximumLength(120).WithMessage("Full name must not exceed 120 characters.")
+            .MaximumLength(120).WithMessage("Họ tên không được vượt quá 120 ký tự.")
             .When(x => x.FullName != null);
 
         RuleFor(x => x.Title)
-            .MaximumLength(120).WithMessage("Title must not exceed 120 characters.")
+            .MaximumLength(120).WithMessage("Chức danh không được vượt quá 120 ký tự.")
             .When(x => x.Title != null);
 
         RuleFor(x => x.Bio)
-            .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters.")
+            .MaximumLength(2000).WithMessage("Tiểu sử không được vượt quá 2000 ký tự.")
             .When(x => x.Bio != null);
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL.")
+            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL phải là URL hợp lệ.")
             .When(x => !string.IsNullOrWhiteSpace(x.LinkedInURL));
 
         RuleFor(x => x.MentorshipPhilosophy)
-            .MaximumLength(2000).WithMessage("Mentorship philosophy must not exceed 2000 characters.")
+            .MaximumLength(2000).WithMessage("Triết lý cố vấn không được vượt quá 2000 ký tự.")
             .When(x => x.MentorshipPhilosophy != null);
     }
 
@@ -76,23 +76,23 @@ public class UpdateAvailabilityRequestValidator : AbstractValidator<UpdateAvaila
     public UpdateAvailabilityRequestValidator()
     {
         RuleFor(x => x.SessionFormats)
-            .MaximumLength(500).WithMessage("Session formats must not exceed 500 characters.")
+            .MaximumLength(500).WithMessage("Định dạng buổi gặp không được vượt quá 500 ký tự.")
             .When(x => x.SessionFormats != null);
 
         RuleFor(x => x.TypicalSessionDuration)
-            .InclusiveBetween(15, 480).WithMessage("Typical session duration must be between 15 and 480 minutes.")
+            .InclusiveBetween(15, 480).WithMessage("Thời lượng buổi gặp phải từ 15 đến 480 phút.")
             .When(x => x.TypicalSessionDuration.HasValue);
 
         RuleFor(x => x.WeeklyAvailableHours)
-            .InclusiveBetween(1, 168).WithMessage("Weekly available hours must be between 1 and 168.")
+            .InclusiveBetween(1, 168).WithMessage("Số giờ sẵn sàng mỗi tuần phải từ 1 đến 168.")
             .When(x => x.WeeklyAvailableHours.HasValue);
 
         RuleFor(x => x.MaxConcurrentMentees)
-            .InclusiveBetween(1, 100).WithMessage("Max concurrent mentees must be between 1 and 100.")
+            .InclusiveBetween(1, 100).WithMessage("Số mentee cùng lúc tối đa phải từ 1 đến 100.")
             .When(x => x.MaxConcurrentMentees.HasValue);
 
         RuleFor(x => x.ResponseTimeCommitment)
-            .MaximumLength(200).WithMessage("Response time commitment must not exceed 200 characters.")
+            .MaximumLength(200).WithMessage("Cam kết thời gian phản hồi không được vượt quá 200 ký tự.")
             .When(x => x.ResponseTimeCommitment != null);
     }
 }

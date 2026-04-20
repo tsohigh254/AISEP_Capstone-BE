@@ -165,6 +165,8 @@ public class StartupMeDto
     public string? FileCertificateBusiness { get; set; }
     public string? LinkedInURL { get; set; }
     public string? ProfileStatus { get; set; }
+    public string SubscriptionPlan { get; set; } = "Free";
+    public DateTime? SubscriptionEndDate { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

@@ -11,11 +11,11 @@ public class DocumentCreateRequestValidator : AbstractValidator<DocumentCreateRe
     public DocumentCreateRequestValidator()
     {
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters.")
+            .MaximumLength(200).WithMessage("Tiêu đề không được vượt quá 200 ký tự.")
             .When(x => x.Title != null);
 
         RuleFor(x => x.Version)
-            .MaximumLength(20).WithMessage("Version must not exceed 20 characters.")
+            .MaximumLength(20).WithMessage("Phiên bản không được vượt quá 20 ký tự.")
             .When(x => x.Version != null);
     }
 }
@@ -28,7 +28,7 @@ public class DocumentUpdateMetadataRequestValidator : AbstractValidator<Document
     public DocumentUpdateMetadataRequestValidator()
     {
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters.")
+            .MaximumLength(200).WithMessage("Tiêu đề không được vượt quá 200 ký tự.")
             .When(x => x.Title != null);
     }
 }

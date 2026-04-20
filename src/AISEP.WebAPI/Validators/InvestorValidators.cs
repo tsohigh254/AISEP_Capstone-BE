@@ -10,17 +10,17 @@ public class SubmitInvestorKYCRequestValidator : AbstractValidator<SubmitInvesto
     public SubmitInvestorKYCRequestValidator()
     {
         RuleFor(x => x.InvestorCategory)
-            .NotEmpty().WithMessage("InvestorCategory is required.")
+            .NotEmpty().WithMessage("Loại nhà đầu tư không được để trống.")
             .Must(c => AllowedCategories.Contains(c))
-            .WithMessage($"InvestorCategory must be one of: {string.Join(", ", AllowedCategories)}");
+            .WithMessage($"Loại nhà đầu tư phải là một trong: {string.Join(", ", AllowedCategories)}");
 
         RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("FullName is required.")
-            .MaximumLength(200).WithMessage("FullName must not exceed 200 characters");
+            .NotEmpty().WithMessage("Họ tên không được để trống.")
+            .MaximumLength(200).WithMessage("Họ tên không được vượt quá 200 ký tự");
 
         RuleFor(x => x.ContactEmail)
-            .NotEmpty().WithMessage("ContactEmail is required.")
-            .EmailAddress().WithMessage("ContactEmail must be a valid email address");
+            .NotEmpty().WithMessage("Email liên hệ không được để trống.")
+            .EmailAddress().WithMessage("Email liên hệ phải có định dạng hợp lệ");
     }
 }
 
@@ -32,10 +32,10 @@ public class SaveInvestorKYCDraftRequestValidator : AbstractValidator<SaveInvest
     {
         RuleFor(x => x.InvestorCategory)
             .Must(c => c == null || AllowedCategories.Contains(c))
-            .WithMessage($"InvestorCategory must be one of: {string.Join(", ", AllowedCategories)}");
+            .WithMessage($"Loại nhà đầu tư phải là một trong: {string.Join(", ", AllowedCategories)}");
 
         RuleFor(x => x.ContactEmail)
-            .EmailAddress().WithMessage("ContactEmail must be a valid email address")
+            .EmailAddress().WithMessage("Email liên hệ phải có định dạng hợp lệ")
             .When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
     }
 }
@@ -45,34 +45,34 @@ public class CreateInvestorRequestValidator : AbstractValidator<CreateInvestorRe
     public CreateInvestorRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("Full name is required")
-            .MaximumLength(200).WithMessage("Full name must not exceed 200 characters");
+            .NotEmpty().WithMessage("Họ tên không được để trống")
+            .MaximumLength(200).WithMessage("Họ tên không được vượt quá 200 ký tự");
 
         RuleFor(x => x.FirmName)
-            .MaximumLength(200).WithMessage("Firm name must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Tên công ty/quỹ không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Chức danh không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Bio)
-            .MaximumLength(5000).WithMessage("Bio must not exceed 5000 characters");
+            .MaximumLength(5000).WithMessage("Tiểu sử không được vượt quá 5000 ký tự");
 
         RuleFor(x => x.InvestmentThesis)
-            .MaximumLength(5000).WithMessage("Investment thesis must not exceed 5000 characters");
+            .MaximumLength(5000).WithMessage("Luận điểm đầu tư không được vượt quá 5000 ký tự");
 
         RuleFor(x => x.Location)
-            .MaximumLength(200).WithMessage("Location must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Địa điểm không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Country)
-            .MaximumLength(100).WithMessage("Country must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Quốc gia không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL")
-            .MaximumLength(500).WithMessage("Website must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("Website phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("Website không được vượt quá 500 ký tự");
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL")
-            .MaximumLength(500).WithMessage("LinkedIn URL must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("LinkedIn URL không được vượt quá 500 ký tự");
     }
 
     private static bool BeAValidUrlOrNull(string? url)
@@ -88,16 +88,16 @@ public class UpdateInvestorRequestValidator : AbstractValidator<UpdateInvestorRe
     public UpdateInvestorRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .MaximumLength(200).WithMessage("Full name must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Họ tên không được vượt quá 200 ký tự");
 
         RuleFor(x => x.FirmName)
-            .MaximumLength(200).WithMessage("Firm name must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Tên công ty/quỹ không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Chức danh không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Bio)
-            .MaximumLength(5000).WithMessage("Bio must not exceed 5000 characters");
+            .MaximumLength(5000).WithMessage("Tiểu sử không được vượt quá 5000 ký tự");
 
         RuleFor(x => x.InvestmentThesis)
             .MaximumLength(5000).WithMessage("Investment thesis must not exceed 5000 characters");
@@ -136,27 +136,27 @@ public class UpdatePreferencesRequestValidator : AbstractValidator<UpdatePrefere
     {
         RuleFor(x => x.TicketMin)
             .GreaterThanOrEqualTo(0).When(x => x.TicketMin.HasValue)
-            .WithMessage("Minimum ticket size must be non-negative");
+            .WithMessage("Mức đầu tư tối thiểu phải >= 0");
 
         RuleFor(x => x.TicketMax)
             .GreaterThanOrEqualTo(0).When(x => x.TicketMax.HasValue)
-            .WithMessage("Maximum ticket size must be non-negative");
+            .WithMessage("Mức đầu tư tối đa phải >= 0");
 
         RuleFor(x => x)
             .Must(x => !x.TicketMin.HasValue || !x.TicketMax.HasValue || x.TicketMin <= x.TicketMax)
-            .WithMessage("ticketMin must be less than or equal to ticketMax")
+            .WithMessage("Mức đầu tư tối thiểu phải nhỏ hơn hoặc bằng tối đa")
             .WithName("TicketRange");
 
         RuleForEach(x => x.PreferredStages)
             .Must(s => AllowedStages.Contains(s))
-            .WithMessage(s => $"Stage '{{PropertyValue}}' is not valid. Allowed: {string.Join(", ", AllowedStages)}");
+            .WithMessage(s => $"Giai đoạn '{{PropertyValue}}' không hợp lệ. Cho phép: {string.Join(", ", AllowedStages)}");
 
         RuleFor(x => x.PreferredGeographies)
-            .MaximumLength(1000).WithMessage("Preferred geographies must not exceed 1000 characters");
+            .MaximumLength(1000).WithMessage("Địa lý ưu tiên không được vượt quá 1000 ký tự");
 
         RuleFor(x => x.MinPotentialScore)
             .InclusiveBetween(0f, 100f).When(x => x.MinPotentialScore.HasValue)
-            .WithMessage("Min potential score must be between 0 and 100");
+            .WithMessage("Điểm tiềm năng tối thiểu phải từ 0 đến 100");
     }
 }
 
@@ -167,13 +167,13 @@ public class WatchlistAddRequestValidator : AbstractValidator<WatchlistAddReques
     public WatchlistAddRequestValidator()
     {
         RuleFor(x => x.StartupId)
-            .GreaterThan(0).WithMessage("startupId must be greater than 0");
+            .GreaterThan(0).WithMessage("startupId phải lớn hơn 0");
 
         RuleFor(x => x.WatchReason)
-            .MaximumLength(1000).WithMessage("Watch reason must not exceed 1000 characters");
+            .MaximumLength(1000).WithMessage("Lý do theo dõi không được vượt quá 1000 ký tự");
 
         RuleFor(x => x.Priority)
             .Must(p => string.IsNullOrEmpty(p) || AllowedPriorities.Contains(p))
-            .WithMessage($"Priority must be one of: {string.Join(", ", AllowedPriorities)}");
+            .WithMessage($"Độ ưu tiên phải là một trong: {string.Join(", ", AllowedPriorities)}");
     }
 }

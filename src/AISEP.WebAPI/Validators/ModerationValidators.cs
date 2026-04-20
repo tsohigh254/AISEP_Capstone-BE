@@ -8,18 +8,18 @@ public class CreateFlagRequestValidator : AbstractValidator<CreateFlagRequest>
     public CreateFlagRequestValidator()
     {
         RuleFor(x => x.EntityType)
-            .NotEmpty().WithMessage("EntityType is required.")
-            .MaximumLength(50).WithMessage("EntityType must be at most 50 characters.");
+            .NotEmpty().WithMessage("Loại đối tượng không được để trống.")
+            .MaximumLength(50).WithMessage("Loại đối tượng không được vượt quá 50 ký tự.");
 
         RuleFor(x => x.EntityId)
-            .GreaterThan(0).WithMessage("EntityId must be greater than 0.");
+            .GreaterThan(0).WithMessage("EntityId phải lớn hơn 0.");
 
         RuleFor(x => x.Reason)
-            .NotEmpty().WithMessage("Reason is required.")
-            .MaximumLength(200).WithMessage("Reason must be at most 200 characters.");
+            .NotEmpty().WithMessage("Lý do không được để trống.")
+            .MaximumLength(200).WithMessage("Lý do không được vượt quá 200 ký tự.");
 
         RuleFor(x => x.Description)
-            .MaximumLength(2000).WithMessage("Description must be at most 2000 characters.")
+            .MaximumLength(2000).WithMessage("Mô tả không được vượt quá 2000 ký tự.")
             .When(x => x.Description != null);
     }
 }
@@ -29,7 +29,7 @@ public class AssignFlagRequestValidator : AbstractValidator<AssignFlagRequest>
     public AssignFlagRequestValidator()
     {
         RuleFor(x => x.Note)
-            .MaximumLength(1000).WithMessage("Note must be at most 1000 characters.")
+            .MaximumLength(1000).WithMessage("Ghi chú không được vượt quá 1000 ký tự.")
             .When(x => x.Note != null);
     }
 }
@@ -41,12 +41,12 @@ public class ResolveFlagRequestValidator : AbstractValidator<ResolveFlagRequest>
     public ResolveFlagRequestValidator()
     {
         RuleFor(x => x.Decision)
-            .NotEmpty().WithMessage("Decision is required.")
+            .NotEmpty().WithMessage("Quyết định không được để trống.")
             .Must(d => AllowedDecisions.Contains(d))
-            .WithMessage($"Decision must be one of: {string.Join(", ", AllowedDecisions)}.");
+            .WithMessage($"Quyết định phải là một trong: {string.Join(", ", AllowedDecisions)}.");
 
         RuleFor(x => x.Note)
-            .MaximumLength(1000).WithMessage("Note must be at most 1000 characters.")
+            .MaximumLength(1000).WithMessage("Ghi chú không được vượt quá 1000 ký tự.")
             .When(x => x.Note != null);
     }
 }
@@ -59,16 +59,16 @@ public class CreateModerationActionRequestValidator : AbstractValidator<CreateMo
     public CreateModerationActionRequestValidator()
     {
         RuleFor(x => x.ActionType)
-            .NotEmpty().WithMessage("ActionType is required.")
+            .NotEmpty().WithMessage("Loại hành động không được để trống.")
             .Must(t => AllowedActionTypes.Contains(t))
-            .WithMessage($"ActionType must be one of: {string.Join(", ", AllowedActionTypes)}.");
+            .WithMessage($"Loại hành động phải là một trong: {string.Join(", ", AllowedActionTypes)}.");
 
         RuleFor(x => x.ActionNote)
-            .MaximumLength(2000).WithMessage("ActionNote must be at most 2000 characters.")
+            .MaximumLength(2000).WithMessage("Ghi chú hành động không được vượt quá 2000 ký tự.")
             .When(x => x.ActionNote != null);
 
         RuleFor(x => x.DurationDays)
-            .GreaterThanOrEqualTo(1).WithMessage("DurationDays must be at least 1.")
+            .GreaterThanOrEqualTo(1).WithMessage("Số ngày phải ít nhất là 1.")
             .When(x => x.DurationDays.HasValue);
     }
 }

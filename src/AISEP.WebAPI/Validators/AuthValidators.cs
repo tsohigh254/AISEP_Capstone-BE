@@ -8,27 +8,27 @@ public class RegisterRequestValidator : AbstractValidator<RegisterRequest>
     public RegisterRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required")
-            .EmailAddress().WithMessage("Invalid email format")
-            .MaximumLength(255).WithMessage("Email must not exceed 255 characters");
+            .NotEmpty().WithMessage("Email không được để trống")
+            .EmailAddress().WithMessage("Định dạng email không hợp lệ")
+            .MaximumLength(255).WithMessage("Email không được vượt quá 255 ký tự");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Password is required")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters")
-            .MaximumLength(100).WithMessage("Password must not exceed 100 characters")
-            .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter")
-            .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter")
-            .Matches("[0-9]").WithMessage("Password must contain at least one number")
-            .Matches("[^a-zA-Z0-9]").WithMessage("Password must contain at least one special character");
+            .NotEmpty().WithMessage("Mật khẩu không được để trống")
+            .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự")
+            .MaximumLength(100).WithMessage("Mật khẩu không được vượt quá 100 ký tự")
+            .Matches("[A-Z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ hoa")
+            .Matches("[a-z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ thường")
+            .Matches("[0-9]").WithMessage("Mật khẩu phải chứa ít nhất một chữ số")
+            .Matches("[^a-zA-Z0-9]").WithMessage("Mật khẩu phải chứa ít nhất một ký tự đặc biệt");
 
         RuleFor(x => x.ConfirmPassword)
-            .NotEmpty().WithMessage("Confirm password is required")
-            .Equal(x => x.Password).WithMessage("Passwords do not match");
+            .NotEmpty().WithMessage("Xác nhận mật khẩu không được để trống")
+            .Equal(x => x.Password).WithMessage("Mật khẩu xác nhận không khớp");
 
         RuleFor(x => x.UserType)
-            .NotEmpty().WithMessage("User type is required")
+            .NotEmpty().WithMessage("Loại người dùng không được để trống")
             .Must(x => new[] { "Startup", "Investor", "Advisor" }.Contains(x))
-            .WithMessage("User type must be Startup, Investor, or Advisor");
+            .WithMessage("Loại người dùng phải là Startup, Investor hoặc Advisor");
     }
 }
 
@@ -37,11 +37,11 @@ public class LoginRequestValidator : AbstractValidator<LoginRequest>
     public LoginRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required")
-            .EmailAddress().WithMessage("Invalid email format");
+            .NotEmpty().WithMessage("Email không được để trống")
+            .EmailAddress().WithMessage("Định dạng email không hợp lệ");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Password is required");
+            .NotEmpty().WithMessage("Mật khẩu không được để trống");
     }
 }
 
@@ -50,7 +50,30 @@ public class RefreshTokenRequestValidator : AbstractValidator<RefreshTokenReques
     public RefreshTokenRequestValidator()
     {
         RuleFor(x => x.RefreshToken)
-            .NotEmpty().WithMessage("Refresh token is required");
+            .NotEmpty().WithMessage("Refresh token không được để trống");
+    }
+}
+
+public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
+{
+    public ResetPasswordRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email không được để trống")
+            .EmailAddress().WithMessage("Định dạng email không hợp lệ");
+
+        RuleFor(x => x.NewPassword)
+            .NotEmpty().WithMessage("Mật khẩu mới không được để trống")
+            .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự")
+            .MaximumLength(100).WithMessage("Mật khẩu không được vượt quá 100 ký tự")
+            .Matches("[A-Z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ hoa")
+            .Matches("[a-z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ thường")
+            .Matches("[0-9]").WithMessage("Mật khẩu phải chứa ít nhất một chữ số")
+            .Matches("[^a-zA-Z0-9]").WithMessage("Mật khẩu phải chứa ít nhất một ký tự đặc biệt");
+
+        RuleFor(x => x.ConfirmNewPassword)
+            .NotEmpty().WithMessage("Xác nhận mật khẩu mới không được để trống")
+            .Equal(x => x.NewPassword).WithMessage("Mật khẩu xác nhận không khớp");
     }
 }
 
@@ -59,20 +82,20 @@ public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRe
     public ChangePasswordRequestValidator()
     {
         RuleFor(x => x.CurrentPassword)
-            .NotEmpty().WithMessage("Current password is required");
+            .NotEmpty().WithMessage("Mật khẩu hiện tại không được để trống");
 
         RuleFor(x => x.NewPassword)
-            .NotEmpty().WithMessage("New password is required")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters")
-            .MaximumLength(100).WithMessage("Password must not exceed 100 characters")
-            .Matches("[A-Z]").WithMessage("Password must contain at least one uppercase letter")
-            .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter")
-            .Matches("[0-9]").WithMessage("Password must contain at least one number")
-            .Matches("[^a-zA-Z0-9]").WithMessage("Password must contain at least one special character")
-            .NotEqual(x => x.CurrentPassword).WithMessage("New password must be different from current password");
+            .NotEmpty().WithMessage("Mật khẩu mới không được để trống")
+            .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự")
+            .MaximumLength(100).WithMessage("Mật khẩu không được vượt quá 100 ký tự")
+            .Matches("[A-Z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ hoa")
+            .Matches("[a-z]").WithMessage("Mật khẩu phải chứa ít nhất một chữ thường")
+            .Matches("[0-9]").WithMessage("Mật khẩu phải chứa ít nhất một chữ số")
+            .Matches("[^a-zA-Z0-9]").WithMessage("Mật khẩu phải chứa ít nhất một ký tự đặc biệt")
+            .NotEqual(x => x.CurrentPassword).WithMessage("Mật khẩu mới phải khác mật khẩu hiện tại");
 
         RuleFor(x => x.ConfirmNewPassword)
-            .NotEmpty().WithMessage("Confirm new password is required")
-            .Equal(x => x.NewPassword).WithMessage("Passwords do not match");
+            .NotEmpty().WithMessage("Xác nhận mật khẩu mới không được để trống")
+            .Equal(x => x.NewPassword).WithMessage("Mật khẩu xác nhận không khớp");
     }
 }
