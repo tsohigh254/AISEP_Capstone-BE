@@ -378,3 +378,6 @@ FodyWeavers.xsd
 src/AISEP.WebAPI/appsettings.Development.json
 src/AISEP.WebAPI/appsettings.json
 
+
+# Scratch / ad-hoc debug code
+tmp/
