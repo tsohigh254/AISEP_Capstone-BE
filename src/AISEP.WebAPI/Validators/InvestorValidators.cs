@@ -3,6 +3,43 @@ using FluentValidation;
 
 namespace AISEP.WebAPI.Validators;
 
+public class SubmitInvestorKYCRequestValidator : AbstractValidator<SubmitInvestorKYCRequest>
+{
+    private static readonly string[] AllowedCategories = { "INSTITUTIONAL", "INDIVIDUAL_ANGEL" };
+
+    public SubmitInvestorKYCRequestValidator()
+    {
+        RuleFor(x => x.InvestorCategory)
+            .NotEmpty().WithMessage("InvestorCategory is required.")
+            .Must(c => AllowedCategories.Contains(c))
+            .WithMessage($"InvestorCategory must be one of: {string.Join(", ", AllowedCategories)}");
+
+        RuleFor(x => x.FullName)
+            .NotEmpty().WithMessage("FullName is required.")
+            .MaximumLength(200).WithMessage("FullName must not exceed 200 characters");
+
+        RuleFor(x => x.ContactEmail)
+            .NotEmpty().WithMessage("ContactEmail is required.")
+            .EmailAddress().WithMessage("ContactEmail must be a valid email address");
+    }
+}
+
+public class SaveInvestorKYCDraftRequestValidator : AbstractValidator<SaveInvestorKYCDraftRequest>
+{
+    private static readonly string[] AllowedCategories = { "INSTITUTIONAL", "INDIVIDUAL_ANGEL" };
+
+    public SaveInvestorKYCDraftRequestValidator()
+    {
+        RuleFor(x => x.InvestorCategory)
+            .Must(c => c == null || AllowedCategories.Contains(c))
+            .WithMessage($"InvestorCategory must be one of: {string.Join(", ", AllowedCategories)}");
+
+        RuleFor(x => x.ContactEmail)
+            .EmailAddress().WithMessage("ContactEmail must be a valid email address")
+            .When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
+    }
+}
+
 public class CreateInvestorRequestValidator : AbstractValidator<CreateInvestorRequest>
 {
     public CreateInvestorRequestValidator()
