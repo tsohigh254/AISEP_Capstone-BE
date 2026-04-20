@@ -381,3 +381,6 @@ src/AISEP.WebAPI/appsettings.json
 
 # Scratch / ad-hoc debug code
 tmp/
+
+# Coverage reports
+tests/**/CoverageReport/

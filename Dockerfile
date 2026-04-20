@@ -7,6 +7,7 @@ COPY src/AISEP.Domain/AISEP.Domain.csproj src/AISEP.Domain/
 COPY src/AISEP.Application/AISEP.Application.csproj src/AISEP.Application/
 COPY src/AISEP.Infrastructure/AISEP.Infrastructure.csproj src/AISEP.Infrastructure/
 COPY src/AISEP.WebAPI/AISEP.WebAPI.csproj src/AISEP.WebAPI/
+COPY tests/AISEP.Tests/AISEP.Tests.csproj tests/AISEP.Tests/
 COPY AISEP.sln .
 
 RUN dotnet restore AISEP.sln
