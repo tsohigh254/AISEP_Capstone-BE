@@ -993,6 +993,8 @@ public class StartupService : IStartupService
             BusinessCode = s.BusinessCode,
 
             ProfileStatus = s.ProfileStatus.ToString(),
+            SubscriptionPlan = s.SubscriptionPlan.ToString(),
+            SubscriptionEndDate = s.SubscriptionEndDate,
             ApprovedAt = s.ApprovedAt,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt,

@@ -13,53 +13,53 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
     public CreateStartupRequestValidator()
     {
         RuleFor(x => x.CompanyName)
-            .NotEmpty().WithMessage("Company name is required")
-            .MaximumLength(200).WithMessage("Company name must not exceed 200 characters");
+            .NotEmpty().WithMessage("Tên công ty không được để trống")
+            .MaximumLength(200).WithMessage("Tên công ty không được vượt quá 200 ký tự");
 
         RuleFor(x => x.IndustryID)
             .GreaterThan(0).When(x => x.IndustryID.HasValue)
-            .WithMessage("IndustryID must be a positive integer");
+            .WithMessage("IndustryID phải là số nguyên dương");
 
         RuleFor(x => x.Description)
-            .MaximumLength(5000).WithMessage("Description must not exceed 5000 characters");
+            .MaximumLength(5000).WithMessage("Mô tả không được vượt quá 5000 ký tự");
 
         RuleFor(x => x.SubIndustry)
-            .MaximumLength(200).WithMessage("SubIndustry must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Ngành phụ không được vượt quá 200 ký tự");
 
         RuleFor(x => x.ProductStatus)
-            .MaximumLength(100).WithMessage("ProductStatus must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Trạng thái sản phẩm không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Location)
-            .MaximumLength(200).WithMessage("Location must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Địa điểm không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Country)
-            .MaximumLength(100).WithMessage("Country must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Quốc gia không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL")
-            .MaximumLength(500).WithMessage("Website must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("Website phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("Website không được vượt quá 500 ký tự");
 
         RuleFor(x => x.PitchDeckUrl)
-            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl must be a valid URL")
-            .MaximumLength(500).WithMessage("PitchDeckUrl must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("PitchDeckUrl không được vượt quá 500 ký tự");
 
         RuleFor(x => x.MetricSummary)
-            .MaximumLength(1000).WithMessage("MetricSummary must not exceed 1000 characters");
+            .MaximumLength(1000).WithMessage("Tóm tắt số liệu không được vượt quá 1000 ký tự");
 
         RuleFor(x => x.TeamSize)
-            .MaximumLength(50).WithMessage("TeamSize must not exceed 50 characters");
+            .MaximumLength(50).WithMessage("Quy mô nhóm không được vượt quá 50 ký tự");
 
         RuleFor(x => x.FundingAmountSought)
             .GreaterThanOrEqualTo(0).When(x => x.FundingAmountSought.HasValue)
-            .WithMessage("Funding amount sought must be non-negative");
+            .WithMessage("Số tiền kêu gọi đầu tư phải >= 0");
 
         RuleFor(x => x.CurrentFundingRaised)
             .GreaterThanOrEqualTo(0).When(x => x.CurrentFundingRaised.HasValue)
-            .WithMessage("Current funding raised must be non-negative");
+            .WithMessage("Số tiền đã huy động phải >= 0");
 
         RuleFor(x => x.Valuation)
             .GreaterThanOrEqualTo(0).When(x => x.Valuation.HasValue)
-            .WithMessage("Valuation must be non-negative");
+            .WithMessage("Định giá phải >= 0");
 
     }
 
@@ -79,55 +79,55 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
     public UpdateStartupRequestValidator()
     {
         RuleFor(x => x.CompanyName)
-            .MaximumLength(200).WithMessage("Company name must not exceed 200 characters")
-            .NotEmpty().When(x => x.CompanyName != null).WithMessage("Company name cannot be empty");
+            .MaximumLength(200).WithMessage("Tên công ty không được vượt quá 200 ký tự")
+            .NotEmpty().When(x => x.CompanyName != null).WithMessage("Tên công ty không được để trống");
 
         RuleFor(x => x.IndustryID)
             .GreaterThan(0).When(x => x.IndustryID.HasValue)
-            .WithMessage("IndustryID must be a positive integer");
+            .WithMessage("IndustryID phải là số nguyên dương");
 
 
         RuleFor(x => x.Description)
-            .MaximumLength(5000).WithMessage("Description must not exceed 5000 characters");
+            .MaximumLength(5000).WithMessage("Mô tả không được vượt quá 5000 ký tự");
 
         RuleFor(x => x.SubIndustry)
-            .MaximumLength(200).WithMessage("SubIndustry must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Ngành phụ không được vượt quá 200 ký tự");
 
         RuleFor(x => x.ProductStatus)
-            .MaximumLength(100).WithMessage("ProductStatus must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Trạng thái sản phẩm không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Location)
-            .MaximumLength(200).WithMessage("Location must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Địa điểm không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Country)
-            .MaximumLength(100).WithMessage("Country must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Quốc gia không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Website)
-            .Must(BeAValidUrlOrNull).WithMessage("Website must be a valid URL")
-            .MaximumLength(500).WithMessage("Website must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("Website phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("Website không được vượt quá 500 ký tự");
 
         RuleFor(x => x.PitchDeckUrl)
-            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl must be a valid URL")
-            .MaximumLength(500).WithMessage("PitchDeckUrl must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("PitchDeckUrl phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("PitchDeckUrl không được vượt quá 500 ký tự");
 
         RuleFor(x => x.MetricSummary)
-            .MaximumLength(1000).WithMessage("MetricSummary must not exceed 1000 characters");
+            .MaximumLength(1000).WithMessage("Tóm tắt số liệu không được vượt quá 1000 ký tự");
 
         RuleFor(x => x.TeamSize)
-            .MaximumLength(50).WithMessage("TeamSize must not exceed 50 characters");
+            .MaximumLength(50).WithMessage("Quy mô nhóm không được vượt quá 50 ký tự");
 
 
         RuleFor(x => x.FundingAmountSought)
             .GreaterThanOrEqualTo(0).When(x => x.FundingAmountSought.HasValue)
-            .WithMessage("Funding amount sought must be non-negative");
+            .WithMessage("Số tiền kêu gọi đầu tư phải >= 0");
 
         RuleFor(x => x.CurrentFundingRaised)
             .GreaterThanOrEqualTo(0).When(x => x.CurrentFundingRaised.HasValue)
-            .WithMessage("Current funding raised must be non-negative");
+            .WithMessage("Số tiền đã huy động phải >= 0");
 
         RuleFor(x => x.Valuation)
             .GreaterThanOrEqualTo(0).When(x => x.Valuation.HasValue)
-            .WithMessage("Valuation must be non-negative");
+            .WithMessage("Định giá phải >= 0");
     }
 
     private static bool BeAValidUrlOrNull(string? url)
@@ -143,26 +143,26 @@ public class CreateTeamMemberRequestValidator : AbstractValidator<CreateTeamMemb
     public CreateTeamMemberRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("Full name is required")
-            .MaximumLength(200).WithMessage("Full name must not exceed 200 characters");
+            .NotEmpty().WithMessage("Họ tên không được để trống")
+            .MaximumLength(200).WithMessage("Họ tên không được vượt quá 200 ký tự");
 
         RuleFor(x => x.Role)
-            .NotEmpty().WithMessage("Role is required")
-            .MaximumLength(100).WithMessage("Role must not exceed 100 characters");
+            .NotEmpty().WithMessage("Vai trò không được để trống")
+            .MaximumLength(100).WithMessage("Vai trò không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Chức danh không được vượt quá 200 ký tự");
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL")
-            .MaximumLength(500).WithMessage("LinkedIn URL must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("LinkedIn URL không được vượt quá 500 ký tự");
 
         RuleFor(x => x.Bio)
-            .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters");
+            .MaximumLength(2000).WithMessage("Tiểu sử không được vượt quá 2000 ký tự");
 
         RuleFor(x => x.YearsOfExperience)
             .GreaterThanOrEqualTo(0).When(x => x.YearsOfExperience.HasValue)
-            .WithMessage("Years of experience must be non-negative");
+            .WithMessage("Số năm kinh nghiệm phải >= 0");
     }
 
     private static bool BeAValidUrlOrNull(string? url)
@@ -178,25 +178,25 @@ public class UpdateTeamMemberRequestValidator : AbstractValidator<UpdateTeamMemb
     public UpdateTeamMemberRequestValidator()
     {
         RuleFor(x => x.FullName)
-            .MaximumLength(200).WithMessage("Full name must not exceed 200 characters")
-            .NotEmpty().When(x => x.FullName != null).WithMessage("Full name cannot be empty");
+            .MaximumLength(200).WithMessage("Họ tên không được vượt quá 200 ký tự")
+            .NotEmpty().When(x => x.FullName != null).WithMessage("Họ tên không được để trống");
 
         RuleFor(x => x.Role)
-            .MaximumLength(100).WithMessage("Role must not exceed 100 characters");
+            .MaximumLength(100).WithMessage("Vai trò không được vượt quá 100 ký tự");
 
         RuleFor(x => x.Title)
-            .MaximumLength(200).WithMessage("Title must not exceed 200 characters");
+            .MaximumLength(200).WithMessage("Chức danh không được vượt quá 200 ký tự");
 
         RuleFor(x => x.LinkedInURL)
-            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL must be a valid URL")
-            .MaximumLength(500).WithMessage("LinkedIn URL must not exceed 500 characters");
+            .Must(BeAValidUrlOrNull).WithMessage("LinkedIn URL phải là URL hợp lệ")
+            .MaximumLength(500).WithMessage("LinkedIn URL không được vượt quá 500 ký tự");
 
         RuleFor(x => x.Bio)
-            .MaximumLength(2000).WithMessage("Bio must not exceed 2000 characters");
+            .MaximumLength(2000).WithMessage("Tiểu sử không được vượt quá 2000 ký tự");
 
         RuleFor(x => x.YearsOfExperience)
             .GreaterThanOrEqualTo(0).When(x => x.YearsOfExperience.HasValue)
-            .WithMessage("Years of experience must be non-negative");
+            .WithMessage("Số năm kinh nghiệm phải >= 0");
     }
 
     private static bool BeAValidUrlOrNull(string? url)

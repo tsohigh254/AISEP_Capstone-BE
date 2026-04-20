@@ -9,16 +9,16 @@ public class CreateConversationRequestValidator : AbstractValidator<CreateConver
     {
         RuleFor(x => x)
             .Must(x => x.MentorshipId.HasValue ^ x.ConnectionId.HasValue)
-            .WithMessage("Exactly one of mentorshipId or connectionId must be provided.")
+            .WithMessage("Phải cung cấp đúng một trong hai: mentorshipId hoặc connectionId.")
             .WithName("mentorshipId/connectionId");
 
         RuleFor(x => x.MentorshipId)
             .GreaterThan(0).When(x => x.MentorshipId.HasValue)
-            .WithMessage("MentorshipId must be a positive integer.");
+            .WithMessage("MentorshipId phải là số nguyên dương.");
 
         RuleFor(x => x.ConnectionId)
             .GreaterThan(0).When(x => x.ConnectionId.HasValue)
-            .WithMessage("ConnectionId must be a positive integer.");
+            .WithMessage("ConnectionId phải là số nguyên dương.");
     }
 }
 
@@ -27,20 +27,20 @@ public class SendMessageRequestValidator : AbstractValidator<SendMessageRequest>
     public SendMessageRequestValidator()
     {
         RuleFor(x => x.ConversationId)
-            .GreaterThan(0).WithMessage("ConversationId must be a positive integer.");
+            .GreaterThan(0).WithMessage("ConversationId phải là số nguyên dương.");
 
         RuleFor(x => x)
             .Must(x => !string.IsNullOrWhiteSpace(x.Content) || !string.IsNullOrWhiteSpace(x.AttachmentUrl))
-            .WithMessage("Either content or attachmentUrl must be provided.")
+            .WithMessage("Phải cung cấp ít nhất một trong hai: nội dung hoặc tệp đính kèm.")
             .WithName("content/attachmentUrl");
 
         RuleFor(x => x.Content)
             .MaximumLength(4000).When(x => x.Content != null)
-            .WithMessage("Content must not exceed 4000 characters.");
+            .WithMessage("Nội dung không được vượt quá 4000 ký tự.");
 
         RuleFor(x => x.AttachmentUrl)
             .MaximumLength(2048).When(x => x.AttachmentUrl != null)
-            .WithMessage("AttachmentUrl must not exceed 2048 characters.");
+            .WithMessage("AttachmentUrl không được vượt quá 2048 ký tự.");
     }
 }
 
@@ -49,6 +49,6 @@ public class MarkReadAllRequestValidator : AbstractValidator<MarkReadAllRequest>
     public MarkReadAllRequestValidator()
     {
         RuleFor(x => x.ConversationId)
-            .GreaterThan(0).WithMessage("ConversationId must be a positive integer.");
+            .GreaterThan(0).WithMessage("ConversationId phải là số nguyên dương.");
     }
 }
