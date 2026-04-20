@@ -79,12 +79,21 @@ public class AiEvaluationService : IAiEvaluationService
         if (request.DocumentIds is { Count: > 0 })
             docsQuery = docsQuery.Where(d => request.DocumentIds.Contains(d.DocumentID));
 
-        var docs = await docsQuery.ToListAsync();
+        var allDocs = await docsQuery.ToListAsync();
+        
+        // Python restriction: Only 1 document per type allowed in a single run.
+        // If multiple are selected/available, pick the most recent UploadedAt for each type.
+        var docs = allDocs
+            .GroupBy(d => d.DocumentType)
+            .Select(g => g.OrderByDescending(d => d.UploadedAt).First())
+            .ToList();
+
         if (docs.Count == 0)
             return ApiResponse<EvaluationSubmitResult>.ErrorResponse("VALIDATION_ERROR", "No anchored Pitch Deck or Business Plan documents available for evaluation.");
 
         // Build Python request with signed URLs (time-limited, no auth needed by Python)
         var correlationId = Guid.NewGuid().ToString();
+
         var pythonReq = new PythonSubmitEvaluationRequest
         {
             StartupId = request.StartupId.ToString(),
