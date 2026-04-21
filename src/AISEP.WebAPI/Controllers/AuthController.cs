@@ -150,7 +150,7 @@ public class AuthController : ControllerBase
         var userAgent = Request.Headers.UserAgent.ToString();
 
         var result = await _authService.VerifyEmailAsync(emailVerifyRequest, HttpContext, ipAddress, userAgent);
-        return result.ToAuthEnvelope(message: "Email verified successfully");
+        return result.ToAuthEnvelope(errorStatus: StatusCodes.Status400BadRequest, message: "Email verified successfully");
     }
 
     /// <summary>Resend verification email using otp</summary>

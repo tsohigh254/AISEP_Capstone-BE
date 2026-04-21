@@ -103,6 +103,7 @@ public static class ApiEnvelopeExtensions
     public static IActionResult ToAuthEnvelope(
         this AuthResponse<AuthData> result,
         int successStatus = StatusCodes.Status200OK,
+        int errorStatus = StatusCodes.Status401Unauthorized,
         string? message = null)
     {
         if (result.Success && result.Data is not null)
@@ -120,10 +121,9 @@ public static class ApiEnvelopeExtensions
         }
 
         // Error
-        var statusCode = StatusCodes.Status401Unauthorized; // default for auth errors
         var msg = result.Message ?? "Authentication failed";
-        var err = ApiEnvelope<AuthPayload<object>>.Error(msg, statusCode);
-        return new ObjectResult(err) { StatusCode = statusCode };
+        var err = ApiEnvelope<AuthPayload<object>>.Error(msg, errorStatus);
+        return new ObjectResult(err) { StatusCode = errorStatus };
     }
 
     /// <summary>Overload for auth errors with custom code/message.</summary>
