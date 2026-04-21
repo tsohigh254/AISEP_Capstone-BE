@@ -209,9 +209,14 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AvailabilityDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
 
-        if (request.IsAcceptingNewMentees == true && advisor.ProfileStatus != ProfileStatus.Approved)
-            return ApiResponse<AvailabilityDto>.ErrorResponse("VALIDATION_ERROR",
-                "Profile must be Approved before enabling accepting new mentees. Please complete KYC verification first.");
+        if (request.IsAcceptingNewMentees == true)
+        {
+            var kycVerified = advisor.AdvisorTag == AdvisorTag.VerifiedAdvisor
+                           || advisor.AdvisorTag == AdvisorTag.BasicVerified;
+            if (!kycVerified)
+                return ApiResponse<AvailabilityDto>.ErrorResponse("ADVISOR_KYC_NOT_APPROVED",
+                    "KYC must be verified before enabling accepting new mentees. Please complete KYC verification first.");
+        }
 
         if (advisor.Availability == null)
         {

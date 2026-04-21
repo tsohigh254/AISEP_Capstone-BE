@@ -189,5 +189,18 @@ namespace AISEP.WebAPI.Controllers
             var response = await _registrationService.RejectInvestorRegistrationAsync(staffId, request);
             return Ok(response);
         }
+
+        /// <summary>
+        /// Get unified KYC review history (Startup + Advisor + Investor).
+        /// Supports filter: roleType (STARTUP|ADVISOR|INVESTOR), result (APPROVED|REJECTED), from, to, page, pageSize.
+        /// </summary>
+        [HttpGet("history")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<RegistrationHistoryItemDto>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetRegistrationHistory([FromQuery] RegistrationHistoryQueryParams query)
+        {
+            var response = await _registrationService.GetRegistrationHistoryAsync(query);
+            return response.ToActionResult();
+        }
     }
 }

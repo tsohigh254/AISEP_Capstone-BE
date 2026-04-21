@@ -299,9 +299,17 @@ public class StartupService : IStartupService
             return ApiResponse<string>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
                 "You haven't created a startup profile yet.");
 
-        if (isVisible && startup.ProfileStatus != ProfileStatus.Approved)
-            return ApiResponse<string>.ErrorResponse("STARTUP_VISIBILITY_NOT_ALLOWED",
-                "Your profile must be KYC-approved before it can be made visible.");
+        if (isVisible)
+        {
+            var kycApproved = await _context.StartupKycSubmissions
+                .AnyAsync(k => k.StartupID == startup.StartupID
+                            && k.IsActive
+                            && k.WorkflowStatus == StartupKycWorkflowStatus.Approved);
+
+            if (!kycApproved)
+                return ApiResponse<string>.ErrorResponse("STARTUP_VISIBILITY_NOT_ALLOWED",
+                    "Your profile must be KYC-approved before it can be made visible.");
+        }
 
         startup.IsVisible = isVisible;
         startup.UpdatedAt = DateTime.UtcNow;

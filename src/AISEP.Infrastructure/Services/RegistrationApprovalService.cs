@@ -1003,5 +1003,138 @@ namespace AISEP.Infrastructure.Services
             InvestorKycEvidenceKind.InvestmentProof => "INVESTMENT_PROOF",
             _ => "OTHER"
         };
+
+        // ═══════════════════════════════════════════════════════════════
+        //  Registration History (unified: Startup + Investor + Advisor)
+        // ═══════════════════════════════════════════════════════════════
+
+        public async Task<ApiResponse<PagedResponse<RegistrationHistoryItemDto>>> GetRegistrationHistoryAsync(RegistrationHistoryQueryParams query)
+        {
+            var roleFilter  = query.RoleType?.ToUpperInvariant();
+            var resultFilter = query.Result?.ToUpperInvariant();
+            var from = query.From?.ToUniversalTime();
+            var to   = query.To?.ToUniversalTime();
+
+            var items = new List<RegistrationHistoryItemDto>();
+
+            // ── Startup KYC submissions ──────────────────────────────
+            if (roleFilter == null || roleFilter == "STARTUP")
+            {
+                var startupQuery = _context.StartupKycSubmissions
+                    .AsNoTracking()
+                    .Include(s => s.Startup).ThenInclude(s => s.User)
+                    .Include(s => s.ReviewedByUser)
+                    .Where(s => s.ReviewedAt != null
+                             && (s.WorkflowStatus == StartupKycWorkflowStatus.Approved
+                              || s.WorkflowStatus == StartupKycWorkflowStatus.Rejected
+                              || s.WorkflowStatus == StartupKycWorkflowStatus.PendingMoreInfo));
+
+                if (from.HasValue) startupQuery = startupQuery.Where(s => s.ReviewedAt >= from.Value);
+                if (to.HasValue)   startupQuery = startupQuery.Where(s => s.ReviewedAt <= to.Value);
+
+                var startupRows = await startupQuery
+                    .OrderByDescending(s => s.ReviewedAt)
+                    .Select(s => new RegistrationHistoryItemDto
+                    {
+                        ApplicantId   = s.Startup.StartupID,
+                        ApplicantName = s.Startup.CompanyName,
+                        RoleType      = "STARTUP",
+                        Result        = s.WorkflowStatus == StartupKycWorkflowStatus.Approved      ? "APPROVED"
+                                      : s.WorkflowStatus == StartupKycWorkflowStatus.Rejected      ? "REJECTED"
+                                      : "PENDING_MORE_INFO",
+                        ProcessedAt   = s.ReviewedAt,
+                        ReviewedBy    = s.ReviewedByUser != null ? s.ReviewedByUser.Email : null,
+                        Remarks       = s.Remarks
+                    })
+                    .ToListAsync();
+
+                items.AddRange(startupRows);
+            }
+
+            // ── Investor KYC submissions ─────────────────────────────
+            if (roleFilter == null || roleFilter == "INVESTOR")
+            {
+                var investorQuery = _context.InvestorKycSubmissions
+                    .AsNoTracking()
+                    .Include(s => s.Investor).ThenInclude(i => i.User)
+                    .Include(s => s.ReviewedByUser)
+                    .Where(s => s.ReviewedAt != null
+                             && (s.WorkflowStatus == InvestorKycWorkflowStatus.Approved
+                              || s.WorkflowStatus == InvestorKycWorkflowStatus.Rejected
+                              || s.WorkflowStatus == InvestorKycWorkflowStatus.PendingMoreInfo));
+
+                if (from.HasValue) investorQuery = investorQuery.Where(s => s.ReviewedAt >= from.Value);
+                if (to.HasValue)   investorQuery = investorQuery.Where(s => s.ReviewedAt <= to.Value);
+
+                var investorRows = await investorQuery
+                    .OrderByDescending(s => s.ReviewedAt)
+                    .Select(s => new RegistrationHistoryItemDto
+                    {
+                        ApplicantId   = s.Investor.InvestorID,
+                        ApplicantName = s.Investor.FullName ?? s.Investor.User.Email,
+                        RoleType      = "INVESTOR",
+                        Result        = s.WorkflowStatus == InvestorKycWorkflowStatus.Approved      ? "APPROVED"
+                                      : s.WorkflowStatus == InvestorKycWorkflowStatus.Rejected      ? "REJECTED"
+                                      : "PENDING_MORE_INFO",
+                        ProcessedAt   = s.ReviewedAt,
+                        ReviewedBy    = s.ReviewedByUser != null ? s.ReviewedByUser.Email : null,
+                        Remarks       = s.Remarks
+                    })
+                    .ToListAsync();
+
+                items.AddRange(investorRows);
+            }
+
+            // ── Advisor KYC (stored on Advisor entity, no submission table) ─
+            if (roleFilter == null || roleFilter == "ADVISOR")
+            {
+                var advisorQuery = _context.Advisors
+                    .AsNoTracking()
+                    .Include(a => a.ApprovedByUser)
+                    .Where(a => a.ApprovedAt != null
+                             && (a.AdvisorTag == AdvisorTag.VerifiedAdvisor
+                              || a.AdvisorTag == AdvisorTag.BasicVerified
+                              || a.AdvisorTag == AdvisorTag.VerificationFailed
+                              || a.AdvisorTag == AdvisorTag.PendingMoreInfo));
+
+                if (from.HasValue) advisorQuery = advisorQuery.Where(a => a.ApprovedAt >= from.Value);
+                if (to.HasValue)   advisorQuery = advisorQuery.Where(a => a.ApprovedAt <= to.Value);
+
+                var advisorRows = await advisorQuery
+                    .OrderByDescending(a => a.ApprovedAt)
+                    .Select(a => new RegistrationHistoryItemDto
+                    {
+                        ApplicantId   = a.AdvisorID,
+                        ApplicantName = a.FullName,
+                        RoleType      = "ADVISOR",
+                        Result        = (a.AdvisorTag == AdvisorTag.VerifiedAdvisor || a.AdvisorTag == AdvisorTag.BasicVerified) ? "APPROVED"
+                                      : a.AdvisorTag == AdvisorTag.VerificationFailed ? "REJECTED"
+                                      : "PENDING_MORE_INFO",
+                        ProcessedAt   = a.ApprovedAt,
+                        ReviewedBy    = a.ApprovedByUser != null ? a.ApprovedByUser.Email : null,
+                        Remarks       = a.RejectionRemarks
+                    })
+                    .ToListAsync();
+
+                items.AddRange(advisorRows);
+            }
+
+            // ── Apply result filter + sort + paginate in memory ──────
+            if (resultFilter != null)
+                items = items.Where(i => i.Result == resultFilter).ToList();
+
+            items = items.OrderByDescending(i => i.ProcessedAt).ToList();
+
+            var page     = query.Page     > 0 ? query.Page     : 1;
+            var pageSize = query.PageSize > 0 ? query.PageSize : 20;
+            var total    = items.Count;
+            var paged    = items.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            return ApiResponse<PagedResponse<RegistrationHistoryItemDto>>.SuccessResponse(new PagedResponse<RegistrationHistoryItemDto>
+            {
+                Items = paged,
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
+            });
+        }
     }
 }
