@@ -17,7 +17,7 @@ public class Investor
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
-    public bool AcceptingConnections { get; set; } = true;
+    public bool AcceptingConnections { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
