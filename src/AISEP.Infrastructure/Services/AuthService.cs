@@ -1,6 +1,7 @@
 using AISEP.Application.Configuration;
 using AISEP.Application.DTOs;
 using AISEP.Application.DTOs.Auth;
+using AISEP.Application.DTOs.Notification;
 using AISEP.Application.Interfaces;
 using AISEP.Domain.Entities;
 using AISEP.Infrastructure.Data;
@@ -30,19 +31,22 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly EmailSettings _emailSettings;
     private readonly ILogger<AuthService> _logger;
+    private readonly INotificationDeliveryService _notifications;
 
     public AuthService(
         ApplicationDbContext context, 
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
         IOptions<EmailSettings> emailSettings,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        INotificationDeliveryService notifications)
     {
         _context = context;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _emailSettings = emailSettings.Value;
         _logger = logger;
+        _notifications = notifications;
     }
 
     public async Task<AuthResponse<string>> RegisterAsync(RegisterRequest request)
@@ -110,7 +114,15 @@ public class AuthService : IAuthService
 
             await SendEmail(user.UserID, user.Email, newOtp);
             await transaction.CommitAsync();
-
+            // Send welcome notification (fire-and-forget, không block response)
+            _ = _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = user.UserID,
+                NotificationType = "WELCOME",
+                Title = "Chào mừng bạn đến với AISEP! 🎉",
+                Message = $"Xin chào! Tài khoản {normalizedUserType} của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ để bắt đầu kết nối với hệ sinh thái khởi nghiệp.",
+                ActionUrl = "/dashboard"
+            });
             return new AuthResponse<string>
             {
                 Success = true,
