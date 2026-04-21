@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -31,7 +32,7 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly EmailSettings _emailSettings;
     private readonly ILogger<AuthService> _logger;
-    private readonly INotificationDeliveryService _notifications;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public AuthService(
         ApplicationDbContext context, 
@@ -39,14 +40,15 @@ public class AuthService : IAuthService
         IEmailService emailService,
         IOptions<EmailSettings> emailSettings,
         ILogger<AuthService> logger,
-        INotificationDeliveryService notifications)
+        INotificationDeliveryService notifications,
+        IServiceScopeFactory scopeFactory)
     {
         _context = context;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
         _emailSettings = emailSettings.Value;
         _logger = logger;
-        _notifications = notifications;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<AuthResponse<string>> RegisterAsync(RegisterRequest request)
@@ -114,14 +116,21 @@ public class AuthService : IAuthService
 
             await SendEmail(user.UserID, user.Email, newOtp);
             await transaction.CommitAsync();
-            // Send welcome notification (fire-and-forget, không block response)
-            _ = _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            // Send welcome notification (fire-and-forget với scope riêng để tránh disposed DbContext)
+            var userId = user.UserID;
+            var userType = normalizedUserType;
+            _ = Task.Run(async () =>
             {
-                UserId = user.UserID,
-                NotificationType = "WELCOME",
-                Title = "Chào mừng bạn đến với AISEP! 🎉",
-                Message = $"Xin chào! Tài khoản {normalizedUserType} của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ để bắt đầu kết nối với hệ sinh thái khởi nghiệp.",
-                ActionUrl = "/dashboard"
+                using var scope = _scopeFactory.CreateScope();
+                var notifications = scope.ServiceProvider.GetRequiredService<INotificationDeliveryService>();
+                await notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = userId,
+                    NotificationType = "WELCOME",
+                    Title = "Chào mừng bạn đến với AISEP! 🎉",
+                    Message = $"Xin chào! Tài khoản {userType} của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ để bắt đầu kết nối với hệ sinh thái khởi nghiệp.",
+                    ActionUrl = "/dashboard"
+                });
             });
             return new AuthResponse<string>
             {
