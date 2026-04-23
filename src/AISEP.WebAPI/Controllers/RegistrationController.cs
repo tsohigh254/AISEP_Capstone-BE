@@ -202,5 +202,22 @@ namespace AISEP.WebAPI.Controllers
             var response = await _registrationService.GetRegistrationHistoryAsync(query);
             return response.ToActionResult();
         }
+
+        /// <summary>
+        /// Get per-case KYC review timeline for a specific entity.
+        /// Returns each submission version as one entry, ordered by version ascending.
+        /// entityType: STARTUP | ADVISOR | INVESTOR
+        /// Note: internalNote and field-level assessments are NOT available in this endpoint —
+        /// those fields are not stored in the current schema.
+        /// </summary>
+        [HttpGet("{entityId:int}/history")]
+        [Authorize(Policy = "StaffOrAdmin")]
+        [ProducesResponseType(typeof(ApiResponse<List<KycCaseHistoryEntryDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetKycCaseHistory(int entityId, [FromQuery] string entityType)
+        {
+            var response = await _registrationService.GetKycCaseHistoryAsync(entityId, entityType);
+            return response.ToActionResult();
+        }
     }
 }

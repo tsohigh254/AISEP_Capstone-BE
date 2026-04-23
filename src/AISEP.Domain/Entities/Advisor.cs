@@ -47,6 +47,7 @@ public class Advisor
     public string? ContactEmail { get; set; }
     public bool RequiresNewEvidence { get; set; }
     public string? RejectionRemarks { get; set; }
+    public bool HasKycDraft { get; set; } = false;
 
     public int? WalletId { get; set; }
 

@@ -22,17 +22,20 @@ namespace AISEP.Infrastructure.Services
         private readonly ILogger<RegistrationApprovalService> _logger;
         private readonly ICloudinaryService _cloudinaryService;
         private readonly INotificationDeliveryService _notifications;
+        private readonly IAuditService _audit;
 
         public RegistrationApprovalService(
             ApplicationDbContext context,
             ILogger<RegistrationApprovalService> logger,
             ICloudinaryService cloudinaryService,
-            INotificationDeliveryService notifications)
+            INotificationDeliveryService notifications,
+            IAuditService audit)
         {
             _context = context;
             _logger = logger;
             _cloudinaryService = cloudinaryService;
             _notifications = notifications;
+            _audit = audit;
         }
 
         public async Task<ApiResponse<StartupKycSubmissionDto>> ApproveStartupRegistrationAsync(int staffId, ApproveStartupRegistrationRequest startupRegistrationRequest)
@@ -170,6 +173,7 @@ namespace AISEP.Infrastructure.Services
             advisor.IsVerified = true;
             advisor.ApprovedAt = DateTime.UtcNow;
             advisor.ApprovedBy = staffId;
+            advisor.RejectionRemarks = string.IsNullOrWhiteSpace(request.Remarks) ? null : request.Remarks.Trim();
 
             if (request.Score >= 11)
             {
@@ -183,17 +187,33 @@ namespace AISEP.Infrastructure.Services
             {
                 advisor.AdvisorTag = AdvisorTag.PendingMoreInfo;
                 advisor.ProfileStatus = ProfileStatus.Pending; // Stay pending for more info
-                advisor.RejectionRemarks = request.Remarks;
             }
             else
             {
                 advisor.AdvisorTag = AdvisorTag.VerificationFailed;
                 advisor.ProfileStatus = ProfileStatus.Rejected;
-                advisor.RejectionRemarks = request.Remarks;
             }
 
             _context.Advisors.Update(advisor);
             await _context.SaveChangesAsync();
+
+            // Audit log for KYC timeline reconstruction
+            var reviewAuditAction = advisor.AdvisorTag switch
+            {
+                AdvisorTag.VerifiedAdvisor or AdvisorTag.BasicVerified => "APPROVE_ADVISOR_KYC",
+                AdvisorTag.PendingMoreInfo => "REQUEST_MORE_INFO_ADVISOR_KYC",
+                _ => "REJECT_ADVISOR_KYC"
+            };
+            var reviewResultLabel = advisor.AdvisorTag switch
+            {
+                AdvisorTag.VerifiedAdvisor    => "VERIFIED_ADVISOR",
+                AdvisorTag.BasicVerified      => "BASIC_VERIFIED",
+                AdvisorTag.PendingMoreInfo    => "PENDING_MORE_INFO",
+                _ => "VERIFICATION_FAILED"
+            };
+            await _audit.LogAsync(staffId, reviewAuditAction, "Advisor", advisor.AdvisorID,
+                JsonSerializer.Serialize(new { resultLabel = reviewResultLabel, remarks = advisor.RejectionRemarks, requiresNewEvidence = false }),
+                "system", "system");
 
             // Notify Advisor
             await _notifications.CreateAndPushAsync(new CreateNotificationRequest
@@ -265,8 +285,7 @@ namespace AISEP.Infrastructure.Services
                 : workflowStatus == InvestorKycWorkflowStatus.PendingMoreInfo
                     ? "Additional information is required."
                     : "KYC has been rejected.";
-            if (workflowStatus != InvestorKycWorkflowStatus.Approved)
-                submission.Remarks = request.Remarks;
+            submission.Remarks = string.IsNullOrWhiteSpace(request.Remarks) ? null : request.Remarks.Trim();
 
             investor.InvestorTag = awardedTag;
             investor.ProfileStatus = profileStatus;
@@ -334,6 +353,18 @@ namespace AISEP.Infrastructure.Services
             startupSubmission.Startup.UpdatedAt = reviewedAt;
 
             await _context.SaveChangesAsync();
+
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startupSubmission.Startup.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = $"Hồ sơ KYC của bạn đã bị từ chối. Lý do: {startupSubmission.Remarks ?? "Không có lý do cụ thể."}",
+                RelatedEntityType = "StartupKycSubmission",
+                RelatedEntityId = startupSubmission.SubmissionID,
+                ActionUrl = "/startup/verification"
+            });
+
             return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(
                 MapToKycSubmissionDto(startupSubmission),
                 "Rejected successfully");
@@ -361,10 +392,29 @@ namespace AISEP.Infrastructure.Services
             advisor.AdvisorTag = AdvisorTag.VerificationFailed;
             advisor.RequiresNewEvidence = request.RequiresNewEvidence ?? false;
             advisor.RejectionRemarks = request.Reason;
+            advisor.ApprovedAt = rejectedAt;
+            advisor.ApprovedBy = staffId;
             advisor.UpdatedAt = rejectedAt;
 
             _context.Advisors.Update(advisor);
             await _context.SaveChangesAsync();
+
+            // Audit log for KYC timeline reconstruction
+            await _audit.LogAsync(staffId, "REJECT_ADVISOR_KYC", "Advisor", advisor.AdvisorID,
+                JsonSerializer.Serialize(new { resultLabel = "VERIFICATION_FAILED", remarks = advisor.RejectionRemarks, requiresNewEvidence = advisor.RequiresNewEvidence }),
+                "system", "system");
+
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = advisor.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = $"Hồ sơ của bạn đã bị từ chối. Lý do: {advisor.RejectionRemarks ?? "Không có lý do cụ thể."}",
+                RelatedEntityType = "Advisor",
+                RelatedEntityId = advisor.AdvisorID,
+                ActionUrl = "/advisor/settings"
+            });
+
             return ApiResponse<Advisor>.SuccessResponse(advisor, "Rejected successfully");
         }
 
@@ -401,6 +451,18 @@ namespace AISEP.Infrastructure.Services
             }
 
             await _context.SaveChangesAsync();
+
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = investor.UserID,
+                NotificationType = "VERIFICATION",
+                Title = "Cập nhật trạng thái KYC",
+                Message = $"Hồ sơ KYC của bạn đã bị từ chối. Lý do: {submission.Remarks ?? "Không có lý do cụ thể."}",
+                RelatedEntityType = "InvestorKycSubmission",
+                RelatedEntityId = submission.SubmissionID,
+                ActionUrl = "/investor/verification"
+            });
+
             return ApiResponse<Investor>.SuccessResponse(investor, "Rejected successfully");
         }
 
@@ -613,11 +675,11 @@ namespace AISEP.Infrastructure.Services
                 SubmitterRole = activeSubmission?.SubmitterRole,
                 IDProofFileURL = activeSubmission?.EvidenceFiles
                     .Where(f => f.Kind == InvestorKycEvidenceKind.IDProof)
-                    .Select(f => _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName))
+                    .Select(f => _cloudinaryService.ToInlineUrl(f.FileUrl))
                     .FirstOrDefault(),
                 InvestmentProofFileURL = activeSubmission?.EvidenceFiles
                     .Where(f => f.Kind == InvestorKycEvidenceKind.InvestmentProof)
-                    .Select(f => _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName))
+                    .Select(f => _cloudinaryService.ToInlineUrl(f.FileUrl))
                     .FirstOrDefault(),
                 Remarks = activeSubmission?.Remarks
             };
@@ -689,7 +751,7 @@ namespace AISEP.Infrastructure.Services
                             FileSize = f.FileSize,
                             UploadedAt = f.UploadedAt,
                             Kind = MapInvestorEvidenceKind(f.Kind),
-                            Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                            Url = _cloudinaryService.ToInlineUrl(f.FileUrl),
                             StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
                                 ? f.StorageKey
                                 : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)
@@ -745,7 +807,7 @@ namespace AISEP.Infrastructure.Services
                             new AdvisorEvidenceFileDto
                             {
                                 Id = 1,
-                                Url = _cloudinaryService.GenerateSignedDocumentUrl(null, advisor.BasicExpertiseProofFileURL),
+                                Url = _cloudinaryService.ToInlineUrl(advisor.BasicExpertiseProofFileURL),
                                 FileName = advisor.BasicExpertiseProofFileName
                                     ?? System.IO.Path.GetFileName(advisor.BasicExpertiseProofFileURL),
                                 FileType = System.IO.Path.GetExtension(advisor.BasicExpertiseProofFileURL)?.ToLowerInvariant() switch
@@ -831,6 +893,7 @@ namespace AISEP.Infrastructure.Services
         {
             var submission = await _context.StartupKycSubmissions
                 .AsNoTracking()
+                .Include(s => s.Startup)
                 .Include(s => s.EvidenceFiles)
                 .Include(s => s.RequestedAdditionalItems)
                 .FirstOrDefaultAsync(s => s.StartupID == startupId && s.IsActive);
@@ -841,7 +904,10 @@ namespace AISEP.Infrastructure.Services
                     "No active startup KYC submission was found for this startup.");
             }
 
-            return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(MapToKycSubmissionDto(submission));
+            var dto = MapToKycSubmissionDto(submission);
+            dto.LogoURL = submission.Startup?.LogoURL;
+            dto.CompanyName = submission.Startup?.CompanyName;
+            return ApiResponse<StartupKycSubmissionDto>.SuccessResponse(dto);
         }
 
         private static List<string> DeserializeCurrentNeeds(string? currentNeeds)
@@ -902,7 +968,7 @@ namespace AISEP.Infrastructure.Services
                             FileSize = f.FileSize,
                             UploadedAt = f.UploadedAt,
                             Kind = MapEvidenceKind(f.Kind),
-                            Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                            Url = _cloudinaryService.ToInlineUrl(f.FileUrl),
                             StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
                                 ? f.StorageKey
                                 : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)
@@ -1044,7 +1110,8 @@ namespace AISEP.Infrastructure.Services
                                       : "PENDING_MORE_INFO",
                         ProcessedAt   = s.ReviewedAt,
                         ReviewedBy    = s.ReviewedByUser != null ? s.ReviewedByUser.Email : null,
-                        Remarks       = s.Remarks
+                        Remarks       = s.Remarks,
+                        AvatarUrl     = s.Startup.LogoURL
                     })
                     .ToListAsync();
 
@@ -1078,7 +1145,8 @@ namespace AISEP.Infrastructure.Services
                                       : "PENDING_MORE_INFO",
                         ProcessedAt   = s.ReviewedAt,
                         ReviewedBy    = s.ReviewedByUser != null ? s.ReviewedByUser.Email : null,
-                        Remarks       = s.Remarks
+                        Remarks       = s.Remarks,
+                        AvatarUrl     = s.Investor.ProfilePhotoURL
                     })
                     .ToListAsync();
 
@@ -1112,7 +1180,8 @@ namespace AISEP.Infrastructure.Services
                                       : "PENDING_MORE_INFO",
                         ProcessedAt   = a.ApprovedAt,
                         ReviewedBy    = a.ApprovedByUser != null ? a.ApprovedByUser.Email : null,
-                        Remarks       = a.RejectionRemarks
+                        Remarks       = a.RejectionRemarks,
+                        AvatarUrl     = a.ProfilePhotoURL
                     })
                     .ToListAsync();
 
@@ -1136,5 +1205,228 @@ namespace AISEP.Infrastructure.Services
                 Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
             });
         }
+
+        // ================================================================
+        // GET KYC CASE HISTORY — per-entity review timeline
+        // ================================================================
+
+        public async Task<ApiResponse<List<KycCaseHistoryEntryDto>>> GetKycCaseHistoryAsync(int entityId, string entityType)
+        {
+            var type = entityType.ToUpperInvariant();
+
+            if (type == "STARTUP")
+            {
+                var startup = await _context.Startups
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.StartupID == entityId);
+
+                if (startup == null)
+                    return ApiResponse<List<KycCaseHistoryEntryDto>>.ErrorResponse(
+                        "STARTUP_NOT_FOUND", "Startup not found.");
+
+                var submissions = await _context.StartupKycSubmissions
+                    .AsNoTracking()
+                    .Include(s => s.ReviewedByUser)
+                    .Where(s => s.StartupID == entityId
+                             && s.WorkflowStatus != StartupKycWorkflowStatus.Draft)
+                    .OrderBy(s => s.Version)
+                    .ToListAsync();
+
+                var entries = submissions.Select(s => new KycCaseHistoryEntryDto
+                {
+                    Version              = s.Version,
+                    SubmittedAt          = s.SubmittedAt,
+                    ReviewedAt           = s.ReviewedAt,
+                    ReviewedByEmail      = s.ReviewedByUser?.Email,
+                    Action               = MapStartupAction(s.WorkflowStatus),
+                    ResultLabel          = MapStartupResultLabel(s.ResultLabel),
+                    Remarks              = s.Remarks,
+                    RequiresNewEvidence  = s.RequiresNewEvidence,
+                }).ToList();
+
+                return ApiResponse<List<KycCaseHistoryEntryDto>>.SuccessResponse(entries);
+            }
+
+            if (type == "INVESTOR")
+            {
+                var investor = await _context.Investors
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(i => i.InvestorID == entityId);
+
+                if (investor == null)
+                    return ApiResponse<List<KycCaseHistoryEntryDto>>.ErrorResponse(
+                        "INVESTOR_NOT_FOUND", "Investor not found.");
+
+                var submissions = await _context.InvestorKycSubmissions
+                    .AsNoTracking()
+                    .Include(s => s.ReviewedByUser)
+                    .Where(s => s.InvestorID == entityId
+                             && s.WorkflowStatus != InvestorKycWorkflowStatus.Draft)
+                    .OrderBy(s => s.Version)
+                    .ToListAsync();
+
+                var entries = submissions.Select(s => new KycCaseHistoryEntryDto
+                {
+                    Version              = s.Version,
+                    SubmittedAt          = s.SubmittedAt,
+                    ReviewedAt           = s.ReviewedAt,
+                    ReviewedByEmail      = s.ReviewedByUser?.Email,
+                    Action               = MapInvestorAction(s.WorkflowStatus),
+                    ResultLabel          = MapInvestorResultLabel(s.ResultLabel),
+                    Remarks              = s.Remarks,
+                    RequiresNewEvidence  = s.RequiresNewEvidence,
+                }).ToList();
+
+                return ApiResponse<List<KycCaseHistoryEntryDto>>.SuccessResponse(entries);
+            }
+
+            if (type == "ADVISOR")
+            {
+                var advisor = await _context.Advisors
+                    .AsNoTracking()
+                    .Include(a => a.ApprovedByUser)
+                    .FirstOrDefaultAsync(a => a.AdvisorID == entityId);
+
+                if (advisor == null)
+                    return ApiResponse<List<KycCaseHistoryEntryDto>>.ErrorResponse(
+                        "ADVISOR_NOT_FOUND", "Advisor not found.");
+
+                // Build timeline from AuditLog: each SUBMIT / APPROVE / REJECT / MORE_INFO event
+                // is recorded as an individual row, enabling a real multi-version timeline.
+                var advisorAuditTypes = new[]
+                {
+                    "SUBMIT_ADVISOR_KYC",
+                    "APPROVE_ADVISOR_KYC",
+                    "REJECT_ADVISOR_KYC",
+                    "REQUEST_MORE_INFO_ADVISOR_KYC"
+                };
+
+                var auditEntries = await _context.AuditLogs
+                    .AsNoTracking()
+                    .Include(a => a.User)
+                    .Where(a => a.EntityType == "Advisor"
+                             && a.EntityID == entityId
+                             && advisorAuditTypes.Contains(a.ActionType))
+                    .OrderBy(a => a.CreatedAt)
+                    .ToListAsync();
+
+                // Fallback for pre-existing advisors who have no audit entries yet:
+                // reconstruct a single entry from current entity state.
+                if (auditEntries.Count == 0)
+                {
+                    var fallbackAction = advisor.AdvisorTag switch
+                    {
+                        AdvisorTag.VerifiedAdvisor or AdvisorTag.BasicVerified => "APPROVED",
+                        AdvisorTag.VerificationFailed => "REJECTED",
+                        AdvisorTag.PendingMoreInfo    => "REQUESTED_MORE_INFO",
+                        _ => "UNDER_REVIEW"
+                    };
+                    var fallbackResultLabel = advisor.AdvisorTag switch
+                    {
+                        AdvisorTag.VerifiedAdvisor    => "VERIFIED_ADVISOR",
+                        AdvisorTag.BasicVerified      => "BASIC_VERIFIED",
+                        AdvisorTag.VerificationFailed => "VERIFICATION_FAILED",
+                        AdvisorTag.PendingMoreInfo    => "PENDING_MORE_INFO",
+                        _ => "NONE"
+                    };
+                    return ApiResponse<List<KycCaseHistoryEntryDto>>.SuccessResponse(new List<KycCaseHistoryEntryDto>
+                    {
+                        new()
+                        {
+                            Version             = 1,
+                            SubmittedAt         = advisor.UpdatedAt ?? advisor.CreatedAt,
+                            ReviewedAt          = advisor.ApprovedAt,
+                            ReviewedByEmail     = advisor.ApprovedByUser?.Email,
+                            Action              = fallbackAction,
+                            ResultLabel         = fallbackResultLabel,
+                            Remarks             = advisor.RejectionRemarks,
+                            RequiresNewEvidence = advisor.RequiresNewEvidence,
+                        }
+                    });
+                }
+
+                // Map audit entries → history items.
+                // Each SUBMIT increments the version counter; review entries share the same version.
+                var historyEntries = new List<KycCaseHistoryEntryDto>();
+                int currentVersion = 0;
+                foreach (var entry in auditEntries)
+                {
+                    bool isSubmit = entry.ActionType == "SUBMIT_ADVISOR_KYC";
+                    if (isSubmit) currentVersion++;
+
+                    string entryAction = entry.ActionType switch
+                    {
+                        "SUBMIT_ADVISOR_KYC"            => "UNDER_REVIEW",
+                        "APPROVE_ADVISOR_KYC"           => "APPROVED",
+                        "REJECT_ADVISOR_KYC"            => "REJECTED",
+                        "REQUEST_MORE_INFO_ADVISOR_KYC" => "REQUESTED_MORE_INFO",
+                        _                               => "UNDER_REVIEW"
+                    };
+
+                    string? entryResultLabel = null;
+                    string? entryRemarks     = null;
+                    bool entryRequiresNew    = false;
+
+                    if (!isSubmit && !string.IsNullOrEmpty(entry.ActionDetails))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(entry.ActionDetails);
+                            var root = doc.RootElement;
+                            if (root.TryGetProperty("resultLabel", out var rl))    entryResultLabel = rl.GetString();
+                            if (root.TryGetProperty("remarks", out var rm))        entryRemarks     = rm.ValueKind != JsonValueKind.Null ? rm.GetString() : null;
+                            if (root.TryGetProperty("requiresNewEvidence", out var rne)) entryRequiresNew = rne.GetBoolean();
+                        }
+                        catch { /* ignore malformed JSON */ }
+                    }
+
+                    historyEntries.Add(new KycCaseHistoryEntryDto
+                    {
+                        Version             = Math.Max(1, currentVersion),
+                        SubmittedAt         = isSubmit ? entry.CreatedAt : null,
+                        ReviewedAt          = isSubmit ? null : entry.CreatedAt,
+                        ReviewedByEmail     = isSubmit ? null : entry.User?.Email,
+                        Action              = entryAction,
+                        ResultLabel         = entryResultLabel ?? (isSubmit ? "NONE" : "NONE"),
+                        Remarks             = entryRemarks,
+                        RequiresNewEvidence = entryRequiresNew,
+                    });
+                }
+
+                return ApiResponse<List<KycCaseHistoryEntryDto>>.SuccessResponse(historyEntries);
+            }
+
+            return ApiResponse<List<KycCaseHistoryEntryDto>>.ErrorResponse(
+                "INVALID_ENTITY_TYPE", "entityType must be STARTUP, ADVISOR, or INVESTOR.");
+        }
+
+        private static string MapStartupAction(StartupKycWorkflowStatus status) => status switch
+        {
+            StartupKycWorkflowStatus.UnderReview    => "UNDER_REVIEW",
+            StartupKycWorkflowStatus.Approved       => "APPROVED",
+            StartupKycWorkflowStatus.Rejected       => "REJECTED",
+            StartupKycWorkflowStatus.PendingMoreInfo => "REQUESTED_MORE_INFO",
+            StartupKycWorkflowStatus.Superseded     => "SUPERSEDED",
+            _                                       => "UNDER_REVIEW",
+        };
+
+        private static string MapStartupResultLabel(StartupKycResultLabel label) => label switch
+        {
+            StartupKycResultLabel.VerifiedCompany   => "VERIFIED_COMPANY",
+            StartupKycResultLabel.BasicVerified     => "BASIC_VERIFIED",
+            StartupKycResultLabel.PendingMoreInfo   => "PENDING_MORE_INFO",
+            StartupKycResultLabel.VerificationFailed => "VERIFICATION_FAILED",
+            _                                       => "NONE",
+        };
+
+        private static string MapInvestorAction(InvestorKycWorkflowStatus status) => status switch
+        {
+            InvestorKycWorkflowStatus.UnderReview    => "UNDER_REVIEW",
+            InvestorKycWorkflowStatus.Approved       => "APPROVED",
+            InvestorKycWorkflowStatus.Rejected       => "REJECTED",
+            InvestorKycWorkflowStatus.PendingMoreInfo => "REQUESTED_MORE_INFO",
+            InvestorKycWorkflowStatus.Superseded     => "SUPERSEDED",
+            _                                        => "UNDER_REVIEW",
+        };
     }
 }

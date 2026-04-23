@@ -314,6 +314,31 @@ public class InvestorDetailForStartupDto
     public string ProfileAvailabilityReason { get; set; } = "OPEN";
 }
 
+/// <summary>Investor profile DTO for Staff/Admin review — no ProfileStatus filter applied.</summary>
+public class InvestorProfileForStaffDto
+{
+    public int InvestorID { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? FirmName { get; set; }
+    public string? Title { get; set; }
+    public string? Bio { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+    public string? InvestmentThesis { get; set; }
+    public string? Location { get; set; }
+    public string? Country { get; set; }
+    public string? LinkedInURL { get; set; }
+    public string? Website { get; set; }
+    public string? InvestorType { get; set; }
+    public bool AcceptingConnections { get; set; }
+    public string ProfileStatus { get; set; } = string.Empty;
+    public List<string> PreferredIndustries { get; set; } = new();
+    public List<string> PreferredStages { get; set; } = new();
+    public decimal? TicketSizeMin { get; set; }
+    public decimal? TicketSizeMax { get; set; }
+    public int? PortfolioCount { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
 /// <summary>Startup search result DTO (no sensitive data exposed)</summary>
 public class StartupSearchItemDto
 {

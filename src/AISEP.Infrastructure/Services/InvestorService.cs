@@ -32,11 +32,15 @@ public class InvestorService : IInvestorService
 
     public async Task<ApiResponse<InvestorDto>> CreateProfileAsync(int userId, CreateInvestorRequest request)
     {
-        // Check if profile already exists
-        var exists = await _db.Investors.AnyAsync(i => i.UserID == userId);
-        if (exists)
-            return ApiResponse<InvestorDto>.ErrorResponse("INVESTOR_PROFILE_EXISTS",
-                "Investor profile already exists for this user.");
+        // Idempotent: if profile already exists, return it instead of 409
+        var existing = await _db.Investors.FirstOrDefaultAsync(i => i.UserID == userId);
+        if (existing != null)
+        {
+            var existingSubmission = await _db.InvestorKycSubmissions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.InvestorID == existing.InvestorID && s.IsActive);
+            return ApiResponse<InvestorDto>.SuccessResponse(MapToDto(existing, existingSubmission));
+        }
 
         var investor = new Investor
         {
@@ -50,7 +54,7 @@ public class InvestorService : IInvestorService
             Country = request.Country,
             LinkedInURL = request.LinkedInURL,
             Website = request.Website,
-            ProfileStatus = ProfileStatus.Approved,
+            ProfileStatus = ProfileStatus.Draft,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -982,7 +986,7 @@ public class InvestorService : IInvestorService
                     FileSize = f.FileSize,
                     UploadedAt = f.UploadedAt,
                     Kind = MapEvidenceKind(f.Kind),
-                    Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                    Url = _cloudinaryService.ToInlineUrl(f.FileUrl),
                     StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
                         ? f.StorageKey
                         : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)
@@ -1249,5 +1253,46 @@ public class InvestorService : IInvestorService
             .ToListAsync();
 
         return ApiResponse<List<StartupCompareDto>>.SuccessResponse(startups);
+    }
+
+    public async Task<ApiResponse<InvestorProfileForStaffDto>> GetInvestorProfileForStaffAsync(int investorId)
+    {
+        var investor = await _db.Investors
+            .AsNoTracking()
+            .Include(i => i.Preferences)
+            .Include(i => i.IndustryFocus)
+            .Include(i => i.StageFocus)
+            .Include(i => i.PortfolioCompanies)
+            .Include(i => i.KycSubmissions)
+            .FirstOrDefaultAsync(i => i.InvestorID == investorId);
+
+        if (investor == null)
+            return ApiResponse<InvestorProfileForStaffDto>.ErrorResponse("INVESTOR_NOT_FOUND", "Investor not found.");
+
+        var activeKyc = investor.KycSubmissions.FirstOrDefault(s => s.IsActive);
+
+        return ApiResponse<InvestorProfileForStaffDto>.SuccessResponse(new InvestorProfileForStaffDto
+        {
+            InvestorID = investor.InvestorID,
+            FullName = investor.FullName,
+            FirmName = investor.FirmName,
+            Title = investor.Title,
+            Bio = investor.Bio,
+            ProfilePhotoURL = investor.ProfilePhotoURL,
+            InvestmentThesis = investor.InvestmentThesis,
+            Location = investor.Location,
+            Country = investor.Country,
+            LinkedInURL = investor.LinkedInURL,
+            Website = investor.Website,
+            InvestorType = activeKyc?.InvestorCategory,
+            AcceptingConnections = investor.AcceptingConnections,
+            ProfileStatus = investor.ProfileStatus.ToString(),
+            PreferredIndustries = investor.IndustryFocus.Select(f => f.Industry).ToList(),
+            PreferredStages = investor.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            TicketSizeMin = investor.Preferences?.MinInvestmentSize,
+            TicketSizeMax = investor.Preferences?.MaxInvestmentSize,
+            PortfolioCount = investor.PortfolioCompanies.Count,
+            UpdatedAt = investor.UpdatedAt
+        });
     }
 }

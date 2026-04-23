@@ -244,6 +244,14 @@ namespace AISEP.Infrastructure.Services
                 "raw");
         }
 
+        public string ToInlineUrl(string? url)
+        {
+            // Note: fl_inline is NOT supported for Cloudinary raw resource type (causes 400).
+            // Return the URL as-is; FE should use Google Docs Viewer for office files,
+            // or open image/PDF URLs directly in a new tab.
+            return url ?? string.Empty;
+        }
+
         public string? ExtractDocumentStorageKeyFromUrl(string? url)
         {
             if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
