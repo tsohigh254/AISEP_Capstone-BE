@@ -32,10 +32,13 @@ public class AdvisorService : IAdvisorService
 
     public async Task<ApiResponse<AdvisorMeDto>> CreateProfileAsync(int userId, CreateAdvisorRequest request)
     {
-        var exists = await _db.Advisors.AnyAsync(a => a.UserID == userId);
-        if (exists)
-            return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_EXISTS",
-                "Advisor profile already exists for this user.");
+        var existingAdvisor = await _db.Advisors
+            .Include(a => a.Availability)
+            .Include(a => a.IndustryFocus).ThenInclude(i => i.Industry)
+            .FirstOrDefaultAsync(a => a.UserID == userId);
+        if (existingAdvisor != null)
+            return ApiResponse<AdvisorMeDto>.SuccessResponse(
+                MapToMeDto(existingAdvisor, existingAdvisor.Availability, existingAdvisor.IndustryFocus));
 
         var profilePhotoUrl = request.ProfilePhotoURL != null
             ? await _cloudinaryService.UploadImage(request.ProfilePhotoURL, CloudinaryFolderSaving.Profile)
@@ -56,7 +59,7 @@ public class AdvisorService : IAdvisorService
                 MsTeamsLink = request.MsTeamsLink,
                 Website = request.Website,
                 MentorshipPhilosophy = request.MentorshipPhilosophy,
-                ProfileStatus = ProfileStatus.Approved,
+                ProfileStatus = ProfileStatus.Draft,
                 IsVerified = false,
                 YearsOfExperience = request.YearsOfExperience,
                 HourlyRate = request.HourlyRate,
@@ -144,6 +147,9 @@ public class AdvisorService : IAdvisorService
             return ApiResponse<AdvisorMeDto>.ErrorResponse("ADVISOR_PROFILE_NOT_FOUND",
                 "Advisor profile not found.");
 
+        _logger.LogInformation("[UpdateProfile] userId={UserId} received YearsOfExperience={YearsOfExperience} (HasValue={HasValue})",
+            userId, request.YearsOfExperience, request.YearsOfExperience.HasValue);
+
         if (request.FullName != null) advisor.FullName = request.FullName;
         if (request.Title != null) advisor.Title = request.Title;
         if (request.Company != null) advisor.Company = request.Company;
@@ -185,7 +191,20 @@ public class AdvisorService : IAdvisorService
             }
         }
 
+        // Auto-disable IsAcceptingNewMentees if either meeting link is removed
+        if (advisor.Availability != null && advisor.Availability.IsAcceptingNewMentees)
+        {
+            var hasGoogleMeet = !string.IsNullOrWhiteSpace(advisor.GoogleMeetLink);
+            var hasMsTeams = !string.IsNullOrWhiteSpace(advisor.MsTeamsLink);
+            if (!hasGoogleMeet || !hasMsTeams)
+            {
+                advisor.Availability.IsAcceptingNewMentees = false;
+                advisor.Availability.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         _db.Advisors.Update(advisor);
+        await _db.SaveChangesAsync();
 
         await _audit.LogAsync("UPDATE_ADVISOR_PROFILE", "Advisor", advisor.AdvisorID, null);
         _logger.LogInformation("Advisor profile {AdvisorId} updated", advisor.AdvisorID);
@@ -216,6 +235,10 @@ public class AdvisorService : IAdvisorService
             if (!kycVerified)
                 return ApiResponse<AvailabilityDto>.ErrorResponse("ADVISOR_KYC_NOT_APPROVED",
                     "KYC must be verified before enabling accepting new mentees. Please complete KYC verification first.");
+
+            if (string.IsNullOrWhiteSpace(advisor.GoogleMeetLink) || string.IsNullOrWhiteSpace(advisor.MsTeamsLink))
+                return ApiResponse<AvailabilityDto>.ErrorResponse("MEETING_LINKS_REQUIRED",
+                    "Both Google Meet and MS Teams links must be set before enabling accepting new mentees.");
         }
 
         if (advisor.Availability == null)
@@ -400,7 +423,7 @@ public class AdvisorService : IAdvisorService
         });
     }
 
-    public async Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId)
+    public async Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId, string userType = "")
     {
         var advisor = await _db.Advisors
             .Include(a => a.IndustryFocus)
@@ -427,7 +450,8 @@ public class AdvisorService : IAdvisorService
             })
             .ToListAsync();
 
-        if (advisor == null || (advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
+        var isStaff = userType == "Staff" || userType == "Admin";
+        if (advisor == null || (!isStaff && advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
         {
             return ApiResponse<AdvisorDetailDto>.ErrorResponse("NOT_FOUND", "Advisor not found or profile is not active.");
         }
@@ -593,10 +617,15 @@ public class AdvisorService : IAdvisorService
             dto.WorkflowStatus = "PENDING_REVIEW";
             dto.Explanation = "Hồ sơ của bạn đang được đội ngũ AISEP xem xét. Thường mất 1–3 ngày làm việc.";
         }
-        else if (advisor.ProfileStatus == ProfileStatus.Draft)
+        else if (advisor.ProfileStatus == ProfileStatus.Draft && advisor.HasKycDraft)
         {
             dto.WorkflowStatus = "DRAFT";
             dto.Explanation = "Bạn đang lưu nháp hồ sơ xác thực. Hãy hoàn thiện và gửi để được xem xét.";
+        }
+        else if (advisor.ProfileStatus == ProfileStatus.Draft && !advisor.HasKycDraft)
+        {
+            dto.WorkflowStatus = "NOT_STARTED";
+            dto.Explanation = "Chào mừng! Hãy xác thực tài khoản để tăng uy tín của bạn trong hệ sinh thái AISEP.";
         }
         else if (advisor.AdvisorTag == AdvisorTag.VerifiedAdvisor || advisor.AdvisorTag == AdvisorTag.BasicVerified)
         {
@@ -630,7 +659,7 @@ public class AdvisorService : IAdvisorService
                       new AdvisorKYCEvidenceFileDto
                       {
                           Id = 1,
-                          Url = _cloudinaryService.GenerateSignedDocumentUrl(null, advisor.BasicExpertiseProofFileURL),
+                          Url = _cloudinaryService.ToInlineUrl(advisor.BasicExpertiseProofFileURL),
                           FileName = advisor.BasicExpertiseProofFileName
                               ?? System.IO.Path.GetFileName(advisor.BasicExpertiseProofFileURL),
                           FileType = System.IO.Path.GetExtension(advisor.BasicExpertiseProofFileURL)?.ToLowerInvariant() switch
@@ -798,6 +827,7 @@ public class AdvisorService : IAdvisorService
             advisor.ProfileStatus = ProfileStatus.Draft;
         }
 
+        advisor.HasKycDraft = true;
         advisor.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 

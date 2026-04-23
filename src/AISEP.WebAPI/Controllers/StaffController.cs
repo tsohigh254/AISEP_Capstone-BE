@@ -1,3 +1,5 @@
+using AISEP.Application.DTOs.Common;
+using AISEP.Application.DTOs.Investor;
 using AISEP.Application.Interfaces;
 using AISEP.WebAPI.Extensions;
 using Microsoft.AspNetCore.Authorization;
@@ -16,10 +18,12 @@ namespace AISEP.WebAPI.Controllers;
 public class StaffController : ControllerBase
 {
     private readonly IStaffDashboardService _svc;
+    private readonly IInvestorService _investorService;
 
-    public StaffController(IStaffDashboardService svc)
+    public StaffController(IStaffDashboardService svc, IInvestorService investorService)
     {
         _svc = svc;
+        _investorService = investorService;
     }
 
     /// <summary>Overview stats: total users, locked accounts, pending KYC, AI uptime.</summary>
@@ -45,6 +49,16 @@ public class StaffController : ControllerBase
     public async Task<IActionResult> GetActivityFeed([FromQuery] int limit = 10)
     {
         var result = await _svc.GetActivityFeedAsync(limit);
+        return result.ToActionResult();
+    }
+
+    /// <summary>Get investor profile by ID — bypasses ProfileStatus filter. For KYC review use.</summary>
+    [HttpGet("investors/{investorId:int}")]
+    [ProducesResponseType(typeof(ApiResponse<InvestorProfileForStaffDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<InvestorProfileForStaffDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInvestorProfile(int investorId)
+    {
+        var result = await _investorService.GetInvestorProfileForStaffAsync(investorId);
         return result.ToActionResult();
     }
 }

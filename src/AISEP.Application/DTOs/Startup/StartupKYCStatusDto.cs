@@ -38,6 +38,8 @@ public class StartupKycSubmissionDto
 {
     public int Id { get; set; }
     public int StartupId { get; set; }
+    public string? CompanyName { get; set; }
+    public string? LogoURL { get; set; }
     public int Version { get; set; }
     public bool IsActive { get; set; }
     public string WorkflowStatus { get; set; } = string.Empty;

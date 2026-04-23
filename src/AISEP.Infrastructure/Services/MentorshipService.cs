@@ -58,11 +58,20 @@ public class MentorshipService : IMentorshipService
                 $"Your current subscription plan ({startup.SubscriptionPlan}) allows a maximum of {maxRequests} advisor consultation requests. Please upgrade your plan.");
         }
 
-        // Advisor must exist
-        var advisorExists = await _db.Advisors.AnyAsync(a => a.AdvisorID == request.AdvisorId);
-        if (!advisorExists)
+        // Advisor must exist, be accepting requests, and have both meeting links configured
+        var advisor = await _db.Advisors
+            .Include(a => a.Availability)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AdvisorID == request.AdvisorId);
+        if (advisor == null)
             return ApiResponse<MentorshipDto>.ErrorResponse("ADVISOR_NOT_FOUND",
                 $"Advisor with id {request.AdvisorId} not found.");
+        if (advisor.Availability == null || !advisor.Availability.IsAcceptingNewMentees)
+            return ApiResponse<MentorshipDto>.ErrorResponse("ADVISOR_NOT_ACCEPTING",
+                "This advisor is not currently accepting new consultation requests.");
+        if (string.IsNullOrWhiteSpace(advisor.GoogleMeetLink) || string.IsNullOrWhiteSpace(advisor.MsTeamsLink))
+            return ApiResponse<MentorshipDto>.ErrorResponse("ADVISOR_MEETING_LINKS_MISSING",
+                "This advisor has not set up all required meeting links.");
 
         // Check for existing pending/active mentorship with same advisor
         var duplicate = await _db.StartupAdvisorMentorships.AnyAsync(m =>
@@ -111,8 +120,7 @@ public class MentorshipService : IMentorshipService
         _logger.LogInformation("Mentorship {MentorshipId} requested by startup {StartupId} for advisor {AdvisorId}",
             mentorship.MentorshipID, startup.StartupID, request.AdvisorId);
 
-        // Notify Advisor
-        var advisor = await _db.Advisors.AsNoTracking().FirstOrDefaultAsync(a => a.AdvisorID == request.AdvisorId);
+        // Notify Advisor (reuse already-fetched advisor entity)
         if (advisor != null)
         {
             await _notifications.CreateAndPushAsync(new CreateNotificationRequest

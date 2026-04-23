@@ -27,7 +27,7 @@ public interface IAdvisorService
 
     // Search & Public info
     Task<ApiResponse<PagedResponse<AdvisorSearchItemDto>>> SearchAdvisorsAsync(AdvisorQueryParams advisorQueryParams);
-    Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId);
+    Task<ApiResponse<AdvisorDetailDto>> GetAdvisorDetailAsync(int advisorId, string userType = "");
 
     // Feedback management (advisor-facing)
     Task<ApiResponse<PagedResponse<AdvisorFeedbackListItemDto>>> GetMyFeedbacksAsync(int userId, int? ratingFilter, string? sort, int page, int pageSize);

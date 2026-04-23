@@ -31,5 +31,6 @@ namespace AISEP.Application.Interfaces
         Task<ApiResponse<Advisor>> RejectAdvisorRegistrationAsync(int staffId, RejectRegistrationRequest request);
         Task<ApiResponse<Investor>> RejectInvestorRegistrationAsync(int staffId, RejectRegistrationRequest request);
         Task<ApiResponse<PagedResponse<RegistrationHistoryItemDto>>> GetRegistrationHistoryAsync(RegistrationHistoryQueryParams query);
+        Task<ApiResponse<List<KycCaseHistoryEntryDto>>> GetKycCaseHistoryAsync(int entityId, string entityType);
     }
 }
