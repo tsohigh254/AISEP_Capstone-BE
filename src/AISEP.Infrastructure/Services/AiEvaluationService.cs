@@ -595,6 +595,7 @@ public class AiEvaluationService : IAiEvaluationService
     {
         Domain.Enums.DocumentType.Pitch_Deck => "pitch_deck",
         Domain.Enums.DocumentType.Bussiness_Plan => "business_plan",
+        Domain.Enums.DocumentType.Other => "other",
         _ => "unknown"
     };
 
