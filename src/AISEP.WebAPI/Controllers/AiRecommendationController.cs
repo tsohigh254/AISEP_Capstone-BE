@@ -19,12 +19,12 @@ namespace AISEP.WebAPI.Controllers;
 [Authorize(Policy = "InvestorOnly")]
 public class AiRecommendationController : ControllerBase
 {
-    private readonly IAiRecommendationService _recommendationService;
+    private readonly IRecommendationService _recommendationService;
     private readonly ApplicationDbContext _db;
     private readonly ILogger<AiRecommendationController> _logger;
 
     public AiRecommendationController(
-        IAiRecommendationService recommendationService,
+        IRecommendationService recommendationService,
         ApplicationDbContext db,
         ILogger<AiRecommendationController> logger)
     {
