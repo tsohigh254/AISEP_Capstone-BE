@@ -152,6 +152,7 @@ builder.Services.AddHttpClient<PythonAiClient>(client =>
 
 builder.Services.AddScoped<IAiEvaluationService, AiEvaluationService>();
 builder.Services.AddScoped<IAiRecommendationService, AiRecommendationService>();
+builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IAiInvestorAgentService, AiInvestorAgentService>();
 
 builder.Services.AddKeyedSingleton("OrderClient", (p, key) =>
