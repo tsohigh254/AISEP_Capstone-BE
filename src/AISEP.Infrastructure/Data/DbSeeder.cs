@@ -177,24 +177,9 @@ public static class DbSeeder
 
     private static async Task SeedIndustriesAsync(ApplicationDbContext context)
     {
-        // Check if correct MVP industries exist (Fintech with ID=1)
-        var hasCorrectData = await context.Industries.AnyAsync(i => i.IndustryID == 1 && i.IndustryName == "FinTech");
-        
-        if (hasCorrectData) return;
-
-        // Delete old industries data if exists (children first due to FK)
-        if (await context.Industries.AnyAsync())
-        {
-            // Delete sub-industries first (ParentIndustryID != null)
-            var subIndustries = await context.Industries.Where(i => i.ParentIndustryID != null).ToListAsync();
-            context.Industries.RemoveRange(subIndustries);
-            await context.SaveChangesAsync();
-
-            // Then delete parent industries
-            var parentIndustries = await context.Industries.Where(i => i.ParentIndustryID == null).ToListAsync();
-            context.Industries.RemoveRange(parentIndustries);
-            await context.SaveChangesAsync();
-        }
+        // If industries already exist, don't try to re-seed or delete them
+        // to avoid foreign key violations with existing Startups or other entities.
+        if (await context.Industries.AnyAsync()) return;
 
         var industries = new List<Industry>
         {
