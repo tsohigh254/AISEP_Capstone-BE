@@ -32,6 +32,9 @@ public class AdvisorsController : ControllerBase
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
+    private string GetCurrentUserType()
+        => User.FindFirst("userType")?.Value ?? string.Empty;
+
     // ================================================================
     // 1) POST /api/advisors — Create advisor profile
     // ================================================================
@@ -201,7 +204,7 @@ public class AdvisorsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AdvisorDetailDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAdvisorDetail(int id, CancellationToken ct = default)
     {
-        var result = await _advisorService.GetAdvisorDetailAsync(id);
+        var result = await _advisorService.GetAdvisorDetailAsync(id, GetCurrentUserType());
         return result.ToActionResult();
     }
 

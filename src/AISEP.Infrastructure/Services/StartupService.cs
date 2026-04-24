@@ -38,13 +38,13 @@ public class StartupService : IStartupService
 
     public async Task<ApiResponse<StartupMeDto>> CreateStartupAsync(int userId, CreateStartupRequest request)
     {
-        // Check if user already has a startup profile
-        var exists = await _context.Startups.AnyAsync(s => s.UserID == userId);
-        if (exists)
-        {
-            return ApiResponse<StartupMeDto>.ErrorResponse("STARTUP_PROFILE_EXISTS",
-                "You already have a startup profile. Each user can only create one startup.");
-        }
+        // Idempotent: if profile already exists, return it instead of 409
+        var existingStartup = await _context.Startups
+            .Include(s => s.Industry)
+            .Include(s => s.TeamMembers)
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+        if (existingStartup != null)
+            return ApiResponse<StartupMeDto>.SuccessResponse(MapToMeDto(existingStartup));
 
         // Validate industry exists in master data
         if (request.IndustryID.HasValue)
@@ -645,20 +645,21 @@ public class StartupService : IStartupService
 
     public async Task<ApiResponse<StartupPublicDto>> GetStartupByIdAsync(int startupId, int requestingUserId, string userType)
     {
+        var isStaff = userType == "Staff" || userType == "Admin";
+
         var startup = await _context.Startups
             .AsNoTracking()
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
                 .ThenInclude(i => i!.ParentIndustry)
             .FirstOrDefaultAsync(s => s.StartupID == startupId
-                && s.ProfileStatus == ProfileStatus.Approved);
+                && (isStaff || s.ProfileStatus == ProfileStatus.Approved));
 
         if (startup == null)
             return ApiResponse<StartupPublicDto>.ErrorResponse("STARTUP_NOT_FOUND", "Startup not found.");
 
         if (!startup.IsVisible)
         {
-            var isStaff = userType == "Staff" || userType == "Admin";
             // Owner: Startup user viewing their own profile
             var isOwner = userType == "Startup" && startup.UserID == requestingUserId;
 
@@ -1344,7 +1345,7 @@ public class StartupService : IStartupService
                     FileSize = f.FileSize,
                     UploadedAt = f.UploadedAt,
                     Kind = MapEvidenceKind(f.Kind),
-                    Url = _cloudinaryService.GenerateSignedDocumentUrl(f.StorageKey, f.FileUrl, f.FileName),
+                    Url = _cloudinaryService.ToInlineUrl(f.FileUrl),
                     StorageKey = !string.IsNullOrWhiteSpace(f.StorageKey)
                         ? f.StorageKey
                         : _cloudinaryService.ExtractDocumentStorageKeyFromUrl(f.FileUrl)

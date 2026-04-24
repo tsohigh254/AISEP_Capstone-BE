@@ -17,6 +17,8 @@ namespace AISEP.Application.Interfaces
         public string GenerateSignedDocumentUrl(string? storageKey, string? fallbackUrl = null, string? fileName = null, int? expiresInMinutes = null);
         public string? ExtractDocumentStorageKeyFromUrl(string? url);
         public Task<DocumentUploadResult> UploadDocumentWithHashAsync(IFormFile file, string folder);
+        /// <summary>Transforms a Cloudinary raw URL to serve inline (Content-Disposition: inline) instead of as an attachment.</summary>
+        public string ToInlineUrl(string? url);
 
         /// <summary>
         /// Download file bytes from Cloudinary using authenticated API.

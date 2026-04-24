@@ -43,4 +43,7 @@ public interface IInvestorService
 
     // Compare
     Task<ApiResponse<List<StartupCompareDto>>> CompareStartupsAsync(List<int> startupIds);
+
+    // Staff
+    Task<ApiResponse<InvestorProfileForStaffDto>> GetInvestorProfileForStaffAsync(int investorId);
 }

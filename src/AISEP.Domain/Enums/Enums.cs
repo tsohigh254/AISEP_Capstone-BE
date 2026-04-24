@@ -214,7 +214,8 @@ public enum MentorshipStatus : short
 public enum DocumentType : short
 {
     Pitch_Deck = 0,
-    Bussiness_Plan = 1
+    Bussiness_Plan = 1,
+    Other = 2
 }
 
 public enum AnalysisStatus : short
