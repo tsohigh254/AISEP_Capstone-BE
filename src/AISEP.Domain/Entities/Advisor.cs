@@ -61,4 +61,5 @@ public class Advisor
     public ICollection<AdvisorTestimonial> Testimonials { get; set; } = new List<AdvisorTestimonial>();
     public ICollection<StartupAdvisorMentorship> Mentorships { get; set; } = new List<StartupAdvisorMentorship>();
     public ICollection<AdvisorTimeSlot> TimeSlots { get; set; } = new List<AdvisorTimeSlot>();
+    public ICollection<StartupAdvisorBookmark> Bookmarks { get; set; } = new List<StartupAdvisorBookmark>();
 }

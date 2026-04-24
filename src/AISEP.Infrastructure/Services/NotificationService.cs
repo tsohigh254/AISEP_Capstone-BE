@@ -165,15 +165,17 @@ public class NotificationService : INotificationService
     // ── CREATE (system / programmatic) ─────────────────────────────────
     public async Task<ApiResponse<NotificationDto>> CreateAsync(CreateNotificationRequest request)
     {
+        var effectiveRequest = await NormalizeWelcomeNotificationAsync(request);
+
         var n = new Domain.Entities.Notification
         {
-            UserID = request.UserId,
-            NotificationType = request.NotificationType ?? string.Empty,
-            Title = request.Title ?? string.Empty,
-            Message = request.Message,
-            RelatedEntityType = request.RelatedEntityType,
-            RelatedEntityID = request.RelatedEntityId,
-            ActionURL = request.ActionUrl,
+            UserID = effectiveRequest.UserId,
+            NotificationType = effectiveRequest.NotificationType ?? string.Empty,
+            Title = effectiveRequest.Title ?? string.Empty,
+            Message = effectiveRequest.Message,
+            RelatedEntityType = effectiveRequest.RelatedEntityType,
+            RelatedEntityID = effectiveRequest.RelatedEntityId,
+            ActionURL = effectiveRequest.ActionUrl,
             IsRead = false,
             IsSent = false,
             CreatedAt = DateTime.UtcNow
@@ -189,6 +191,63 @@ public class NotificationService : INotificationService
     }
 
     // ── Mapper ────────────────────────────────────────────────────
+
+    private async Task<CreateNotificationRequest> NormalizeWelcomeNotificationAsync(CreateNotificationRequest request)
+    {
+        if (!string.Equals(request.NotificationType, "WELCOME", StringComparison.OrdinalIgnoreCase))
+            return request;
+
+        var userType = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.UserID == request.UserId)
+            .Select(u => u.UserType)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(userType))
+            return request;
+
+        var welcome = BuildWelcomeNotification(userType);
+
+        return new CreateNotificationRequest
+        {
+            UserId = request.UserId,
+            NotificationType = request.NotificationType,
+            Title = welcome.Title,
+            Message = welcome.Message,
+            RelatedEntityType = request.RelatedEntityType,
+            RelatedEntityId = request.RelatedEntityId,
+            ActionUrl = welcome.ActionUrl
+        };
+    }
+
+    private static (string Title, string Message, string ActionUrl) BuildWelcomeNotification(string userType)
+    {
+        const string title = "Chào mừng bạn đến với AISEP! 🎉";
+
+        return userType.ToLowerInvariant() switch
+        {
+            "startup" => (
+                title,
+                "Xin chào! Tài khoản Startup của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ xác thực KYC để bắt đầu kết nối với nhà đầu tư và sử dụng đầy đủ tính năng trên AISEP.",
+                "/startup/verification"
+            ),
+            "investor" => (
+                title,
+                "Xin chào! Tài khoản Investor của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ xác thực KYC để bắt đầu theo dõi startup, gửi yêu cầu kết nối và sử dụng đầy đủ tính năng trên AISEP.",
+                "/investor/verification"
+            ),
+            "advisor" => (
+                title,
+                "Xin chào! Tài khoản Advisor của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ xác thực KYC để bắt đầu nhận yêu cầu cố vấn và kết nối với hệ sinh thái khởi nghiệp trên AISEP.",
+                "/advisor/kyc"
+            ),
+            _ => (
+                title,
+                $"Xin chào! Tài khoản {userType} của bạn đã được tạo thành công. Hãy hoàn thiện hồ sơ xác thực KYC để bắt đầu sử dụng AISEP.",
+                "/dashboard"
+            )
+        };
+    }
 
     private static NotificationDto MapToDto(Domain.Entities.Notification n) => new()
     {

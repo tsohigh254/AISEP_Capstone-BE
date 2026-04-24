@@ -88,6 +88,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
     public DbSet<SavedReport> SavedReports => Set<SavedReport>();
 
+    // Bookmarks
+    public DbSet<StartupAdvisorBookmark> StartupAdvisorBookmarks => Set<StartupAdvisorBookmark>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -260,6 +263,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Incident>().HasKey(i => i.IncidentID);
         modelBuilder.Entity<PlatformAnalytics>().HasKey(pa => pa.AnalyticID);
         modelBuilder.Entity<SavedReport>().HasKey(sr => sr.ReportID);
+
+        // Bookmarks
+        modelBuilder.Entity<StartupAdvisorBookmark>().HasKey(b => b.BookmarkID);
 
         // AI Integration
         modelBuilder.Entity<AiEvaluationRun>().HasKey(r => r.Id);
@@ -551,6 +557,35 @@ public class ApplicationDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<IssueReportAttachment>()
             .Property(a => a.UploadedAt)
+            .HasDefaultValueSql("NOW()");
+
+        // ── Startup Advisor Bookmarks ─────────────────────────
+        modelBuilder.Entity<StartupAdvisorBookmark>()
+            .HasOne(b => b.Startup)
+            .WithMany(s => s.AdvisorBookmarks)
+            .HasForeignKey(b => b.StartupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<StartupAdvisorBookmark>()
+            .HasOne(b => b.Advisor)
+            .WithMany(a => a.Bookmarks)
+            .HasForeignKey(b => b.AdvisorID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<StartupAdvisorBookmark>()
+            .HasOne(b => b.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(b => b.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Unique constraint — one bookmark per (startup, advisor) pair
+        modelBuilder.Entity<StartupAdvisorBookmark>()
+            .HasIndex(b => new { b.StartupID, b.AdvisorID })
+            .HasDatabaseName("IX_StartupAdvisorBookmarks_Unique")
+            .IsUnique();
+
+        modelBuilder.Entity<StartupAdvisorBookmark>()
+            .Property(b => b.CreatedAt)
             .HasDefaultValueSql("NOW()");
 
     }

@@ -1724,4 +1724,135 @@ public class StartupService : IStartupService
             ProfileAvailabilityReason = discoverable ? "OPEN" : "INVESTOR_PAUSED_DISCOVERY"
         });
     }
+
+    // ================================================================
+    // GET INTERESTED INVESTORS — investors who have added this startup to their watchlist
+    // ================================================================
+
+    public async Task<ApiResponse<PagedResponse<InterestedInvestorDto>>> GetInterestedInvestorsAsync(
+        int userId, int page, int pageSize, string? keyword, string? sortBy,
+        DateTime? fromDate, DateTime? toDate)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        // 1. Resolve startup + verify email
+        var startup = await _context.Startups
+            .Include(s => s.User)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<PagedResponse<InterestedInvestorDto>>.ErrorResponse(
+                "STARTUP_PROFILE_NOT_FOUND",
+                "Startup profile not found.");
+
+        // 2. Email verified check (MSG012)
+        if (!startup.User.EmailVerified)
+            return ApiResponse<PagedResponse<InterestedInvestorDto>>.ErrorResponse(
+                "EMAIL_NOT_VERIFIED",
+                "Your email address has not been verified.");
+
+        // 3. Profile complete check (MSG041) — must be at least submitted/approved
+        if (startup.ProfileStatus == ProfileStatus.Draft)
+            return ApiResponse<PagedResponse<InterestedInvestorDto>>.ErrorResponse(
+                "STARTUP_PROFILE_INCOMPLETE",
+                "Your startup profile is incomplete. Please complete your profile before viewing interested investors.");
+
+        // 4. Build query — investors who have this startup in their active watchlist
+        var watchlistQuery = _context.InvestorWatchlists
+            .AsNoTracking()
+            .Include(w => w.Investor)
+                .ThenInclude(i => i.KycSubmissions)
+            .Where(w =>
+                w.StartupID == startup.StartupID &&
+                w.IsActive &&
+                w.Investor.ProfileStatus == ProfileStatus.Approved);
+
+        // 5. Optional filters
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim();
+            watchlistQuery = watchlistQuery.Where(w =>
+                w.Investor.FullName.Contains(kw) ||
+                (w.Investor.FirmName != null && w.Investor.FirmName.Contains(kw)));
+        }
+
+        if (fromDate.HasValue)
+            watchlistQuery = watchlistQuery.Where(w => w.AddedAt >= fromDate.Value);
+
+        if (toDate.HasValue)
+            watchlistQuery = watchlistQuery.Where(w => w.AddedAt <= toDate.Value);
+
+        // 6. Sorting
+        watchlistQuery = sortBy?.ToLower() switch
+        {
+            "name"   => watchlistQuery.OrderBy(w => w.Investor.FullName),
+            "oldest" => watchlistQuery.OrderBy(w => w.AddedAt),
+            _        => watchlistQuery.OrderByDescending(w => w.AddedAt)   // default: latest
+        };
+
+        var total = await watchlistQuery.CountAsync();
+
+        if (total == 0)
+            return ApiResponse<PagedResponse<InterestedInvestorDto>>.ErrorResponse(
+                "NO_INTERESTED_INVESTORS",
+                "No interested investors found for your startup.");
+
+        var items = await watchlistQuery
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var dtos = items.Select(w =>
+        {
+            var investor = w.Investor;
+            var activeKyc = investor.KycSubmissions
+                .OrderByDescending(k => k.Version)
+                .FirstOrDefault(k => k.WorkflowStatus == InvestorKycWorkflowStatus.Approved);
+
+            var (verificationStatus, verificationBadge) = ResolveInvestorVerification(investor, activeKyc);
+
+            var rawSummary = investor.InvestmentThesis ?? investor.Bio;
+            var shortSummary = rawSummary != null && rawSummary.Length > 200
+                ? rawSummary[..200].TrimEnd() + "…"
+                : rawSummary;
+
+            return new InterestedInvestorDto
+            {
+                InvestorId = investor.InvestorID,
+                DisplayName = investor.FirmName ?? investor.FullName,
+                RepresentativeName = investor.FullName,
+                FundName = investor.FirmName,
+                ProfilePhotoURL = investor.ProfilePhotoURL,
+                ShortSummary = shortSummary,
+                VerificationStatus = verificationStatus,
+                VerificationBadge = verificationBadge,
+                DateOfInterest = w.AddedAt
+            };
+        }).ToList();
+
+        return ApiResponse<PagedResponse<InterestedInvestorDto>>.SuccessResponse(
+            new PagedResponse<InterestedInvestorDto>
+            {
+                Items = dtos,
+                Paging = new PagingInfo { Page = page, PageSize = pageSize, TotalItems = total }
+            });
+    }
+
+    private static (string status, string? badge) ResolveInvestorVerification(
+        Investor investor, InvestorKycSubmission? activeKyc)
+    {
+        if (activeKyc == null)
+            return ("UNVERIFIED", null);
+
+        return activeKyc.ResultLabel switch
+        {
+            InvestorKycResultLabel.VerifiedInvestorEntity => ("VERIFIED", "Verified Investor Entity"),
+            InvestorKycResultLabel.VerifiedAngelInvestor  => ("VERIFIED", "Verified Angel Investor"),
+            InvestorKycResultLabel.BasicVerified          => ("BASIC_VERIFIED", "Basic Verified"),
+            InvestorKycResultLabel.PendingMoreInfo        => ("PENDING", null),
+            _                                             => ("UNVERIFIED", null)
+        };
+    }
 }

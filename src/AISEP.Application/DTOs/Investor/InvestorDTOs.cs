@@ -452,3 +452,38 @@ public class WatchlistItemDto
     public DateTime AddedAt { get; set; }
     public double? AiScore { get; set; }
 }
+
+// ========== INTERESTED INVESTORS (Startup view) ==========
+
+/// <summary>
+/// An investor who has added this startup to their watchlist (expressed passive interest).
+/// Returned by GET /api/startups/me/interested-investors.
+/// </summary>
+public class InterestedInvestorDto
+{
+    public int InvestorId { get; set; }
+    /// <summary>Headline name for display: FirmName nếu có, fallback về FullName (cá nhân).</summary>
+    public string DisplayName { get; set; } = string.Empty;
+    /// <summary>Tên người đại diện — investor.FullName</summary>
+    public string RepresentativeName { get; set; } = string.Empty;
+    /// <summary>Tên tổ chức/quỹ — investor.FirmName. Null nếu là investor cá nhân.</summary>
+    public string? FundName { get; set; }
+    public string? ProfilePhotoURL { get; set; }
+
+    /// <summary>
+    /// Short, pre-built summary for direct FE display.
+    /// Built from InvestmentThesis or Bio truncated to 200 chars.
+    /// </summary>
+    public string? ShortSummary { get; set; }
+
+    /// <summary>"VERIFIED" | "BASIC_VERIFIED" | "PENDING" | "UNVERIFIED"</summary>
+    public string VerificationStatus { get; set; } = "UNVERIFIED";
+
+    /// <summary>Human-readable badge label e.g. "Verified Investor Entity"</summary>
+    public string? VerificationBadge { get; set; }
+
+    /// <summary>
+    /// Timestamp when the investor added this startup to their watchlist.
+    /// </summary>
+    public DateTime? DateOfInterest { get; set; }
+}
