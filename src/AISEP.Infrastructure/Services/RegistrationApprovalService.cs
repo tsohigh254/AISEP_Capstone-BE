@@ -230,7 +230,7 @@ namespace AISEP.Infrastructure.Services
                 },
                 RelatedEntityType = "Advisor",
                 RelatedEntityId = advisor.AdvisorID,
-                ActionUrl = "/advisor/settings"
+                ActionUrl = "/advisor/kyc"
             });
 
             return ApiResponse<Advisor>.SuccessResponse(advisor, "Advisor reviewed successfully");
@@ -412,7 +412,7 @@ namespace AISEP.Infrastructure.Services
                 Message = $"Hồ sơ của bạn đã bị từ chối. Lý do: {advisor.RejectionRemarks ?? "Không có lý do cụ thể."}",
                 RelatedEntityType = "Advisor",
                 RelatedEntityId = advisor.AdvisorID,
-                ActionUrl = "/advisor/settings"
+                ActionUrl = "/advisor/kyc"
             });
 
             return ApiResponse<Advisor>.SuccessResponse(advisor, "Rejected successfully");
