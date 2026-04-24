@@ -182,21 +182,11 @@ public static class DbSeeder
         
         if (hasCorrectData) return;
 
-        // Delete old industries data if exists (children first due to FK)
-        if (await context.Industries.AnyAsync())
-        {
-            // Delete sub-industries first (ParentIndustryID != null)
-            var subIndustries = await context.Industries.Where(i => i.ParentIndustryID != null).ToListAsync();
-            context.Industries.RemoveRange(subIndustries);
-            await context.SaveChangesAsync();
-
-            // Then delete parent industries
-            var parentIndustries = await context.Industries.Where(i => i.ParentIndustryID == null).ToListAsync();
-            context.Industries.RemoveRange(parentIndustries);
-            await context.SaveChangesAsync();
-        }
-
-        var industries = new List<Industry>
+        // If we reach here, we are either missing the correct data or the table is empty.
+        // We will "Upsert" the required industries instead of deleting everything,
+        // as deleting fails if any Startup or Advisor is already linked to an industry.
+        
+        var industriesToSeed = new List<Industry>
         {
             // ===== Top-level (5 industries) =====
             new() { IndustryID = 1, IndustryName = "FinTech",                    Description = "Financial Technology",               ParentIndustryID = null },
@@ -249,7 +239,20 @@ public static class DbSeeder
             new() { IndustryID = 605, IndustryName = "Data Analytics & BI",       Description = "Business intelligence and data visualization", ParentIndustryID = 6 }
         };
 
-        context.Industries.AddRange(industries);
+        foreach (var industry in industriesToSeed)
+        {
+            var existing = await context.Industries.FindAsync(industry.IndustryID);
+            if (existing == null)
+            {
+                context.Industries.Add(industry);
+            }
+            else
+            {
+                existing.IndustryName = industry.IndustryName;
+                existing.Description = industry.Description;
+                existing.ParentIndustryID = industry.ParentIndustryID;
+            }
+        }
         await context.SaveChangesAsync();
     }
 
