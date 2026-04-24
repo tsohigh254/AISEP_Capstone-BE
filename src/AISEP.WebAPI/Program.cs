@@ -109,6 +109,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAdvisorService, AdvisorService>();
+builder.Services.AddScoped<IAdvisorBookmarkService, AdvisorBookmarkService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddScoped<IStartupService, StartupService>();

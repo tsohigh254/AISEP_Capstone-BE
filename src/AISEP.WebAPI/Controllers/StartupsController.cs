@@ -1,6 +1,7 @@
 using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
+using AISEP.Application.DTOs.Bookmark;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
 using AISEP.WebAPI.Extensions;
@@ -20,10 +21,12 @@ namespace AISEP.WebAPI.Controllers;
 public class StartupsController : ControllerBase
 {
     private readonly IStartupService _startupService;
+    private readonly IAdvisorBookmarkService _bookmarkService;
 
-    public StartupsController(IStartupService startupService)
+    public StartupsController(IStartupService startupService, IAdvisorBookmarkService bookmarkService)
     {
         _startupService = startupService;
+        _bookmarkService = bookmarkService;
     }
 
     private int GetCurrentUserId()
@@ -317,5 +320,102 @@ public class StartupsController : ControllerBase
         var userId = GetCurrentUserId();
         var result = await _startupService.DeleteTeamMemberAsync(userId, teamMemberId);
         return result.ToActionResult();
+    }
+
+    // ================================================================
+    // ADVISOR BOOKMARK ENDPOINTS  (Role = Startup)
+    // ================================================================
+
+    /// <summary>
+    /// Bookmark an advisor.
+    /// Requires: email verified (MSG012), KYC approved (MSG005), advisor found (MSG077).
+    /// Returns MSG004 if already bookmarked, MSG001 on success.
+    /// </summary>
+    [HttpPost("me/advisor-bookmarks")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorBookmarkDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorBookmarkDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorBookmarkDto>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorBookmarkDto>), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> BookmarkAdvisor([FromBody] BookmarkAdvisorRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _bookmarkService.CreateBookmarkAsync(userId, request.AdvisorId);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToCreatedEnvelope();
+    }
+
+    /// <summary>
+    /// Get paginated list of bookmarked advisors for the current startup.
+    /// </summary>
+    [HttpGet("me/advisor-bookmarks")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<AdvisorBookmarkListItemDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyAdvisorBookmarks(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _bookmarkService.GetMyBookmarksAsync(userId, page, pageSize);
+        return result.ToPagedEnvelope();
+    }
+
+    /// <summary>
+    /// Return the list of advisor IDs bookmarked by the current startup.
+    /// Lightweight endpoint for FE to check saved status in bulk.
+    /// </summary>
+    [HttpGet("me/advisor-bookmarks/ids")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<BookmarkedAdvisorIdsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBookmarkedAdvisorIds()
+    {
+        var userId = GetCurrentUserId();
+        var result = await _bookmarkService.GetBookmarkedAdvisorIdsAsync(userId);
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Remove (unsave) an advisor bookmark.
+    /// </summary>
+    [HttpDelete("me/advisor-bookmarks/{advisorId:int}")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAdvisorBookmark(int advisorId)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _bookmarkService.DeleteBookmarkAsync(userId, advisorId);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToDeletedEnvelope();
+    }
+
+    // ================================================================
+    // INTERESTED INVESTORS (Role = Startup)
+    // ================================================================
+
+    /// <summary>
+    /// Get list of investors who have added this startup to their watchlist (passive interest signals).
+    /// Only returns investors with an Approved profile and an active watchlist entry.
+    /// Validates: email verified (MSG012), profile complete (MSG041).
+    /// Returns NO_INTERESTED_INVESTORS when no results are found.
+    /// </summary>
+    [HttpGet("me/interested-investors")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<InterestedInvestorDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetInterestedInvestors(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? keyword = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.GetInterestedInvestorsAsync(
+            userId, page, pageSize, keyword, sortBy, fromDate, toDate);
+        if (!result.Success) return result.ToErrorResult();
+        return result.ToPagedEnvelope();
     }
 }

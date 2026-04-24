@@ -32,4 +32,9 @@ public interface IStartupService
     Task<ApiResponse<TeamMemberDto>> AddTeamMemberAsync(int userId, CreateTeamMemberRequest request);
     Task<ApiResponse<TeamMemberDto>> UpdateTeamMemberAsync(int userId, int teamMemberId, UpdateTeamMemberRequest request);
     Task<ApiResponse<string>> DeleteTeamMemberAsync(int userId, int teamMemberId);
+
+    // Interested investors (Startup sees who sent them a connection request)
+    Task<ApiResponse<PagedResponse<InterestedInvestorDto>>> GetInterestedInvestorsAsync(
+        int userId, int page, int pageSize, string? keyword, string? sortBy,
+        DateTime? fromDate, DateTime? toDate);
 }

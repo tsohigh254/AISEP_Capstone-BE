@@ -359,13 +359,20 @@ public class ChatService : IChatService
         await _db.Entry(message).Reference(m => m.SenderUser).LoadAsync();
 
         // Get recipient for notification
-        var (recipientUserId, senderName, _) = GetOtherParticipant(conv, userId);
+        var (recipientUserId, senderName, recipientRole) = GetOtherParticipant(conv, userId);
 
         // Push notification inline (NOT via Task.Run) to keep scoped DI services alive.
         // Task.Run would cause DbContext/NotificationService to be disposed before execution.
         try
         {
             var senderDisplayName = GetSenderDisplayName(message.SenderUser);
+            // Build role-prefixed route to match the rest of the notification contract
+            var rolePrefix = recipientRole.ToLower() switch
+            {
+                "investor" => "investor",
+                "advisor"  => "advisor",
+                _          => "startup"
+            };
             await _notifications.CreateAndPushAsync(new CreateNotificationRequest
             {
                 UserId = recipientUserId,
@@ -374,7 +381,7 @@ public class ChatService : IChatService
                 Message = message.MessageText.Length > 100 ? message.MessageText[..100] + "..." : message.MessageText,
                 RelatedEntityType = "Conversation",
                 RelatedEntityId = conv.ConversationID,
-                ActionUrl = $"/messaging?conversationId={conv.ConversationID}"
+                ActionUrl = $"/{rolePrefix}/messaging?conversationId={conv.ConversationID}"
             });
         }
         catch (Exception ex)

@@ -75,4 +75,5 @@ public class Startup
     public ICollection<InvestorWatchlist> WatchedByInvestors { get; set; } = new List<InvestorWatchlist>();
     public ICollection<AdvisorTestimonial> AdvisorTestimonials { get; set; } = new List<AdvisorTestimonial>();
     public ICollection<StartupKycSubmission> KycSubmissions { get; set; } = new List<StartupKycSubmission>();
+    public ICollection<StartupAdvisorBookmark> AdvisorBookmarks { get; set; } = new List<StartupAdvisorBookmark>();
 }
