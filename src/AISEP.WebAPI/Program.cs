@@ -138,6 +138,14 @@ builder.Services.AddHttpClient<IAIService, AIService>(client =>
     client.Timeout = TimeSpan.FromSeconds(300);
 });
 
+// ── Gemini AI Service Integration ──────────────────────────────
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
+builder.Services.AddHttpClient<IGeminiService, GeminiService>(client =>
+{
+    // Timeout is controlled by individual calls
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
 // ── Python AI Service Integration ──────────────────────────────
 builder.Services.Configure<PythonAiOptions>(builder.Configuration.GetSection(PythonAiOptions.SectionName));
 var pythonAiOpts = builder.Configuration.GetSection(PythonAiOptions.SectionName).Get<PythonAiOptions>() ?? new PythonAiOptions();
@@ -153,6 +161,7 @@ builder.Services.AddHttpClient<PythonAiClient>(client =>
 builder.Services.AddScoped<IAiEvaluationService, AiEvaluationService>();
 builder.Services.AddScoped<IAiRecommendationService, AiRecommendationService>();
 builder.Services.AddScoped<IAiInvestorAgentService, AiInvestorAgentService>();
+// Gemini Service is already added via AddHttpClient above
 
 builder.Services.AddKeyedSingleton("OrderClient", (p, key) =>
     {
