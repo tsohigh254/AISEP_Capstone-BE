@@ -113,6 +113,7 @@ builder.Services.AddScoped<IAdvisorBookmarkService, AdvisorBookmarkService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddScoped<IStartupService, StartupService>();
+builder.Services.AddScoped<IReadinessService, ReadinessService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IInvestorService, InvestorService>();
 builder.Services.AddScoped<IMentorshipService, MentorshipService>();

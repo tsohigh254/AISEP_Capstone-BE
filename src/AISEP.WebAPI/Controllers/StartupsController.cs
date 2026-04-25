@@ -2,6 +2,7 @@ using AISEP.Application.DTOs.Common;
 using AISEP.Application.DTOs.Investor;
 using AISEP.Application.DTOs.Startup;
 using AISEP.Application.DTOs.Bookmark;
+using AISEP.Application.DTOs.Readiness;
 using AISEP.Application.Interfaces;
 using AISEP.Application.QueryParams;
 using AISEP.WebAPI.Extensions;
@@ -22,11 +23,16 @@ public class StartupsController : ControllerBase
 {
     private readonly IStartupService _startupService;
     private readonly IAdvisorBookmarkService _bookmarkService;
+    private readonly IReadinessService _readinessService;
 
-    public StartupsController(IStartupService startupService, IAdvisorBookmarkService bookmarkService)
+    public StartupsController(
+        IStartupService startupService,
+        IAdvisorBookmarkService bookmarkService,
+        IReadinessService readinessService)
     {
         _startupService = startupService;
         _bookmarkService = bookmarkService;
+        _readinessService = readinessService;
     }
 
     private int GetCurrentUserId()
@@ -417,5 +423,34 @@ public class StartupsController : ControllerBase
             userId, page, pageSize, keyword, sortBy, fromDate, toDate);
         if (!result.Success) return result.ToErrorResult();
         return result.ToPagedEnvelope();
+    }
+
+    // ================================================================
+    // READINESS CHECKLIST
+    // ================================================================
+
+    /// <summary>
+    /// Get investment readiness assessment for the current startup.
+    /// Calculates score in real-time and persists the latest snapshot.
+    /// </summary>
+    [HttpGet("me/readiness")]
+    [Authorize(Roles = "Startup")]
+    [ProducesResponseType(typeof(ApiResponse<ReadinessResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetReadiness()
+    {
+        var result = await _readinessService.GetReadinessAsync(GetCurrentUserId());
+        return result.ToActionResult();
+    }
+
+    /// <summary>
+    /// Force recalculate investment readiness.
+    /// </summary>
+    [HttpPost("me/readiness/recalculate")]
+    [Authorize(Roles = "Startup")]
+    [ProducesResponseType(typeof(ApiResponse<ReadinessResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RecalculateReadiness()
+    {
+        var result = await _readinessService.RecalculateReadinessAsync(GetCurrentUserId());
+        return result.ToActionResult();
     }
 }

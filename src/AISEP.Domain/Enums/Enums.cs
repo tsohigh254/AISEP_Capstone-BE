@@ -405,3 +405,14 @@ public enum IssueReportStatus : short
     Resolved    = 2,
     Dismissed   = 3
 }
+
+// ───────────────────────── Readiness ─────────────────────────
+
+/// <summary>Investment readiness status derived from overall score.</summary>
+public enum ReadinessStatus : short
+{
+    NotReady      = 0,   // 0–39
+    NeedsWork     = 1,   // 40–69
+    AlmostReady   = 2,   // 70–84
+    InvestorReady = 3    // 85–100
+}
