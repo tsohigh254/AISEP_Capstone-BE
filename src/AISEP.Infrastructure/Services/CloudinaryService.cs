@@ -267,8 +267,12 @@ namespace AISEP.Infrastructure.Services
             }
 
             var pathAfterUpload = parts[1];
+            // URL-decode each segment so non-ASCII chars (e.g. Vietnamese in filenames)
+            // round-trip back to their actual public_id form. Without this, signed URLs
+            // refer to a public_id Cloudinary never stored → 404.
             var segments = pathAfterUpload
                 .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Select(Uri.UnescapeDataString)
                 .ToList();
 
             if (segments.Count == 0)
