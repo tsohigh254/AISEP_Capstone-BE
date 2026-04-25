@@ -13,8 +13,8 @@ public class Startup
     public string OneLiner { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
-    public StartupStage? Stage { get; set; }
+    public int? SubIndustryID { get; set; }
+    public int? StageID { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
@@ -67,6 +67,8 @@ public class Startup
     public User User { get; set; } = null!;
     public User? ApprovedByUser { get; set; }
     public Industry? Industry { get; set; }
+    public Industry? SubIndustryRef { get; set; }
+    public Stage? StageRef { get; set; }
     public ICollection<TeamMember> TeamMembers { get; set; } = new List<TeamMember>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
     public ICollection<StartupPotentialScore> PotentialScores { get; set; } = new List<StartupPotentialScore>();

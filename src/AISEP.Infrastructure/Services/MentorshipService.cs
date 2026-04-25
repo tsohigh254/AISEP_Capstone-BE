@@ -151,6 +151,7 @@ public class MentorshipService : IMentorshipService
         IQueryable<StartupAdvisorMentorship> query = _db.StartupAdvisorMentorships
             .AsNoTracking()
             .Include(m => m.Startup).ThenInclude(s => s.Industry)
+            .Include(m => m.Startup).ThenInclude(s => s.StageRef)
             .Include(m => m.Advisor)
             .Include(m => m.Reports)
             .Include(m => m.Sessions);
@@ -205,7 +206,7 @@ public class MentorshipService : IMentorshipService
                 StartupName = m.Startup?.CompanyName ?? "Unknown",
                 StartupLogoUrl = m.Startup?.LogoURL,
                 StartupIndustry = m.Startup?.Industry?.IndustryName,
-                StartupStage = m.Startup?.Stage?.ToString(),
+                StartupStage = m.Startup?.StageRef?.StageName,
                 AdvisorID = m.AdvisorID,
                 AdvisorName = m.Advisor?.FullName ?? "Unknown",
                 AdvisorTitle = m.Advisor?.Title,
@@ -254,6 +255,7 @@ public class MentorshipService : IMentorshipService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(m => m.Startup).ThenInclude(s => s.Industry)
+            .Include(m => m.Startup).ThenInclude(s => s.StageRef)
             .Include(m => m.Advisor)
             .Include(m => m.Sessions.OrderByDescending(s => s.ScheduledStartAt))
             .Include(m => m.Reports.OrderByDescending(r => r.CreatedAt))
@@ -1413,7 +1415,7 @@ public class MentorshipService : IMentorshipService
         StartupName = m.Startup.CompanyName,
         StartupLogoUrl = m.Startup.LogoURL,
         StartupIndustry = m.Startup.Industry?.IndustryName,
-        StartupStage = m.Startup.Stage?.ToString(),
+        StartupStage = m.Startup.StageRef?.StageName,
         AdvisorID = m.AdvisorID,
         AdvisorName = m.Advisor.FullName,
         AdvisorTitle = m.Advisor.Title,

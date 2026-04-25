@@ -5,8 +5,8 @@ public class InvestorPreferences
     public int PreferenceID { get; set; }
     public int InvestorID { get; set; }
     public float? MinPotentialScore { get; set; }
-    public string? PreferredStages { get; set; }
-    public string? PreferredIndustries { get; set; }
+    public string? PreferredStageIDs { get; set; } // CSV of int
+    public string? PreferredIndustryIDs { get; set; } // CSV of int
     public string? PreferredGeographies { get; set; }
     public string? PreferredMarketScopes { get; set; }     // CSV
     public string? SupportOffered { get; set; }             // CSV

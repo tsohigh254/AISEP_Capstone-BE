@@ -72,8 +72,8 @@ public class RecommendationService : IRecommendationService
         var investor = await _db.Investors
             .AsNoTracking()
             .Include(i => i.Preferences)
-            .Include(i => i.IndustryFocus)
-            .Include(i => i.StageFocus)
+            .Include(i => i.IndustryFocus).ThenInclude(f => f.IndustryRef)
+            .Include(i => i.StageFocus).ThenInclude(f => f.StageRef)
             .FirstOrDefaultAsync(i => i.InvestorID == investorId);
 
         if (investor == null) return new RecommendationListResult { InvestorId = investorId };
@@ -81,6 +81,7 @@ public class RecommendationService : IRecommendationService
         var startups = await _db.Startups
             .AsNoTracking()
             .Include(s => s.Industry)
+            .Include(s => s.StageRef)
             .Where(s => s.IsVisible && s.ProfileStatus == Domain.Enums.ProfileStatus.Approved)
             .ToListAsync();
 
@@ -90,13 +91,8 @@ public class RecommendationService : IRecommendationService
             ? new List<string>() 
             : val.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-        var preferredIndustries = investor.IndustryFocus.Select(ifoc => ifoc.Industry).ToList();
-        if (!preferredIndustries.Any() && investor.Preferences != null) 
-            preferredIndustries = SplitCsv(investor.Preferences.PreferredIndustries);
-
-        var preferredStages = investor.StageFocus.Select(sf => sf.Stage.ToString()).ToList();
-        if (!preferredStages.Any() && investor.Preferences != null)
-            preferredStages = SplitCsv(investor.Preferences.PreferredStages);
+        var preferredIndustries = investor.IndustryFocus.Select(ifoc => ifoc.IndustryRef?.IndustryName ?? "").ToList();
+        var preferredStages = investor.StageFocus.Select(sf => sf.StageRef?.StageName ?? "").ToList();
 
         var preferredGeos = SplitCsv(investor.Preferences?.PreferredGeographies);
 
@@ -113,10 +109,10 @@ public class RecommendationService : IRecommendationService
             }
 
             // Stage Match (30 pts)
-            if (s.Stage.HasValue && preferredStages.Any(ps => ps.Equals(s.Stage.Value.ToString(), StringComparison.OrdinalIgnoreCase)))
+            if (s.StageRef != null && preferredStages.Any(ps => ps.Equals(s.StageRef.StageName, StringComparison.OrdinalIgnoreCase)))
             {
                 score += 30;
-                positive.Add($"Giai đoạn phù hợp: {s.Stage.Value}");
+                positive.Add($"Giai đoạn phù hợp: {s.StageRef.StageName}");
             }
 
             // Geo Match (20 pts)

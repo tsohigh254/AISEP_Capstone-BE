@@ -101,10 +101,9 @@ public class UpdatePreferencesRequest
 {
     public decimal? TicketMin { get; set; }
     public decimal? TicketMax { get; set; }
-    /// <summary>Preferred stages, e.g. ["Seed", "Series A"]</summary>
-    public List<string>? PreferredStages { get; set; }
-    /// <summary>Preferred industry names, e.g. ["Fintech", "HealthTech"]</summary>
-    public List<string>? PreferredIndustries { get; set; }
+    public List<int>? PreferredStageIDs { get; set; }
+    /// <summary>Preferred industry IDs, e.g. [1, 2]</summary>
+    public List<int>? PreferredIndustryIDs { get; set; }
     public string? PreferredGeographies { get; set; }
     public float? MinPotentialScore { get; set; }
     public List<string>? PreferredMarketScopes { get; set; }
@@ -261,8 +260,8 @@ public class InvestorSearchItemDto
     public bool KycVerified { get; set; }
 
     // Matching / Filter
-    public List<string> PreferredIndustries { get; set; } = new();
-    public List<string> PreferredStages { get; set; } = new();
+    public List<IndustryFocusDto> PreferredIndustries { get; set; } = new();
+    public List<StageFocusDto> PreferredStages { get; set; } = new();
     public List<string> PreferredGeographies { get; set; } = new();
     public decimal? TicketSizeMin { get; set; }
     public decimal? TicketSizeMax { get; set; }
@@ -299,8 +298,8 @@ public class InvestorDetailForStartupDto
     public string? LinkedInURL { get; set; }
     public string? Website { get; set; }
     public string? InvestorType { get; set; } // "INDIVIDUAL_ANGEL" | "INSTITUTIONAL"
-    public List<string> PreferredIndustries { get; set; } = new();
-    public List<string> PreferredStages { get; set; } = new();
+    public List<IndustryFocusDto> PreferredIndustries { get; set; } = new();
+    public List<StageFocusDto> PreferredStages { get; set; } = new();
     public decimal? TicketSizeMin { get; set; }
     public decimal? TicketSizeMax { get; set; }
     public int? PortfolioCount { get; set; }
@@ -331,8 +330,8 @@ public class InvestorProfileForStaffDto
     public string? InvestorType { get; set; }
     public bool AcceptingConnections { get; set; }
     public string ProfileStatus { get; set; } = string.Empty;
-    public List<string> PreferredIndustries { get; set; } = new();
-    public List<string> PreferredStages { get; set; } = new();
+    public List<IndustryFocusDto> PreferredIndustries { get; set; } = new();
+    public List<StageFocusDto> PreferredStages { get; set; } = new();
     public decimal? TicketSizeMin { get; set; }
     public decimal? TicketSizeMax { get; set; }
     public int? PortfolioCount { get; set; }
@@ -344,11 +343,17 @@ public class StartupSearchItemDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
-    public string? Stage { get; set; }
+    public string? OneLiner { get; set; }
+    public string? Description { get; set; }
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public string? IndustryName { get; set; }
     public string? ParentIndustryName { get; set; }
-    public string? SubIndustry { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public string? LogoURL { get; set; }
+    public string? Stage => StageName;
+    public string? Industry => IndustryName;
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -369,26 +374,26 @@ public class StartupSearchItemDto
 
 public class IndustryFocusDto
 {
-    public int FocusId { get; set; }
-    public string Industry { get; set; } = string.Empty;
+    public int IndustryID { get; set; }
+    public string IndustryName { get; set; } = string.Empty;
 }
 
 public class AddIndustryFocusRequest
 {
-    public string Industry { get; set; } = string.Empty;
+    public int IndustryID { get; set; }
 }
 
 // ========== STAGE FOCUS DTOs ==========
 
 public class StageFocusDto
 {
-    public int StageFocusId { get; set; }
-    public string Stage { get; set; } = string.Empty;
+    public int StageID { get; set; }
+    public string StageName { get; set; } = string.Empty;
 }
 
 public class AddStageFocusRequest
 {
-    public AISEP.Domain.Enums.StartupStage Stage { get; set; }
+    public int StageID { get; set; }
 }
 
 // ========== COMPARE DTOs ==========
@@ -398,8 +403,12 @@ public class StartupCompareDto
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string? OneLiner { get; set; }
+    public int? StageID { get; set; }
     public string? Stage { get; set; }
+    public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public decimal? FundingAmountSought { get; set; }
     public decimal? CurrentFundingRaised { get; set; }
     public decimal? Valuation { get; set; }
@@ -415,8 +424,8 @@ public class PreferencesDto
 {
     public decimal? TicketMin { get; set; }
     public decimal? TicketMax { get; set; }
-    public List<string> PreferredStages { get; set; } = new();
-    public List<string> PreferredIndustries { get; set; } = new();
+    public List<StageFocusDto> PreferredStages { get; set; } = new();
+    public List<IndustryFocusDto> PreferredIndustries { get; set; } = new();
     public string? PreferredGeographies { get; set; }
     public float? MinPotentialScore { get; set; }
     public List<string> PreferredMarketScopes { get; set; } = new();
@@ -446,7 +455,8 @@ public class WatchlistItemDto
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string? Industry { get; set; }
-    public string? Stage { get; set; }
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public string? LogoURL { get; set; }
     public string Priority { get; set; } = "Medium";
     public DateTime AddedAt { get; set; }

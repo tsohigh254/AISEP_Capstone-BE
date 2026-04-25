@@ -88,6 +88,16 @@ public class StartupServiceTests
     public async Task ToggleVisibilityAsync_WhenApproved_TogglesSuccessfully()
     {
         var s = SeedStartup(userId: 1, status: ProfileStatus.Approved, visible: false);
+        _db.StartupKycSubmissions.Add(new StartupKycSubmission 
+        { 
+            StartupID = s.StartupID, 
+            IsActive = true, 
+            WorkflowStatus = StartupKycWorkflowStatus.Approved,
+            WorkEmail = "test@example.com",
+            RepresentativeFullName = "Test User",
+            RepresentativeRole = "CEO"
+        });
+        await _db.SaveChangesAsync();
 
         var result = await _sut.ToggleVisibilityAsync(1, isVisible: true);
 
@@ -182,9 +192,9 @@ public class StartupServiceTests
     }
 
     [Fact]
-    public async Task CreateStartupAsync_WhenAlreadyExists_ReturnsError()
+    public async Task CreateStartupAsync_WhenAlreadyExists_ReturnsSuccessIdempotent()
     {
-        SeedStartup(userId: 1);
+        var s = SeedStartup(userId: 1);
 
         var result = await _sut.CreateStartupAsync(1, new CreateStartupRequest
         {
@@ -192,8 +202,8 @@ public class StartupServiceTests
             OneLiner = "new co"
         });
 
-        result.Success.Should().BeFalse();
-        result.Error!.Code.Should().Be("STARTUP_PROFILE_EXISTS");
+        result.Success.Should().BeTrue();
+        result.Data!.CompanyName.Should().Be("Acme");
     }
 
     [Fact]

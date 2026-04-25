@@ -127,10 +127,7 @@ public class UpdateInvestorRequestValidator : AbstractValidator<UpdateInvestorRe
 
 public class UpdatePreferencesRequestValidator : AbstractValidator<UpdatePreferencesRequest>
 {
-    private static readonly string[] AllowedStages =
-    {
-        "Idea", "PreSeed", "Seed", "SeriesA", "SeriesB", "SeriesC", "Growth"
-    };
+
 
     public UpdatePreferencesRequestValidator()
     {
@@ -147,9 +144,6 @@ public class UpdatePreferencesRequestValidator : AbstractValidator<UpdatePrefere
             .WithMessage("Mức đầu tư tối thiểu phải nhỏ hơn hoặc bằng tối đa")
             .WithName("TicketRange");
 
-        RuleForEach(x => x.PreferredStages)
-            .Must(s => AllowedStages.Contains(s))
-            .WithMessage(s => $"Giai đoạn '{{PropertyValue}}' không hợp lệ. Cho phép: {string.Join(", ", AllowedStages)}");
 
         RuleFor(x => x.PreferredGeographies)
             .MaximumLength(1000).WithMessage("Địa lý ưu tiên không được vượt quá 1000 ký tự");
@@ -157,6 +151,14 @@ public class UpdatePreferencesRequestValidator : AbstractValidator<UpdatePrefere
         RuleFor(x => x.MinPotentialScore)
             .InclusiveBetween(0f, 100f).When(x => x.MinPotentialScore.HasValue)
             .WithMessage("Điểm tiềm năng tối thiểu phải từ 0 đến 100");
+
+        RuleFor(x => x.PreferredStageIDs)
+            .Must(ids => ids == null || ids.All(id => id > 0))
+            .WithMessage("Mỗi StageID phải là số nguyên dương");
+
+        RuleFor(x => x.PreferredIndustryIDs)
+            .Must(ids => ids == null || ids.All(id => id > 0))
+            .WithMessage("Mỗi IndustryID phải là số nguyên dương");
     }
 }
 

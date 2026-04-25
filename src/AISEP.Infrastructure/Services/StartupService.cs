@@ -67,8 +67,8 @@ public class StartupService : IStartupService
             OneLiner = request.OneLiner,
             Description = request.Description,
             IndustryID = request.IndustryID,
-            SubIndustry = request.SubIndustry,
-            Stage = request.Stage,
+            SubIndustryID = request.SubIndustryID,
+            StageID = request.StageID,
             FoundedDate = request.FoundedDate.HasValue
                 ? DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc)
                 : null,
@@ -137,6 +137,8 @@ public class StartupService : IStartupService
         var startup = await _context.Startups
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
+            .Include(s => s.SubIndustryRef)
+            .Include(s => s.StageRef)
             .Include(s => s.ApprovedByUser)
             .Include(s => s.Documents)
                 .ThenInclude(d => d.BlockchainProof)
@@ -197,8 +199,8 @@ public class StartupService : IStartupService
         if (request.CompanyName != null) startup.CompanyName = request.CompanyName;
         if (request.Description != null) startup.Description = request.Description;
         if (request.IndustryID.HasValue) startup.IndustryID = request.IndustryID;
-        if (request.SubIndustry != null) startup.SubIndustry = request.SubIndustry;
-        if (request.Stage != null) startup.Stage = request.Stage;
+        if (request.SubIndustryID != null) startup.SubIndustryID = request.SubIndustryID;
+        if (request.StageID != null) startup.StageID = request.StageID;
         if (request.OneLiner != null) startup.OneLiner = request.OneLiner;
         if (request.FoundedDate.HasValue) startup.FoundedDate = DateTime.SpecifyKind(request.FoundedDate.Value, DateTimeKind.Utc);
         if (request.Website != null) startup.Website = request.Website;
@@ -652,6 +654,8 @@ public class StartupService : IStartupService
             .Include(s => s.TeamMembers)
             .Include(s => s.Industry)
                 .ThenInclude(i => i!.ParentIndustry)
+            .Include(s => s.SubIndustryRef)
+            .Include(s => s.StageRef)
             .FirstOrDefaultAsync(s => s.StartupID == startupId
                 && (isStaff || s.ProfileStatus == ProfileStatus.Approved));
 
@@ -726,6 +730,7 @@ public class StartupService : IStartupService
         var isInvestor = userType == "Investor";
 
         var query = _context.Startups.AsNoTracking()
+            .Include(s => s.StageRef)
             .Where(s => s.ProfileStatus == ProfileStatus.Approved
                      && (isStaff || s.IsVisible))
             .AsQueryable();
@@ -738,10 +743,19 @@ public class StartupService : IStartupService
             || (s.Industry != null && s.Industry.IndustryName.Trim().ToLower().Contains(key)));
         }
 
-        // Filter by stage
-        if (startupQuery.Stage.HasValue)
+        if (startupQuery.StageID.HasValue)
         {
-            query = query.Where(s => s.Stage == startupQuery.Stage.Value);
+            query = query.Where(s => s.StageID == startupQuery.StageID.Value);
+        }
+
+        if (startupQuery.IndustryID.HasValue)
+        {
+            query = query.Where(s => s.IndustryID == startupQuery.IndustryID.Value);
+        }
+
+        if (startupQuery.SubIndustryID.HasValue)
+        {
+            query = query.Where(s => s.SubIndustryID == startupQuery.SubIndustryID.Value);
         }
 
         var totalItems = await query.CountAsync();
@@ -752,8 +766,12 @@ public class StartupService : IStartupService
             {
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
+                StageID = s.StageID,
+                StageName = s.StageRef != null ? s.StageRef.StageName : null,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
-                Stage = s.Stage != null ? s.Stage.ToString() : null,
+                ParentIndustryName = s.Industry != null && s.Industry.ParentIndustry != null ? s.Industry.ParentIndustry.IndustryName : null,
+                SubIndustryID = s.SubIndustryID,
+                SubIndustryName = s.SubIndustryRef != null ? s.SubIndustryRef.IndustryName : null,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt
@@ -972,7 +990,8 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
-            Stage = s.Stage?.ToString(),
+            StageID = s.StageID,
+            StageName = s.StageRef?.StageName,
             FoundedDate = s.FoundedDate,
             Website = s.Website,
             LogoURL = s.LogoURL,
@@ -980,7 +999,8 @@ public class StartupService : IStartupService
             CurrentFundingRaised = s.CurrentFundingRaised,
             Valuation = s.Valuation,
             
-            SubIndustry = s.SubIndustry,
+            SubIndustryID = s.SubIndustryID,
+            SubIndustryName = s.SubIndustryRef?.IndustryName,
             MarketScope = s.MarketScope,
             ProductStatus = s.ProductStatus,
             Location = s.Location,
@@ -1077,13 +1097,15 @@ public class StartupService : IStartupService
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
             ParentIndustryName = s.Industry?.ParentIndustry?.IndustryName,
-            Stage = s.Stage?.ToString(),
+            StageID = s.StageID,
+            StageName = s.StageRef?.StageName,
             FoundedDate = s.FoundedDate,
             Website = s.Website,
             LogoURL = s.LogoURL,
             FundingAmountSought = s.FundingAmountSought,
             CurrentFundingRaised = s.CurrentFundingRaised,
-            SubIndustry = s.SubIndustry,
+            SubIndustryID = s.SubIndustryID,
+            SubIndustryName = s.SubIndustryRef?.IndustryName,
             MarketScope = s.MarketScope,
             ProductStatus = s.ProductStatus,
             Location = s.Location,
@@ -1545,16 +1567,14 @@ public class StartupService : IStartupService
                 (i.Title != null && i.Title.ToLower().Contains(kw)));
         }
 
-        if (!string.IsNullOrWhiteSpace(q.Industry))
+        if (q.IndustryID.HasValue)
         {
-            var ind = q.Industry.ToLower();
-            query = query.Where(i => i.IndustryFocus.Any(f => f.Industry.ToLower().Contains(ind)));
+            query = query.Where(i => i.IndustryFocus.Any(f => f.IndustryID == q.IndustryID.Value));
         }
 
-        if (!string.IsNullOrWhiteSpace(q.Stage))
+        if (q.StageID.HasValue)
         {
-            if (Enum.TryParse<StartupStage>(q.Stage, true, out var stageEnum))
-                query = query.Where(i => i.StageFocus.Any(s => s.Stage == stageEnum));
+            query = query.Where(i => i.StageFocus.Any(s => s.StageID == q.StageID.Value));
         }
 
         if (q.TicketSizeMin.HasValue)
@@ -1607,8 +1627,8 @@ public class StartupService : IStartupService
                 i.UpdatedAt,
                 i.InvestorTag,
                 i.AcceptingConnections,
-                Industries           = i.IndustryFocus.Select(f => f.Industry).ToList(),
-                Stages               = i.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+                Industries           = i.IndustryFocus.Select(f => new IndustryFocusDto { IndustryID = f.IndustryID, IndustryName = f.IndustryRef != null ? f.IndustryRef.IndustryName : "" }).ToList(),
+                Stages               = i.StageFocus.Select(s => new StageFocusDto { StageID = s.StageID, StageName = s.StageRef != null ? s.StageRef.StageName : "" }).ToList(),
                 RawGeographies       = i.Preferences != null ? i.Preferences.PreferredGeographies : null,
                 TicketSizeMin        = i.Preferences != null ? i.Preferences.MinInvestmentSize : (decimal?)null,
                 TicketSizeMax        = i.Preferences != null ? i.Preferences.MaxInvestmentSize : (decimal?)null,
@@ -1686,8 +1706,8 @@ public class StartupService : IStartupService
         var investor = await _context.Investors
             .AsNoTracking()
             .Include(i => i.Preferences)
-            .Include(i => i.IndustryFocus)
-            .Include(i => i.StageFocus)
+            .Include(i => i.IndustryFocus).ThenInclude(f => f.IndustryRef)
+            .Include(i => i.StageFocus).ThenInclude(f => f.StageRef)
             .Include(i => i.PortfolioCompanies)
             .Include(i => i.KycSubmissions)
             .FirstOrDefaultAsync(i => i.InvestorID == investorId
@@ -1713,8 +1733,8 @@ public class StartupService : IStartupService
             LinkedInURL = investor.LinkedInURL,
             Website = investor.Website,
             InvestorType = activeKyc?.InvestorCategory,
-            PreferredIndustries = investor.IndustryFocus.Select(f => f.Industry).ToList(),
-            PreferredStages = investor.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            PreferredIndustries = investor.IndustryFocus.Select(f => new IndustryFocusDto { IndustryID = f.IndustryID, IndustryName = f.IndustryRef?.IndustryName ?? "" }).ToList(),
+            PreferredStages = investor.StageFocus.Select(s => new StageFocusDto { StageID = s.StageID, StageName = s.StageRef?.StageName ?? "" }).ToList(),
             TicketSizeMin = investor.Preferences?.MinInvestmentSize,
             TicketSizeMax = investor.Preferences?.MaxInvestmentSize,
             PortfolioCount = investor.PortfolioCompanies.Count,

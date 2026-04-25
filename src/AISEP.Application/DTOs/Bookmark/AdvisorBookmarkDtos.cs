@@ -40,6 +40,7 @@ public class AdvisorBookmarkListItemDto
     public List<string> Expertise { get; set; } = new();
     public DateTime CreatedAt { get; set; }
     public bool IsBookmarked { get; set; } = true;
+    public string AvailabilityHint { get; set; } = "Available"; // "Available" | "Not available"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

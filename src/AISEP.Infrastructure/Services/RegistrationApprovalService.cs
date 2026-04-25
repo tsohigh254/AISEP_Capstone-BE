@@ -569,8 +569,9 @@ namespace AISEP.Infrastructure.Services
         {
             var submissionQuery = _context.StartupKycSubmissions
                 .AsNoTracking()
-                .Include(s => s.Startup)
-                .ThenInclude(s => s.Industry)
+                .Include(s => s.Startup).ThenInclude(s => s.Industry).ThenInclude(i => i.ParentIndustry)
+                .Include(s => s.Startup).ThenInclude(s => s.StageRef)
+                .Include(s => s.Startup).ThenInclude(s => s.SubIndustryRef)
                 .Where(s => s.IsActive
                     && (s.WorkflowStatus == StartupKycWorkflowStatus.UnderReview
                         || s.WorkflowStatus == StartupKycWorkflowStatus.PendingMoreInfo))
@@ -582,8 +583,12 @@ namespace AISEP.Infrastructure.Services
                 {
                     StartupID = s.StartupID,
                     CompanyName = s.Startup.CompanyName,
+                    StageID = s.Startup.StageID,
+                    StageName = s.Startup.StageRef != null ? s.Startup.StageRef.StageName : null,
                     IndustryName = s.Startup.Industry != null ? s.Startup.Industry.IndustryName : null,
-                    Stage = s.Startup.Stage != null ? s.Startup.Stage.ToString() : null,
+                    ParentIndustryName = s.Startup.Industry != null && s.Startup.Industry.ParentIndustry != null ? s.Startup.Industry.ParentIndustry.IndustryName : null,
+                    SubIndustryID = s.Startup.SubIndustryID,
+                    SubIndustryName = s.Startup.SubIndustryRef != null ? s.Startup.SubIndustryRef.IndustryName : null,
                     LogoURL = s.Startup.LogoURL,
                     ProfileStatus = MapWorkflowStatus(s.WorkflowStatus),
                     UpdatedAt = s.UpdatedAt,
@@ -833,6 +838,8 @@ namespace AISEP.Infrastructure.Services
             var startup = await _context.Startups
                .Include(s => s.TeamMembers)
                .Include(s => s.Industry)
+               .Include(s => s.StageRef)
+               .Include(s => s.SubIndustryRef)
                .FirstOrDefaultAsync(i => i.StartupID == startupId);
 
             if (startup == null)
@@ -847,7 +854,8 @@ namespace AISEP.Infrastructure.Services
                 Description = startup.Description,
                 IndustryID = startup.IndustryID,
                 IndustryName = startup.Industry?.IndustryName ?? string.Empty,
-                Stage = startup.Stage.ToString(),
+                StageID = startup.StageID,
+                StageName = startup.StageRef?.StageName,
                 FoundedDate = startup.FoundedDate,
                 Website = startup.Website,
                 LogoURL = startup.LogoURL,
@@ -859,7 +867,8 @@ namespace AISEP.Infrastructure.Services
                 ContactEmail = startup.ContactEmail,
                 ContactPhone = startup.ContactPhone,
                 BusinessCode = startup.BusinessCode,
-                SubIndustry = startup.SubIndustry,
+                SubIndustryID = startup.SubIndustryID,
+                SubIndustryName = startup.SubIndustryRef?.IndustryName,
                 MarketScope = startup.MarketScope,
                 ProductStatus = startup.ProductStatus,
                 Location = startup.Location,

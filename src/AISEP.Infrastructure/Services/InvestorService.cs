@@ -166,8 +166,8 @@ public class InvestorService : IInvestorService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(i => i.Preferences)
-            .Include(i => i.StageFocus)
-            .Include(i => i.IndustryFocus)
+            .Include(i => i.StageFocus).ThenInclude(sf => sf.StageRef)
+            .Include(i => i.IndustryFocus).ThenInclude(inf => inf.IndustryRef)
             .FirstOrDefaultAsync(i => i.UserID == userId);
 
         if (investor == null)
@@ -207,11 +207,11 @@ public class InvestorService : IInvestorService
         investor.Preferences.UpdatedAt = DateTime.UtcNow;
 
         // Store comma-separated in the text columns too (for backward compat)
-        investor.Preferences.PreferredStages = request.PreferredStages != null
-            ? string.Join(",", request.PreferredStages)
+        investor.Preferences.PreferredStageIDs = request.PreferredStageIDs != null
+            ? string.Join(",", request.PreferredStageIDs)
             : null;
-        investor.Preferences.PreferredIndustries = request.PreferredIndustries != null
-            ? string.Join(",", request.PreferredIndustries)
+        investor.Preferences.PreferredIndustryIDs = request.PreferredIndustryIDs != null
+            ? string.Join(",", request.PreferredIndustryIDs)
             : null;
         investor.Preferences.PreferredMarketScopes = request.PreferredMarketScopes != null
             ? string.Join(",", request.PreferredMarketScopes)
@@ -221,32 +221,29 @@ public class InvestorService : IInvestorService
             : null;
 
         // Sync InvestorStageFocus table
-        if (request.PreferredStages != null)
+        if (request.PreferredStageIDs != null)
         {
             _db.InvestorStageFocuses.RemoveRange(investor.StageFocus);
-            foreach (var stage in request.PreferredStages.Distinct())
+            foreach (var stageId in request.PreferredStageIDs.Distinct())
             {
-                if (Enum.TryParse<StartupStage>(stage, true, out var stageEnum))
+                _db.InvestorStageFocuses.Add(new InvestorStageFocus
                 {
-                    _db.InvestorStageFocuses.Add(new InvestorStageFocus
-                    {
-                        InvestorID = investor.InvestorID,
-                        Stage = stageEnum
-                    });
-                }
+                    InvestorID = investor.InvestorID,
+                    StageID = stageId
+                });
             }
         }
 
         // Sync InvestorIndustryFocus table
-        if (request.PreferredIndustries != null)
+        if (request.PreferredIndustryIDs != null)
         {
             _db.InvestorIndustryFocuses.RemoveRange(investor.IndustryFocus);
-            foreach (var industry in request.PreferredIndustries.Distinct())
+            foreach (var industryId in request.PreferredIndustryIDs.Distinct())
             {
                 _db.InvestorIndustryFocuses.Add(new InvestorIndustryFocus
                 {
                     InvestorID = investor.InvestorID,
-                    Industry = industry
+                    IndustryID = industryId
                 });
             }
         }
@@ -262,8 +259,8 @@ public class InvestorService : IInvestorService
             .AsNoTracking()
             .AsSplitQuery()
             .Include(i => i.Preferences)
-            .Include(i => i.StageFocus)
-            .Include(i => i.IndustryFocus)
+            .Include(i => i.StageFocus).ThenInclude(f => f.StageRef)
+            .Include(i => i.IndustryFocus).ThenInclude(f => f.IndustryRef)
             .FirstAsync(i => i.InvestorID == investor.InvestorID);
 
         return ApiResponse<PreferencesDto>.SuccessResponse(MapPreferencesDto(updatedInvestor));
@@ -332,7 +329,8 @@ public class InvestorService : IInvestorService
             StartupID = startup.StartupID,
             CompanyName = startup.CompanyName,
             Industry = startup.Industry?.IndustryName,
-            Stage = startup.Stage?.ToString(),
+            StageID = startup.StageID,
+            StageName = startup.StageRef?.StageName,
             LogoURL = startup.LogoURL,
             Priority = (entry.Priority ?? WatchlistPriority.Medium).ToString(),
             AddedAt = entry.AddedAt,
@@ -371,7 +369,8 @@ public class InvestorService : IInvestorService
                 StartupID = w.StartupID,
                 CompanyName = w.Startup.CompanyName,
                 Industry = w.Startup.Industry != null ? w.Startup.Industry.IndustryName : null,
-                Stage = w.Startup.Stage != null ? w.Startup.Stage.ToString() : null,
+                StageID = w.Startup.StageID,
+                StageName = w.Startup.StageRef != null ? w.Startup.StageRef.StageName : null,
                 LogoURL = w.Startup.LogoURL,
                 Priority = (w.Priority ?? WatchlistPriority.Medium).ToString(),
                 AddedAt = w.AddedAt,
@@ -444,7 +443,7 @@ public class InvestorService : IInvestorService
     // ================================================================
 
     public async Task<ApiResponse<PagedResponse<StartupSearchItemDto>>> SearchStartupsAsync(
-        string? q, int? industryId, string? stage, string? location,
+        string? q, int? industryId, int? stageId, string? location,
         string? sortBy, int page, int pageSize, int callerUserId = 0)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -473,12 +472,8 @@ public class InvestorService : IInvestorService
             query = query.Where(s => s.IndustryID == industryId.Value || subIndustryIds.Contains(s.IndustryID));
         }
 
-        // Stage filter
-        if (!string.IsNullOrWhiteSpace(stage))
-        {
-            if (Enum.TryParse<StartupStage>(stage, true, out var stageEnum))
-                query = query.Where(s => s.Stage == stageEnum);
-        }
+        if (stageId.HasValue)
+            query = query.Where(s => s.StageID == stageId.Value);
 
         // Sorting
         query = sortBy?.ToLower() switch
@@ -497,11 +492,16 @@ public class InvestorService : IInvestorService
             {
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
-                Stage = s.Stage != null ? s.Stage.ToString() : null,
+                OneLiner = s.OneLiner,
+                Description = s.Description,
+                StageID = s.StageID,
+                StageName = s.StageRef != null ? s.StageRef.StageName : null,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
                 ParentIndustryName = s.Industry != null && s.Industry.ParentIndustry != null
                     ? s.Industry.ParentIndustry.IndustryName
                     : null,
+                SubIndustryID = s.SubIndustryID,
+                SubIndustryName = s.SubIndustryRef != null ? s.SubIndustryRef.IndustryName : null,
                 LogoURL = s.LogoURL,
                 ProfileStatus = s.ProfileStatus.ToString(),
                 UpdatedAt = s.UpdatedAt,
@@ -1086,8 +1086,8 @@ public class InvestorService : IInvestorService
         {
             TicketMin = pref?.MinInvestmentSize,
             TicketMax = pref?.MaxInvestmentSize,
-            PreferredStages = investor.StageFocus.Select(sf => sf.Stage.ToString()).ToList(),
-            PreferredIndustries = investor.IndustryFocus.Select(inf => inf.Industry).ToList(),
+            PreferredStages = investor.StageFocus.Select(sf => new StageFocusDto { StageID = sf.StageID, StageName = sf.StageRef?.StageName ?? "" }).ToList(),
+            PreferredIndustries = investor.IndustryFocus.Select(inf => new IndustryFocusDto { IndustryID = inf.IndustryID, IndustryName = inf.IndustryRef?.IndustryName ?? "" }).ToList(),
             PreferredGeographies = pref?.PreferredGeographies,
             MinPotentialScore = pref?.MinPotentialScore,
             PreferredMarketScopes = pref?.PreferredMarketScopes != null
@@ -1112,9 +1112,10 @@ public class InvestorService : IInvestorService
             return ApiResponse<List<IndustryFocusDto>>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var items = await _db.InvestorIndustryFocuses
+            .Include(f => f.IndustryRef)
             .Where(f => f.InvestorID == investor.InvestorID)
             .AsNoTracking()
-            .Select(f => new IndustryFocusDto { FocusId = f.FocusID, Industry = f.Industry })
+            .Select(f => new IndustryFocusDto { IndustryID = f.IndustryID, IndustryName = f.IndustryRef.IndustryName })
             .ToListAsync();
 
         return ApiResponse<List<IndustryFocusDto>>.SuccessResponse(items);
@@ -1127,30 +1128,32 @@ public class InvestorService : IInvestorService
             return ApiResponse<IndustryFocusDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var exists = await _db.InvestorIndustryFocuses
-            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.Industry == request.Industry);
+            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.IndustryID == request.IndustryID);
         if (exists)
             return ApiResponse<IndustryFocusDto>.ErrorResponse("INDUSTRY_FOCUS_ALREADY_EXISTS", "Industry focus already exists");
 
         var focus = new InvestorIndustryFocus
         {
             InvestorID = investor.InvestorID,
-            Industry = request.Industry
+            IndustryID = request.IndustryID
         };
         _db.InvestorIndustryFocuses.Add(focus);
         await _db.SaveChangesAsync();
 
+        var industry = await _db.Industries.FindAsync(request.IndustryID);
+
         return ApiResponse<IndustryFocusDto>.SuccessResponse(
-            new IndustryFocusDto { FocusId = focus.FocusID, Industry = focus.Industry }, "Industry focus added");
+            new IndustryFocusDto { IndustryID = focus.IndustryID, IndustryName = industry?.IndustryName ?? string.Empty }, "Industry focus added");
     }
 
-    public async Task<ApiResponse<string>> RemoveIndustryFocusAsync(int userId, int focusId)
+    public async Task<ApiResponse<string>> RemoveIndustryFocusAsync(int userId, int industryId)
     {
         var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
         if (investor == null)
             return ApiResponse<string>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var focus = await _db.InvestorIndustryFocuses
-            .FirstOrDefaultAsync(f => f.FocusID == focusId && f.InvestorID == investor.InvestorID);
+            .FirstOrDefaultAsync(f => f.IndustryID == industryId && f.InvestorID == investor.InvestorID);
         if (focus == null)
             return ApiResponse<string>.ErrorResponse("INDUSTRY_FOCUS_NOT_FOUND", "Industry focus not found");
 
@@ -1172,9 +1175,10 @@ public class InvestorService : IInvestorService
             return ApiResponse<List<StageFocusDto>>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var items = await _db.InvestorStageFocuses
+            .Include(f => f.StageRef)
             .Where(f => f.InvestorID == investor.InvestorID)
             .AsNoTracking()
-            .Select(f => new StageFocusDto { StageFocusId = f.StageFocusID, Stage = f.Stage.ToString() })
+            .Select(f => new StageFocusDto { StageID = f.StageID, StageName = f.StageRef.StageName })
             .ToListAsync();
 
         return ApiResponse<List<StageFocusDto>>.SuccessResponse(items);
@@ -1187,30 +1191,32 @@ public class InvestorService : IInvestorService
             return ApiResponse<StageFocusDto>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var exists = await _db.InvestorStageFocuses
-            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.Stage == request.Stage);
+            .AnyAsync(f => f.InvestorID == investor.InvestorID && f.StageID == request.StageID);
         if (exists)
             return ApiResponse<StageFocusDto>.ErrorResponse("STAGE_FOCUS_ALREADY_EXISTS", "Stage focus already exists");
 
         var focus = new InvestorStageFocus
         {
             InvestorID = investor.InvestorID,
-            Stage = request.Stage
+            StageID = request.StageID
         };
         _db.InvestorStageFocuses.Add(focus);
         await _db.SaveChangesAsync();
 
+        var stage = await _db.Stages.FindAsync(request.StageID);
+
         return ApiResponse<StageFocusDto>.SuccessResponse(
-            new StageFocusDto { StageFocusId = focus.StageFocusID, Stage = focus.Stage.ToString() }, "Stage focus added");
+            new StageFocusDto { StageID = focus.StageID, StageName = stage?.StageName ?? string.Empty }, "Stage focus added");
     }
 
-    public async Task<ApiResponse<string>> RemoveStageFocusAsync(int userId, int stageFocusId)
+    public async Task<ApiResponse<string>> RemoveStageFocusAsync(int userId, int stageId)
     {
         var investor = await _db.Investors.AsNoTracking().FirstOrDefaultAsync(i => i.UserID == userId);
         if (investor == null)
             return ApiResponse<string>.ErrorResponse("INVESTOR_PROFILE_NOT_FOUND", "Investor profile not found");
 
         var focus = await _db.InvestorStageFocuses
-            .FirstOrDefaultAsync(f => f.StageFocusID == stageFocusId && f.InvestorID == investor.InvestorID);
+            .FirstOrDefaultAsync(f => f.StageID == stageId && f.InvestorID == investor.InvestorID);
         if (focus == null)
             return ApiResponse<string>.ErrorResponse("STAGE_FOCUS_NOT_FOUND", "Stage focus not found");
 
@@ -1232,6 +1238,8 @@ public class InvestorService : IInvestorService
 
         var startups = await _db.Startups
             .Include(s => s.Industry)
+            .Include(s => s.StageRef)
+            .Include(s => s.SubIndustryRef)
             .Include(s => s.TeamMembers)
             .Where(s => startupIds.Contains(s.StartupID))
             .AsNoTracking()
@@ -1240,8 +1248,12 @@ public class InvestorService : IInvestorService
                 StartupID = s.StartupID,
                 CompanyName = s.CompanyName,
                 OneLiner = s.OneLiner,
-                Stage = s.Stage.ToString(),
+                StageID = s.StageID,
+                Stage = s.StageRef != null ? s.StageRef.StageName : null,
+                IndustryID = s.IndustryID,
                 IndustryName = s.Industry != null ? s.Industry.IndustryName : null,
+                SubIndustryID = s.SubIndustryID,
+                SubIndustryName = s.SubIndustryRef != null ? s.SubIndustryRef.IndustryName : null,
                 FundingAmountSought = s.FundingAmountSought,
                 CurrentFundingRaised = s.CurrentFundingRaised,
                 Valuation = s.Valuation,
@@ -1260,8 +1272,8 @@ public class InvestorService : IInvestorService
         var investor = await _db.Investors
             .AsNoTracking()
             .Include(i => i.Preferences)
-            .Include(i => i.IndustryFocus)
-            .Include(i => i.StageFocus)
+            .Include(i => i.StageFocus).ThenInclude(f => f.StageRef)
+            .Include(i => i.IndustryFocus).ThenInclude(f => f.IndustryRef)
             .Include(i => i.PortfolioCompanies)
             .Include(i => i.KycSubmissions)
             .FirstOrDefaultAsync(i => i.InvestorID == investorId);
@@ -1287,8 +1299,8 @@ public class InvestorService : IInvestorService
             InvestorType = activeKyc?.InvestorCategory,
             AcceptingConnections = investor.AcceptingConnections,
             ProfileStatus = investor.ProfileStatus.ToString(),
-            PreferredIndustries = investor.IndustryFocus.Select(f => f.Industry).ToList(),
-            PreferredStages = investor.StageFocus.Select(s => s.Stage.ToString()).ToList(),
+            PreferredIndustries = investor.IndustryFocus.Select(f => new IndustryFocusDto { IndustryID = f.IndustryID, IndustryName = f.IndustryRef?.IndustryName ?? string.Empty }).ToList(),
+            PreferredStages = investor.StageFocus.Select(s => new StageFocusDto { StageID = s.StageID, StageName = s.StageRef?.StageName ?? string.Empty }).ToList(),
             TicketSizeMin = investor.Preferences?.MinInvestmentSize,
             TicketSizeMax = investor.Preferences?.MaxInvestmentSize,
             PortfolioCount = investor.PortfolioCompanies.Count,

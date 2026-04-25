@@ -43,8 +43,10 @@ public class AuthServiceTests
             .Returns(Task.CompletedTask);
 
         var logger = new Mock<ILogger<AuthService>>();
+        var notificationService = new Mock<INotificationDeliveryService>();
+        var serviceScopeFactory = new Mock<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>();
 
-        _sut = new AuthService(_db, jwt, emailService.Object, emailSettings, logger.Object);
+        _sut = new AuthService(_db, jwt, emailService.Object, emailSettings, logger.Object, notificationService.Object, serviceScopeFactory.Object);
     }
 
     private User SeedUser(string email, string password, bool active = true, bool verified = true)

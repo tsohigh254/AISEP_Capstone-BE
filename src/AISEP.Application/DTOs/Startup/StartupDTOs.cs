@@ -14,9 +14,8 @@ public class CreateStartupRequest
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
-    /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
-    public StartupStage Stage { get; set; }
+    public int? SubIndustryID { get; set; }
+    public int? StageID { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public IFormFile? LogoUrl { get; set; }
@@ -52,9 +51,8 @@ public class UpdateStartupRequest
     public string? Description { get; set; }
     /// <summary>FK to Industries table</summary>
     public int? IndustryID { get; set; }
-    public string? SubIndustry { get; set; }
-    /// <summary>Enum name: Idea, PreSeed, Seed, SeriesA, SeriesB, SeriesC, Growth</summary>
-    public StartupStage? Stage { get; set; }
+    public int? SubIndustryID { get; set; }
+    public int? StageID { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public IFormFile? LogoUrl { get; set; }
@@ -99,7 +97,7 @@ public class SubmitStartupKYCRequest
     // Legacy fields kept for backward compatibility during migration.
     public string? CompanyName { get; set; }
     public string? IndustryName { get; set; }
-    public string? Stage { get; set; }
+    public string? StageName { get; set; }
     public string? FullNameOfApplicant { get; set; }
     public string? RoleOfApplicant { get; set; }
     public string? ContactEmail { get; set; }
@@ -133,7 +131,8 @@ public class StartupMeDto
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
-    public string? Stage { get; set; }
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
@@ -149,7 +148,8 @@ public class StartupMeDto
     public string? ContactPhone { get; set; }
     public string BusinessCode { get; set; } = string.Empty;
     // UI Additions
-    public string? SubIndustry { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public string? MarketScope { get; set; }
     public string? ProductStatus { get; set; }
     public string? Location { get; set; }
@@ -185,7 +185,8 @@ public class StartupPublicDto
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
     public string? ParentIndustryName { get; set; }
-    public string? Stage { get; set; }
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
@@ -197,9 +198,15 @@ public class StartupPublicDto
     // UI Format aliases
     public decimal? TargetFunding => FundingAmountSought;
     public decimal? RaisedAmount => CurrentFundingRaised;
+    
+    // Compatibility aliases for FE
+    public string? Stage => StageName;
+    public string? Industry => IndustryName;
+    public string? SubIndustry => SubIndustryName;
 
     // Public UI additions
-    public string? SubIndustry { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public string? MarketScope { get; set; }
     public string? ProductStatus { get; set; }
     public string? Location { get; set; }
@@ -233,8 +240,12 @@ public class StartupListItemDto
 {
     public int StartupID { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public string? IndustryName { get; set; }
-    public string? Stage { get; set; }
+    public string? ParentIndustryName { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public string? LogoURL { get; set; }
     public string? ProfileStatus { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -313,7 +324,8 @@ public class StartupDto
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
-    public string? Stage { get; set; }
+    public int? StageID { get; set; }
+    public string? StageName { get; set; }
     public DateTime? FoundedDate { get; set; }
     public string? Website { get; set; }
     public string? LogoURL { get; set; }
@@ -330,7 +342,8 @@ public class StartupDto
     public string BusinessCode { get; set; } = string.Empty;
 
     // Public UI additions
-    public string? SubIndustry { get; set; }
+    public int? SubIndustryID { get; set; }
+    public string? SubIndustryName { get; set; }
     public string? MarketScope { get; set; }
     public string? ProblemStatement { get; set; }
     public string? ProductStatus { get; set; }
