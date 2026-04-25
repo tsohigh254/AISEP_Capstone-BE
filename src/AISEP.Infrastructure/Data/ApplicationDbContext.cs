@@ -92,6 +92,9 @@ public class ApplicationDbContext : DbContext
     // Bookmarks
     public DbSet<StartupAdvisorBookmark> StartupAdvisorBookmarks => Set<StartupAdvisorBookmark>();
 
+    // Readiness
+    public DbSet<StartupReadinessSnapshot> StartupReadinessSnapshots => Set<StartupReadinessSnapshot>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -266,6 +269,20 @@ public class ApplicationDbContext : DbContext
 
         // Bookmarks
         modelBuilder.Entity<StartupAdvisorBookmark>().HasKey(b => b.BookmarkID);
+
+        // Readiness
+        modelBuilder.Entity<StartupReadinessSnapshot>().HasKey(r => r.Id);
+        modelBuilder.Entity<StartupReadinessSnapshot>()
+            .HasIndex(r => r.StartupID)
+            .IsUnique();
+        modelBuilder.Entity<StartupReadinessSnapshot>()
+            .Property(r => r.Status)
+            .HasConversion<short>();
+        modelBuilder.Entity<StartupReadinessSnapshot>()
+            .HasOne(r => r.Startup)
+            .WithMany()
+            .HasForeignKey(r => r.StartupID)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // AI Integration
         modelBuilder.Entity<AiEvaluationRun>().HasKey(r => r.Id);
