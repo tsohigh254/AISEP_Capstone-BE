@@ -153,17 +153,13 @@ namespace AISEP.Infrastructure.Services
             // Reset stream for upload
             memoryStream.Position = 0;
 
-            // 2. Upload to Cloudinary as AUTHENTICATED delivery
-            //    => the returned URL cannot be accessed directly without a signed token.
-            //    Consumers (DocumentService) must wrap it in GenerateSignedDocumentUrl
-            //    before handing it to the client.
+            // 2. Upload to Cloudinary
             var uploadParams = new RawUploadParams
             {
                 File = new FileDescription(file.FileName, memoryStream),
                 Folder = folder,
                 UseFilename = true,
-                UniqueFilename = true,
-                Type = "authenticated"
+                UniqueFilename = true
             };
 
             var result = await _cloudinary.UploadAsync(uploadParams);
@@ -196,14 +192,11 @@ namespace AISEP.Infrastructure.Services
                 ? string.Join(", ", response.Headers.GetValues("x-cld-error"))
                 : "none";
 
-            // Try 2: signed URL via Cloudinary DownloadPrivate.
-            // Pass fileUrl as fallbackUrl so the delivery type (upload/authenticated)
-            // is auto-detected from the URL path — otherwise signing with the wrong
-            // type makes Cloudinary reject authenticated assets.
+            // Try 2: signed URL via Cloudinary DownloadPrivate
             var storageKey = ExtractDocumentStorageKeyFromUrl(fileUrl);
             if (!string.IsNullOrWhiteSpace(storageKey))
             {
-                var signedUrl = GenerateSignedDocumentUrl(storageKey, fileUrl);
+                var signedUrl = GenerateSignedDocumentUrl(storageKey);
                 response = await httpClient.GetAsync(signedUrl, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (response.IsSuccessStatusCode)
                     return await response.Content.ReadAsByteArrayAsync(ct);
@@ -242,15 +235,11 @@ namespace AISEP.Infrastructure.Services
                 .AddMinutes(expiresInMinutes ?? _options.SignedUrlExpirationMinutes)
                 .ToUnixTimeSeconds();
 
-            // Delivery type must match how the asset was uploaded.
-            // Old files were uploaded with default type "upload"; new files use "authenticated".
-            var deliveryType = DetectDeliveryType(fallbackUrl);
-
             return _cloudinary.DownloadPrivate(
                 publicId,
                 false,
                 null,
-                deliveryType,
+                "upload",
                 expiresAt,
                 "raw");
         }
@@ -271,24 +260,14 @@ namespace AISEP.Infrastructure.Services
             }
 
             var path = uri.AbsolutePath;
-            var separators = new[] { "/authenticated/", "/private/", "/upload/" };
-            string? pathAfterDelivery = null;
-            foreach (var sep in separators)
-            {
-                var parts = path.Split(sep);
-                if (parts.Length >= 2)
-                {
-                    pathAfterDelivery = parts[1];
-                    break;
-                }
-            }
-
-            if (pathAfterDelivery == null)
+            var parts = path.Split("/upload/");
+            if (parts.Length < 2)
             {
                 return null;
             }
 
-            var segments = pathAfterDelivery
+            var pathAfterUpload = parts[1];
+            var segments = pathAfterUpload
                 .Split('/', StringSplitOptions.RemoveEmptyEntries)
                 .ToList();
 
@@ -303,14 +282,6 @@ namespace AISEP.Infrastructure.Services
             }
 
             return segments.Count == 0 ? null : string.Join("/", segments);
-        }
-
-        private static string DetectDeliveryType(string? url)
-        {
-            if (string.IsNullOrWhiteSpace(url)) return "upload";
-            if (url.Contains("/authenticated/", StringComparison.OrdinalIgnoreCase)) return "authenticated";
-            if (url.Contains("/private/", StringComparison.OrdinalIgnoreCase)) return "private";
-            return "upload";
         }
 
         private static string? ExtractImagePublicIdFromUrl(string imageUrl)

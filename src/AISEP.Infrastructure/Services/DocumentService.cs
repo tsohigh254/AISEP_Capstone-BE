@@ -308,19 +308,12 @@ public class DocumentService : IDocumentService
 
     private DocumentDto MapToDto(Document d)
     {
-        // Never expose the raw Cloudinary URL — it's a delivery URL anyone can open.
-        // Wrap it in a short-lived signed URL so share-linking is useless after expiry
-        // and every access must go through an authenticated API path for future downloads.
-        var signedUrl = string.IsNullOrWhiteSpace(d.FileURL)
-            ? string.Empty
-            : _cloudinaryService.GenerateSignedDocumentUrl(null, d.FileURL, d.Title, null);
-
         return new DocumentDto
         {
             DocumentID = d.DocumentID,
             StartupID = d.StartupID,
             Title = d.Title ?? string.Empty,
-            FileUrl = signedUrl,
+            FileUrl = d.FileURL ?? string.Empty,
             DocumentType = d.DocumentType.ToString(),
             Version = d.Version,
             IsArchived = d.IsArchived,
@@ -331,10 +324,6 @@ public class DocumentService : IDocumentService
             FileHash = d.BlockchainProof != null ? d.BlockchainProof.FileHash : string.Empty,
             TransactionHash = d.BlockchainProof != null ? d.BlockchainProof.TransactionHash : null,
             AnchoredAt = d.BlockchainProof?.AnchoredAt,
-            ReviewStatus = d.ReviewStatus.ToString(),
-            ReviewedBy = d.ReviewedBy,
-            ReviewedAt = d.ReviewedAt,
-            ReviewNotes = d.ReviewNotes,
             Visibility = (int)d.Visibility,
             VisibilityLabel = d.Visibility == DocumentVisibility.OwnerOnly
                 ? "OwnerOnly"
@@ -645,9 +634,7 @@ public class DocumentService : IDocumentService
             DocumentID = d.DocumentID,
             Version = d.Version,
             Title = d.Title ?? string.Empty,
-            FileUrl = string.IsNullOrWhiteSpace(d.FileURL)
-                ? null
-                : _cloudinaryService.GenerateSignedDocumentUrl(null, d.FileURL, d.Title, null),
+            FileUrl = d.FileURL,
             UploadedAt = d.UploadedAt,
             ReviewStatus = d.ReviewStatus.ToString(),
             ProofStatus = d.BlockchainProof?.ProofStatus.ToString(),
@@ -696,8 +683,27 @@ public class DocumentService : IDocumentService
 
         await _context.SaveChangesAsync(ct);
 
-        return ApiResponse<DocumentDto>.SuccessResponse(
-            MapToDto(doc),
-            $"Document {status.ToString().ToLower()}");
+        return ApiResponse<DocumentDto>.SuccessResponse(new DocumentDto
+        {
+            DocumentID = doc.DocumentID,
+            StartupID = doc.StartupID,
+            DocumentType = doc.DocumentType.ToString(),
+            Title = doc.Title ?? string.Empty,
+            Version = doc.Version,
+            FileUrl = doc.FileURL,
+            IsAnalyzed = doc.IsAnalyzed,
+            IsArchived = doc.IsArchived,
+            AnalysisStatus = doc.AnalysisStatus.ToString(),
+            UploadedAt = doc.UploadedAt,
+            ProofStatus = doc.BlockchainProof?.ProofStatus.ToString(),
+            FileHash = doc.BlockchainProof?.FileHash,
+            TransactionHash = doc.BlockchainProof?.TransactionHash,
+            ReviewStatus = doc.ReviewStatus.ToString(),
+            ReviewedBy = doc.ReviewedBy,
+            ReviewedAt = doc.ReviewedAt,
+            ReviewNotes = doc.ReviewNotes,
+            Visibility = (int)doc.Visibility,
+            VisibilityLabel = doc.Visibility == DocumentVisibility.OwnerOnly ? "OwnerOnly" : doc.Visibility.ToString()
+        }, $"Document {status.ToString().ToLower()}");
     }
 }
