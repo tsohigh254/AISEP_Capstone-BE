@@ -35,6 +35,7 @@ public class MasterDataController : ControllerBase
     {
         var allIndustries = await _context.Industries
             .AsNoTracking()
+            .Where(i => i.IsActive)
             .OrderBy(i => i.IndustryID)
             .ToListAsync();
 
@@ -66,6 +67,9 @@ public class MasterDataController : ControllerBase
             IndustryName = parent.IndustryName,
             Description = parent.Description,
             ParentIndustryID = null,
+            IsActive = parent.IsActive,
+            StartupCount = _context.Startups.Count(s => s.IndustryID == parent.IndustryID || s.SubIndustryID == parent.IndustryID),
+            InvestorCount = _context.InvestorIndustryFocuses.Count(f => f.IndustryID == parent.IndustryID),
             SubIndustries = allIndustries
                 .Where(sub => sub.ParentIndustryID == parent.IndustryID)
                 .OrderBy(sub => sub.IndustryID)
@@ -75,6 +79,9 @@ public class MasterDataController : ControllerBase
                     IndustryName = sub.IndustryName,
                     Description = sub.Description,
                     ParentIndustryID = sub.ParentIndustryID,
+                    IsActive = sub.IsActive,
+                    StartupCount = _context.Startups.Count(s => s.IndustryID == sub.IndustryID || s.SubIndustryID == sub.IndustryID),
+                    InvestorCount = _context.InvestorIndustryFocuses.Count(f => f.IndustryID == sub.IndustryID),
                     SubIndustries = new List<IndustryDto>()
                 })
                 .ToList()
@@ -83,26 +90,26 @@ public class MasterDataController : ControllerBase
         return OkEnvelope<List<IndustryDto>>(tree);
     }
 
-    // Startup stages matching StartupStage enum
-    private static readonly List<StartupStageDto> _stages = new()
-    {
-        new() { StageName = "Idea", Description = "Concept stage - validating the idea" },
-        new() { StageName = "PreSeed", Description = "Building MVP and early validation" },
-        new() { StageName = "Seed", Description = "Product-market fit and early traction" },
-        new() { StageName = "SeriesA", Description = "Scaling product and team" },
-        new() { StageName = "SeriesB", Description = "Expansion and growth" },
-        new() { StageName = "SeriesC", Description = "Late stage growth and profitability" },
-        new() { StageName = "Growth", Description = "Scaling and preparing for exit" }
-    };
-
     /// <summary>
     /// Get all startup stages
     /// </summary>
     [HttpGet("stages")]
     [AllowAnonymous]
-    public IActionResult GetStages()
+    public async Task<IActionResult> GetStages()
     {
-        return OkEnvelope<List<StartupStageDto>>(_stages);
+        var stages = await _context.Stages
+            .AsNoTracking()
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.OrderIndex)
+            .Select(s => new StartupStageDto
+            {
+                StageID = s.StageID,
+                StageName = s.StageName,
+                Description = s.Description
+            })
+            .ToListAsync();
+
+        return OkEnvelope<List<StartupStageDto>>(stages);
     }
 
     /// <summary>

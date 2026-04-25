@@ -269,7 +269,7 @@ public class InvestorsController : ControllerBase
     public async Task<IActionResult> SearchStartups(
         [FromQuery] string? q,
         [FromQuery] int? industryId,
-        [FromQuery] string? stage,
+        [FromQuery] int? stageId,
         [FromQuery] string? location,
         [FromQuery] float? minScore,
         [FromQuery] string? sortBy,
@@ -277,7 +277,7 @@ public class InvestorsController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         // minScore is accepted but ignored until AI module is implemented
-        var result = await _investorService.SearchStartupsAsync(q, industryId, stage, location, sortBy, page, pageSize, GetCurrentUserId());
+        var result = await _investorService.SearchStartupsAsync(q, industryId, stageId, location, sortBy, page, pageSize, GetCurrentUserId());
         return result.ToActionResult();
     }
 

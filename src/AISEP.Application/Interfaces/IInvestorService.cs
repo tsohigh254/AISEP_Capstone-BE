@@ -28,18 +28,18 @@ public interface IInvestorService
 
     // Search startups
     Task<ApiResponse<PagedResponse<StartupSearchItemDto>>> SearchStartupsAsync(
-        string? q, int? industryId, string? stage, string? location,
+        string? q, int? industryId, int? stageId, string? location,
         string? sortBy, int page, int pageSize, int callerUserId = 0);
 
     // Industry focus
     Task<ApiResponse<List<IndustryFocusDto>>> GetIndustryFocusAsync(int userId);
     Task<ApiResponse<IndustryFocusDto>> AddIndustryFocusAsync(int userId, AddIndustryFocusRequest request);
-    Task<ApiResponse<string>> RemoveIndustryFocusAsync(int userId, int focusId);
+    Task<ApiResponse<string>> RemoveIndustryFocusAsync(int userId, int industryId);
 
     // Stage focus
     Task<ApiResponse<List<StageFocusDto>>> GetStageFocusAsync(int userId);
     Task<ApiResponse<StageFocusDto>> AddStageFocusAsync(int userId, AddStageFocusRequest request);
-    Task<ApiResponse<string>> RemoveStageFocusAsync(int userId, int stageFocusId);
+    Task<ApiResponse<string>> RemoveStageFocusAsync(int userId, int stageId);
 
     // Compare
     Task<ApiResponse<List<StartupCompareDto>>> CompareStartupsAsync(List<int> startupIds);

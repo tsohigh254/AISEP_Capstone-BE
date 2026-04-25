@@ -6,9 +6,7 @@ namespace AISEP.WebAPI.Validators;
 
 public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequest>
 {
-    // Allowed stages derived from StartupStage enum
-    private static readonly string[] AllowedStages =
-        Enum.GetNames<StartupStage>();
+
 
     public CreateStartupRequestValidator()
     {
@@ -23,8 +21,13 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
         RuleFor(x => x.Description)
             .MaximumLength(5000).WithMessage("Mô tả không được vượt quá 5000 ký tự");
 
-        RuleFor(x => x.SubIndustry)
-            .MaximumLength(200).WithMessage("Ngành phụ không được vượt quá 200 ký tự");
+        RuleFor(x => x.SubIndustryID)
+            .GreaterThan(0).When(x => x.SubIndustryID.HasValue)
+            .WithMessage("SubIndustryID phải là số nguyên dương");
+
+        RuleFor(x => x.StageID)
+            .GreaterThan(0).When(x => x.StageID.HasValue)
+            .WithMessage("StageID phải là số nguyên dương");
 
         RuleFor(x => x.ProductStatus)
             .MaximumLength(100).WithMessage("Trạng thái sản phẩm không được vượt quá 100 ký tự");
@@ -73,8 +76,7 @@ public class CreateStartupRequestValidator : AbstractValidator<CreateStartupRequ
 
 public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequest>
 {
-    private static readonly string[] AllowedStages =
-        Enum.GetNames<StartupStage>();
+
 
     public UpdateStartupRequestValidator()
     {
@@ -90,8 +92,13 @@ public class UpdateStartupRequestValidator : AbstractValidator<UpdateStartupRequ
         RuleFor(x => x.Description)
             .MaximumLength(5000).WithMessage("Mô tả không được vượt quá 5000 ký tự");
 
-        RuleFor(x => x.SubIndustry)
-            .MaximumLength(200).WithMessage("Ngành phụ không được vượt quá 200 ký tự");
+        RuleFor(x => x.SubIndustryID)
+            .GreaterThan(0).When(x => x.SubIndustryID.HasValue)
+            .WithMessage("SubIndustryID phải là số nguyên dương");
+
+        RuleFor(x => x.StageID)
+            .GreaterThan(0).When(x => x.StageID.HasValue)
+            .WithMessage("StageID phải là số nguyên dương");
 
         RuleFor(x => x.ProductStatus)
             .MaximumLength(100).WithMessage("Trạng thái sản phẩm không được vượt quá 100 ký tự");

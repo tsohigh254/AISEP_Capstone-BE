@@ -386,10 +386,35 @@ public class AdvisorService : IAdvisorService
             _             => query.OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt)
         };
 
-        var items = query.Select(a => new AdvisorSearchItemDto
+        var rawItems = await query.Select(a => new
+        {
+            a.AdvisorID,
+            a.FullName,
+            a.Title,
+            Bio = a.Bio,
+            a.ProfilePhotoURL,
+            a.AverageRating,
+            a.ReviewCount,
+            a.CompletedSessions,
+            a.YearsOfExperience,
+            a.IsVerified,
+            IsAcceptingNewMentees = a.Availability == null || a.Availability.IsAcceptingNewMentees,
+            a.HourlyRate,
+            a.Expertise,
+            a.DomainTags,
+            a.SuitableFor,
+            a.SupportedDurations,
+            Industry = a.IndustryFocus.Select(i => new
+            {
+                i.IndustryID,
+                i.Industry.IndustryName
+            }).ToList()
+        }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize).ToListAsync();
+
+        var items = rawItems.Select(a => new AdvisorSearchItemDto
         {
             AdvisorID = a.AdvisorID,
-            FullName  = a.FullName,
+            FullName = a.FullName,
             Title = a.Title,
             Bio = TruncateBio(a.Bio, 200),
             ProfilePhotoURL = a.ProfilePhotoURL,
@@ -398,22 +423,22 @@ public class AdvisorService : IAdvisorService
             CompletedSessions = a.CompletedSessions,
             YearsOfExperience = a.YearsOfExperience,
             IsVerified = a.IsVerified,
-            AvailabilityHint = a.Availability != null ? (a.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
+            AvailabilityHint = a.IsAcceptingNewMentees ? "Available" : "Not available",
             HourlyRate = a.HourlyRate,
-            Expertise = string.IsNullOrEmpty(a.Expertise) ? new List<string>() : a.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            DomainTags = string.IsNullOrEmpty(a.DomainTags) ? new List<string>() : a.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SuitableFor = string.IsNullOrEmpty(a.SuitableFor) ? new List<string>() : a.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            SupportedDurations = string.IsNullOrEmpty(a.SupportedDurations) ? new List<string>() : a.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
-            Industry = a.IndustryFocus.Select(i => new AdvisorIndustryFocusDto
+            Expertise = string.IsNullOrEmpty(a.Expertise) ? new List<string>() : a.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Trim()).ToList(),
+            DomainTags = string.IsNullOrEmpty(a.DomainTags) ? new List<string>() : a.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Trim()).ToList(),
+            SuitableFor = string.IsNullOrEmpty(a.SuitableFor) ? new List<string>() : a.SuitableFor.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Trim()).ToList(),
+            SupportedDurations = string.IsNullOrEmpty(a.SupportedDurations) ? new List<string>() : a.SupportedDurations.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(e => e.Trim()).ToList(),
+            Industry = a.Industry.Select(i => new AdvisorIndustryFocusDto
             {
                 IndustryId = i.IndustryID,
-                Industry = i.Industry.IndustryName
+                Industry = i.IndustryName
             }).ToList()
-        }).Paging(advisorQueryParams.Page, advisorQueryParams.PageSize);
+        }).ToList();
 
         return ApiResponse<PagedResponse<AdvisorSearchItemDto>>.SuccessResponse(new PagedResponse<AdvisorSearchItemDto>
         {
-            Items = await items.ToListAsync(),
+            Items = items,
             Paging = new PagingInfo
             {
                 Page = advisorQueryParams.Page,
@@ -437,13 +462,13 @@ public class AdvisorService : IAdvisorService
             .Where(f => f.Mentorship.AdvisorID == advisorId
                      && f.FromRole == "Startup"
                      && f.IsPublic)
-            .Include(f => f.Mentorship).ThenInclude(m => m.Startup)
+            .Include(f => f.Mentorship).ThenInclude(m => m.Startup).ThenInclude(s => s.StageRef)
             .AsNoTracking()
             .OrderByDescending(f => f.SubmittedAt)
             .Select(f => new AdvisorReviewDto
             {
                 Author      = f.Mentorship.Startup.CompanyName,
-                Stage       = f.Mentorship.Startup.Stage != null ? f.Mentorship.Startup.Stage.ToString() : null,
+                Stage       = f.Mentorship.Startup.StageRef != null ? f.Mentorship.Startup.StageRef.StageName : null,
                 Rating      = f.Rating,
                 Text        = f.Comment,
                 SubmittedAt = f.SubmittedAt
@@ -468,7 +493,7 @@ public class AdvisorService : IAdvisorService
             CompletedSessions = advisor.CompletedSessions,
             YearsOfExperience = advisor.YearsOfExperience,
             IsVerified = advisor.IsVerified,
-            AvailabilityHint = advisor.Availability != null ? (advisor.Availability.IsAcceptingNewMentees ? "Available" : "Not available") : string.Empty,
+            AvailabilityHint = (advisor.Availability == null || advisor.Availability.IsAcceptingNewMentees) ? "Available" : "Not available",
             HourlyRate = advisor.HourlyRate,
             Expertise = string.IsNullOrEmpty(advisor.Expertise) ? new List<string>() : advisor.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
             DomainTags = string.IsNullOrEmpty(advisor.DomainTags) ? new List<string>() : advisor.DomainTags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),

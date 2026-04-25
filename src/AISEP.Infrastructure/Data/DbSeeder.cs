@@ -11,7 +11,9 @@ public static class DbSeeder
         await SeedPermissionsAsync(context);
         await SeedRolePermissionsAsync(context);
         await SeedIndustriesAsync(context);
+        await SeedStagesAsync(context);
         await SeedUsersAsync(context);
+        await ResetSequencesAsync(context);
         await FixMissingStartupDataAsync(context);
     }
 
@@ -177,12 +179,6 @@ public static class DbSeeder
 
     private static async Task SeedIndustriesAsync(ApplicationDbContext context)
     {
-        // Check if correct MVP industries exist (Fintech with ID=1)
-        var hasCorrectData = await context.Industries.AnyAsync(i => i.IndustryID == 1 && i.IndustryName == "FinTech");
-        
-        if (hasCorrectData) return;
-
-        // If we reach here, we are either missing the correct data or the table is empty.
         // We will "Upsert" the required industries instead of deleting everything,
         // as deleting fails if any Startup or Advisor is already linked to an industry.
         
@@ -244,6 +240,7 @@ public static class DbSeeder
             var existing = await context.Industries.FindAsync(industry.IndustryID);
             if (existing == null)
             {
+                industry.IsActive = true;
                 context.Industries.Add(industry);
             }
             else
@@ -251,8 +248,27 @@ public static class DbSeeder
                 existing.IndustryName = industry.IndustryName;
                 existing.Description = industry.Description;
                 existing.ParentIndustryID = industry.ParentIndustryID;
+                existing.IsActive = true;
             }
         }
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedStagesAsync(ApplicationDbContext context)
+    {
+        if (await context.Stages.AnyAsync()) return;
+
+        var stages = new List<Stage>
+        {
+            new() { StageID = 1, StageName = "Idea / Concept", Description = "Early stage idea", OrderIndex = 1, IsActive = true },
+            new() { StageID = 2, StageName = "MVP", Description = "Minimum Viable Product", OrderIndex = 2, IsActive = true },
+            new() { StageID = 3, StageName = "Seed", Description = "Seed funding stage", OrderIndex = 3, IsActive = true },
+            new() { StageID = 4, StageName = "Series A", Description = "Scaling stage", OrderIndex = 4, IsActive = true },
+            new() { StageID = 5, StageName = "Series B+", Description = "Growth stage", OrderIndex = 5, IsActive = true },
+            new() { StageID = 6, StageName = "Exit", Description = "Acquired or IPO", OrderIndex = 6, IsActive = true }
+        };
+
+        context.Stages.AddRange(stages);
         await context.SaveChangesAsync();
     }
 
@@ -301,5 +317,20 @@ public static class DbSeeder
 
         context.UserRoles.Add(userRole);
         await context.SaveChangesAsync();
+    }
+
+    private static async Task ResetSequencesAsync(ApplicationDbContext context)
+    {
+        var tables = new[] 
+        { 
+            new { Table = "Industries", Id = "IndustryID" },
+            new { Table = "Stages", Id = "StageID" }
+        };
+
+        foreach (var t in tables)
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                $"SELECT setval(pg_get_serial_sequence('\"{t.Table}\"', '{t.Id}'), COALESCE(MAX(\"{t.Id}\"), 1)) FROM \"{t.Table}\"");
+        }
     }
 }

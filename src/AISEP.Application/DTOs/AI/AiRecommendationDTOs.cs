@@ -10,7 +10,7 @@ namespace AISEP.Application.DTOs.AI;
 public class PythonReindexStartupRequest
 {
     [JsonPropertyName("startup_id")]
-    public string StartupId { get; set; } = string.Empty;
+    public string? StartupId { get; set; }
 
     [JsonPropertyName("profile_version")]
     public string ProfileVersion { get; set; } = string.Empty;

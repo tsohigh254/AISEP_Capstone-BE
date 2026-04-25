@@ -237,6 +237,7 @@ public class ConnectionsService : IConnectionsService
 
             query = _db.StartupInvestorConnections.AsNoTracking()
                 .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Startup).ThenInclude(s => s.StageRef)
                 .Include(c => c.Investor)
                 .Where(c => c.InvestorID == investor.InvestorID && c.InitiatedBy != userId);
 
@@ -252,6 +253,7 @@ public class ConnectionsService : IConnectionsService
 
             query = _db.StartupInvestorConnections.AsNoTracking()
                 .Include(c => c.Startup).ThenInclude(s => s.Industry)
+                .Include(c => c.Startup).ThenInclude(s => s.StageRef)
                 .Include(c => c.Investor)
                 .Where(c => c.StartupID == startup.StartupID && c.InitiatedBy != userId);
 
@@ -868,7 +870,7 @@ public class ConnectionsService : IConnectionsService
         StartupID = c.StartupID,
         StartupName = c.Startup.CompanyName,
         StartupLogoURL = c.Startup.LogoURL,
-        StartupStage = c.Startup.Stage?.ToString(),
+        StartupStage = c.Startup.StageRef?.StageName,
         StartupIndustryName = c.Startup.Industry?.IndustryName,
         InvestorID = c.InvestorID,
         InvestorName = c.Investor.FullName,

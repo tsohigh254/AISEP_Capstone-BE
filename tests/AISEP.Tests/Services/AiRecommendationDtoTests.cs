@@ -20,7 +20,7 @@ public class AiRecommendationDtoTests
         var json = """
         {
           "investor_id": "42",
-          "items": [
+          "matches": [
             {
               "investor_id": "42",
               "startup_id": "7",
@@ -38,18 +38,17 @@ public class AiRecommendationDtoTests
               },
               "match_reasons": ["industry match"],
               "positive_reasons": [
-                { "type": "positive", "code": "INDUSTRY_MATCH", "text": "Healthtech aligns with thesis" },
-                { "type": "positive", "code": "STAGE_MATCH", "text": "Seed stage fit" }
+                "Healthtech aligns with thesis",
+                "Seed stage fit"
               ],
               "caution_reasons": [
-                { "type": "caution", "code": "AI_SCORE_MISSING", "text": "No AI evaluation yet" }
+                "No AI evaluation yet"
               ],
               "warning_flags": [],
               "generated_at": "2026-04-18T10:00:00Z"
             }
           ],
           "warnings": ["llm rerank capped"],
-          "internal_warnings": ["embedding fallback"],
           "generated_at": "2026-04-18T10:00:00Z"
         }
         """;
@@ -58,26 +57,22 @@ public class AiRecommendationDtoTests
 
         result.Should().NotBeNull();
         result!.InvestorId.Should().Be("42");
-        result.Items.Should().HaveCount(1);
+        result.Matches.Should().HaveCount(1);
         result.Warnings.Should().ContainSingle().Which.Should().Be("llm rerank capped");
-        result.InternalWarnings.Should().ContainSingle().Which.Should().Be("embedding fallback");
 
-        var match = result.Items[0];
+        var match = result.Matches[0];
         match.StartupId.Should().Be("7");
         match.StartupName.Should().Be("Acme");
         match.FinalMatchScore.Should().Be(0.87);
         match.MatchBand.Should().Be("HIGH");
 
         match.PositiveReasons.Should().HaveCount(2);
-        match.PositiveReasons![0].Type.Should().Be("positive");
-        match.PositiveReasons[0].Code.Should().Be("INDUSTRY_MATCH");
-        match.PositiveReasons[0].Text.Should().Be("Healthtech aligns with thesis");
+        match.PositiveReasons![0].Should().Be("Healthtech aligns with thesis");
 
         match.CautionReasons.Should().ContainSingle();
-        match.CautionReasons![0].Code.Should().Be("AI_SCORE_MISSING");
+        match.CautionReasons![0].Should().Be("No AI evaluation yet");
 
         match.Breakdown.Should().NotBeNull();
-        match.GeneratedAt.Should().NotBeNull();
     }
 
     [Fact]
@@ -87,7 +82,7 @@ public class AiRecommendationDtoTests
         {
           "investor_id": "42",
           "startup_id": "7",
-          "result": {
+          "explanation": {
             "investor_id": "42",
             "startup_id": "7",
             "startup_name": "Acme",
@@ -115,10 +110,10 @@ public class AiRecommendationDtoTests
         result.Should().NotBeNull();
         result!.InvestorId.Should().Be("42");
         result.StartupId.Should().Be("7");
-        result.Result.Should().NotBeNull();
-        result.Result!.StartupName.Should().Be("Acme");
-        result.Result.PositiveReasons.Should().ContainSingle()
-            .Which.Text.Should().Be("Strong thesis fit");
+        result.Explanation.Should().NotBeNull();
+        var jsonElement = (JsonElement)result.Explanation!;
+        jsonElement.GetProperty("startup_name").GetString().Should().Be("Acme");
+        jsonElement.GetProperty("positive_reasons")[0].GetProperty("text").GetString().Should().Be("Strong thesis fit");
     }
 
     [Fact]
@@ -126,10 +121,7 @@ public class AiRecommendationDtoTests
     {
         var json = """
         {
-          "success": true,
-          "startup_id": "7",
-          "profile_version": "v1",
-          "source_updated_at": "2026-04-18T10:00:00Z",
+          "status": "success",
           "message": "Startup recommendation document reindexed successfully"
         }
         """;
@@ -137,10 +129,7 @@ public class AiRecommendationDtoTests
         var result = JsonSerializer.Deserialize<PythonReindexResponse>(json, JsonOpts);
 
         result.Should().NotBeNull();
-        result!.Success.Should().BeTrue();
-        result.StartupId.Should().Be("7");
-        result.ProfileVersion.Should().Be("v1");
-        result.SourceUpdatedAt.Should().NotBeNull();
+        result!.Status.Should().Be("success");
         result.Message.Should().Contain("reindexed");
     }
 
@@ -155,10 +144,6 @@ public class AiRecommendationDtoTests
             Tagline = "Save the world",
             Stage = "Seed",
             PrimaryIndustry = "Healthtech",
-            Website = "https://acme.example",
-            LogoUrl = "https://cdn/logo.png",
-            CurrentNeeds = new List<string> { "funding", "mentor" },
-            OptionalShortMetricSummary = "100 MAU",
             IsProfileVisibleToInvestors = true,
             AccountActive = true,
         };
@@ -167,9 +152,7 @@ public class AiRecommendationDtoTests
 
         json.Should().Contain("\"profile_version\":\"v1\"");
         json.Should().Contain("\"startup_name\":\"Acme\"");
-        json.Should().Contain("\"logo_url\":\"https://cdn/logo.png\"");
-        json.Should().Contain("\"current_needs\":[\"funding\",\"mentor\"]");
-        json.Should().Contain("\"optional_short_metric_summary\":\"100 MAU\"");
+        json.Should().Contain("\"startup_name\":\"Acme\"");
         json.Should().NotContain("\"startup_id\"");
         json.Should().NotContain("\"sub_industry\"");
         json.Should().NotContain("\"description\"");
@@ -181,16 +164,12 @@ public class AiRecommendationDtoTests
     {
         var payload = new PythonReindexInvestorRequest
         {
-            ProfileVersion = "v1",
-            SourceUpdatedAt = new DateTime(2026, 4, 18, 10, 0, 0, DateTimeKind.Utc),
             InvestorName = "Jane Doe",
             InvestorType = "angel",
         };
 
         var json = JsonSerializer.Serialize(payload, JsonOpts);
 
-        json.Should().Contain("\"profile_version\":\"v1\"");
-        json.Should().Contain("\"source_updated_at\":");
         json.Should().Contain("\"investor_name\":\"Jane Doe\"");
         json.Should().Contain("\"investor_type\":\"angel\"");
     }

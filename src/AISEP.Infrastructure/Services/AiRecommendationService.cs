@@ -34,6 +34,7 @@ public class AiRecommendationService : IAiRecommendationService
             var startup = await _db.Startups
                 .AsNoTracking()
                 .Include(s => s.Industry)
+                .Include(s => s.StageRef)
                 .FirstOrDefaultAsync(s => s.StartupID == startupId);
 
             if (startup == null) return;
@@ -134,7 +135,7 @@ public class AiRecommendationService : IAiRecommendationService
         {
             StartupId = startup.StartupID.ToString(),
             StartupName = startup.CompanyName,
-            Stage = startup.Stage?.ToString(),
+            Stage = startup.StageRef?.StageName,
             PrimaryIndustry = startup.Industry?.IndustryName,
             Location = startup.Location,
             Country = startup.Country

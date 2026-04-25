@@ -11,11 +11,11 @@ namespace AISEP.Application.QueryParams
         /// <summary>Search by investor name, firm name, or title (replaces base Key)</summary>
         public string? Keyword { get; set; }
 
-        /// <summary>Filter by preferred industry name (partial match)</summary>
-        public string? Industry { get; set; }
+        /// <summary>Filter by preferred industry ID</summary>
+        public int? IndustryID { get; set; }
 
-        /// <summary>Filter by preferred stage (e.g. "Seed", "SeriesA")</summary>
-        public string? Stage { get; set; }
+        /// <summary>Filter by preferred stage ID</summary>
+        public int? StageID { get; set; }
 
         /// <summary>Filter investors whose max ticket >= this value</summary>
         public decimal? TicketSizeMin { get; set; }

@@ -129,33 +129,52 @@ public class AdvisorBookmarkService : IAdvisorBookmarkService
             .AsNoTracking()
             .Where(b => b.StartupID == startup.StartupID)
             .Include(b => b.Advisor)
+                .ThenInclude(a => a.Availability)
             .OrderByDescending(b => b.CreatedAt);
 
         var total = await query.CountAsync();
 
-        var items = await query
+        var rawItems = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(b => new AdvisorBookmarkListItemDto
+            .Select(b => new
             {
-                BookmarkId = b.BookmarkID,
-                AdvisorId = b.AdvisorID,
-                FullName = b.Advisor.FullName,
-                Title = b.Advisor.Title,
-                ProfilePhotoURL = b.Advisor.ProfilePhotoURL,
-                AverageRating = b.Advisor.AverageRating,
-                ReviewCount = b.Advisor.ReviewCount,
-                YearsOfExperience = b.Advisor.YearsOfExperience,
-                IsVerified = b.Advisor.IsVerified,
-                HourlyRate = b.Advisor.HourlyRate,
-                Expertise = b.Advisor.Expertise != null
-                    ? b.Advisor.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(e => e.Trim()).ToList()
-                    : new List<string>(),
-                CreatedAt = b.CreatedAt,
-                IsBookmarked = true
+                b.BookmarkID,
+                b.AdvisorID,
+                b.Advisor.FullName,
+                b.Advisor.Title,
+                b.Advisor.ProfilePhotoURL,
+                b.Advisor.AverageRating,
+                b.Advisor.ReviewCount,
+                b.Advisor.YearsOfExperience,
+                b.Advisor.IsVerified,
+                b.Advisor.HourlyRate,
+                b.Advisor.Expertise,
+                IsAcceptingNewMentees = b.Advisor.Availability == null || b.Advisor.Availability.IsAcceptingNewMentees,
+                b.CreatedAt
             })
             .ToListAsync();
+
+        var items = rawItems.Select(b => new AdvisorBookmarkListItemDto
+        {
+            BookmarkId = b.BookmarkID,
+            AdvisorId = b.AdvisorID,
+            FullName = b.FullName,
+            Title = b.Title,
+            ProfilePhotoURL = b.ProfilePhotoURL,
+            AverageRating = b.AverageRating,
+            ReviewCount = b.ReviewCount,
+            YearsOfExperience = b.YearsOfExperience,
+            IsVerified = b.IsVerified,
+            HourlyRate = b.HourlyRate,
+            Expertise = b.Expertise != null
+                ? b.Expertise.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(e => e.Trim()).ToList()
+                : new List<string>(),
+            AvailabilityHint = b.IsAcceptingNewMentees ? "Available" : "Not available",
+            CreatedAt = b.CreatedAt,
+            IsBookmarked = true
+        }).ToList();
 
         return ApiResponse<PagedResponse<AdvisorBookmarkListItemDto>>.SuccessResponse(
             new PagedResponse<AdvisorBookmarkListItemDto>

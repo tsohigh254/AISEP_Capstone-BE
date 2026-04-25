@@ -10,8 +10,8 @@ namespace AISEP.Application.QueryParams
 {
     public class StartupQueryParams : BaseQueryParams
     {
-        [JsonPropertyName("stage")]   
-        
-        public StartupStage? Stage { get; set; }
+        public int? IndustryID { get; set; }
+        public int? SubIndustryID { get; set; }
+        public int? StageID { get; set; }
     }
 }

@@ -83,6 +83,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<DocumentAccessLog> DocumentAccessLogs => Set<DocumentAccessLog>();
     public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<Stage> Stages => Set<Stage>();
     public DbSet<IssueReport> IssueReports => Set<IssueReport>();
     public DbSet<IssueReportAttachment> IssueReportAttachments => Set<IssueReportAttachment>();
     public DbSet<PlatformAnalytics> PlatformAnalytics => Set<PlatformAnalytics>();
@@ -130,7 +131,6 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<InformationRequest>().Property(e => e.RequestStatus).HasConversion<short>().HasDefaultValue(RequestStatus.Pending);
 
         // Investor
-        modelBuilder.Entity<InvestorStageFocus>().Property(e => e.Stage).HasConversion<short>();
         modelBuilder.Entity<InvestorWatchlist>().Property(e => e.Priority).HasConversion<short?>().HasDefaultValueSql("1");
 
         // Portfolio
@@ -145,7 +145,6 @@ public class ApplicationDbContext : DbContext
             .HasDefaultValue(DocumentVisibility.OwnerOnly);
 
         // Startup
-        modelBuilder.Entity<Startup>().Property(e => e.Stage).HasConversion<short?>();
         modelBuilder.Entity<StartupKycSubmission>().Property(e => e.WorkflowStatus).HasConversion<short>().HasDefaultValue(StartupKycWorkflowStatus.Draft);
         modelBuilder.Entity<StartupKycSubmission>().Property(e => e.ResultLabel).HasConversion<short>().HasDefaultValue(StartupKycResultLabel.None);
         modelBuilder.Entity<StartupKycSubmission>().Property(e => e.StartupVerificationType).HasConversion<short>();
@@ -257,6 +256,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<FlaggedContent>().HasKey(fc => fc.FlagID);
         modelBuilder.Entity<ModerationAction>().HasKey(ma => ma.ActionID);
         modelBuilder.Entity<Industry>().HasKey(i => i.IndustryID);
+        modelBuilder.Entity<Stage>().HasKey(s => s.StageID);
         modelBuilder.Entity<IndustryTrend>().HasKey(it => it.TrendID);
         modelBuilder.Entity<SystemSettings>().HasKey(ss => ss.SettingID);
         modelBuilder.Entity<DocumentAccessLog>().HasKey(l => l.LogID);
@@ -317,6 +317,19 @@ public class ApplicationDbContext : DbContext
             .HasOne(s => s.Industry)
             .WithMany()
             .HasForeignKey(s => s.IndustryID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Startup>()
+            .HasOne(s => s.SubIndustryRef)
+            .WithMany()
+            .HasForeignKey(s => s.SubIndustryID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Startup → Stage FK
+        modelBuilder.Entity<Startup>()
+            .HasOne(s => s.StageRef)
+            .WithMany(st => st.Startups)
+            .HasForeignKey(s => s.StageID)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<StartupKycSubmission>()
@@ -395,6 +408,20 @@ public class ApplicationDbContext : DbContext
             .HasOne(p => p.Investor)
             .WithOne(i => i.Preferences)
             .HasForeignKey<InvestorPreferences>(p => p.InvestorID);
+
+        // InvestorStageFocus → Stage FK
+        modelBuilder.Entity<InvestorStageFocus>()
+            .HasOne(isf => isf.StageRef)
+            .WithMany(st => st.InvestorStageFocuses)
+            .HasForeignKey(isf => isf.StageID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // InvestorIndustryFocus → Industry FK
+        modelBuilder.Entity<InvestorIndustryFocus>()
+            .HasOne(iif => iif.IndustryRef)
+            .WithMany()
+            .HasForeignKey(iif => iif.IndustryID)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Industry self-reference
         modelBuilder.Entity<Industry>()
