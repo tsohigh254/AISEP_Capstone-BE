@@ -172,6 +172,34 @@ public class DocumentsController : ControllerBase
     }
 
     // ================================================================
+    // GET /api/documents/{documentId}/content — Inline stream for in-app preview
+    // ================================================================
+
+    /// <summary>
+    /// Stream a document's file inline (for in-app preview via authenticated fetch + blob URL).
+    /// Same visibility rules as /download. Frontend MUST call with Bearer token —
+    /// leaked URL alone returns 401, so the file never escapes the system.
+    /// </summary>
+    [HttpGet("{documentId:int}/content")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetContent(int documentId, CancellationToken ct = default)
+    {
+        var result = await _documentService.DownloadDocumentAsync(
+            documentId, GetCurrentUserId(), GetCurrentUserType(), ct);
+
+        if (!result.Success) return result.ToErrorResult();
+
+        var payload = result.Data!;
+        // Omit fileName → ASP.NET Core sends Content-Disposition: inline,
+        // letting browsers preview PDFs/images natively in iframe/blob.
+        return File(payload.Content, payload.ContentType);
+    }
+
+    // ================================================================
     // 5) PUT /api/documents/{documentId}/metadata — Update metadata
     // ================================================================
 
