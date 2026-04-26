@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text.Json;
 using AISEP.Application.DTOs.Notification;
+using AISEP.Domain.Enums;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -248,11 +249,10 @@ public class AiEvaluationService : IAiEvaluationService
             }
             run.UpdatedAt = DateTime.UtcNow;
 
-            // Also reconcile status if report says completed
-            if (!string.IsNullOrEmpty(report.Status))
-                await ReconcileStatus(run, report.Status, run.OverallScore, null, "report-fetch");
-
             await _db.SaveChangesAsync();
+
+            // Trigger sync to StartupPotentialScore
+            await SyncToPotentialScoreAsync(run);
 
             var reportObj = JsonSerializer.Deserialize<object>(run.ReportJson);
             return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
@@ -366,6 +366,7 @@ public class AiEvaluationService : IAiEvaluationService
 
         // Find the local evaluation run by Python run id
         var run = await _db.AiEvaluationRuns
+            .Include(r => r.Startup)
             .FirstOrDefaultAsync(r => r.PythonRunId == payload.EvaluationRunId);
 
         // Record delivery regardless
@@ -396,19 +397,30 @@ public class AiEvaluationService : IAiEvaluationService
         delivery.ProcessingNote = $"Updated run {run.Id} to status={run.Status}";
         await _db.SaveChangesAsync();
 
-        // If evaluation completed, reindex startup in recommendation engine (new scope — avoids disposed DbContext)
+        // If evaluation completed, reindex startup and SYNC to PotentialScore
         if (string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase))
         {
-            var startupIdForEvalReindex = run.StartupId;
+            var startupIdForEval = run.StartupId;
+            var runIdForEval = run.Id;
+            
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await using var scope = _scopeFactory.CreateAsyncScope();
-                    var svc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
-                    await svc.ReindexStartupAsync(startupIdForEvalReindex);
+                    var evalSvc = scope.ServiceProvider.GetRequiredService<IAiEvaluationService>();
+                    var recSvc = scope.ServiceProvider.GetRequiredService<IAiRecommendationService>();
+                    
+                    // 1. Ensure report is fetched and sync to PotentialScore
+                    await evalSvc.GetEvaluationReportAsync(runIdForEval);
+                    
+                    // 2. Reindex for recommendation engine
+                    await recSvc.ReindexStartupAsync(startupIdForEval);
                 }
-                catch (Exception ex) { _logger.LogWarning(ex, "Background reindex after evaluation failed for startup {StartupId}", startupIdForEvalReindex); }
+                catch (Exception ex) 
+                { 
+                    _logger.LogWarning(ex, "Background sync/reindex after evaluation failed for startup {StartupId}", startupIdForEval); 
+                }
             });
         }
 
@@ -494,7 +506,7 @@ public class AiEvaluationService : IAiEvaluationService
                 run.Id, oldStatus, incomingStatus, source);
 
             // Notify Startup if completed
-            if (string.Equals(incomingStatus, "completed", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(incomingStatus, "completed", StringComparison.OrdinalIgnoreCase) && run.Startup != null)
             {
                 try
                 {
@@ -636,4 +648,106 @@ public class AiEvaluationService : IAiEvaluationService
             return fileUrl;
         }
     }
+    // ═══════════════════════════════════════════════════════════
+    //  Sync to StartupPotentialScore
+    // ═══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Synchronizes the results of an AiEvaluationRun into the StartupPotentialScore table.
+    /// This ensures that legacy features (Readiness Checklist, Dashboard scores) work with the new AI system.
+    /// </summary>
+    private async Task SyncToPotentialScoreAsync(AiEvaluationRun run)
+    {
+        if (string.IsNullOrEmpty(run.ReportJson) || !run.IsReportValid) return;
+
+        try
+        {
+            var report = JsonSerializer.Deserialize<PythonCanonicalReport>(run.ReportJson);
+            if (report == null || !report.OverallResult.HasValue || !report.CriteriaResults.HasValue) return;
+
+            // 1. Map scores from criteria
+            float teamScore = 0, marketScore = 0, productScore = 0, tractionScore = 0, financialScore = 0;
+            var subMetrics = new List<ScoreSubMetric>();
+
+            foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
+            {
+                var name = criterion.GetProperty("criterion").GetString();
+                float scoreValue = 0;
+                if (criterion.TryGetProperty("final_score", out var sProp) && sProp.ValueKind == JsonValueKind.Number)
+                {
+                    scoreValue = (float)sProp.GetDouble();
+                }
+
+                // Map to main scores
+                switch (name)
+                {
+                    case "Team_&_Execution_Readiness": teamScore = scoreValue; break;
+                    case "Market_Attractiveness_&_Timing": marketScore = scoreValue; break;
+                    case "Solution_&_Differentiation": productScore = scoreValue; break;
+                    case "Validation_Traction_Evidence_Quality": tractionScore = scoreValue; break;
+                    case "Business_Model_&_Go_to_Market": financialScore = scoreValue; break;
+                }
+
+                // Create sub-metric
+                subMetrics.Add(new ScoreSubMetric
+                {
+                    Category = name ?? "Other",
+                    MetricName = name?.Replace("_", " ") ?? "Unknown",
+                    MetricScore = scoreValue,
+                    Explanation = criterion.TryGetProperty("explanation", out var exp) ? exp.GetString() : null,
+                    MetricValue = criterion.TryGetProperty("evidence_strength_summary", out var ess) ? ess.GetString() : null
+                });
+            }
+
+            // 2. Map recommendations
+            var recommendations = new List<ScoreImprovementRecommendation>();
+            if (report.Narrative.HasValue && report.Narrative.Value.TryGetProperty("recommendations", out var recsArray))
+            {
+                foreach (var rec in recsArray.EnumerateArray())
+                {
+                    recommendations.Add(new ScoreImprovementRecommendation
+                    {
+                        Category = rec.TryGetProperty("category", out var cat) ? cat.GetString() ?? "General" : "General",
+                        RecommendationText = rec.TryGetProperty("recommendation", out var text) ? text.GetString() : null,
+                        ExpectedImpact = rec.TryGetProperty("expected_impact", out var imp) ? imp.GetString() : null,
+                        Priority = (RecommendationPriority)Math.Clamp(rec.TryGetProperty("priority", out var prio) ? prio.GetInt32() : 2, 1, 3),
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
+            // 3. Deactivate old scores for this startup
+            var oldScores = await _db.StartupPotentialScores
+                .Where(s => s.StartupID == run.StartupId && s.IsCurrentScore)
+                .ToListAsync();
+            foreach (var old in oldScores) old.IsCurrentScore = false;
+
+            // 4. Create new score
+            var newScore = new StartupPotentialScore
+            {
+                StartupID = run.StartupId,
+                OverallScore = (float)(run.OverallScore ?? 0),
+                TeamScore = teamScore,
+                MarketScore = marketScore,
+                ProductScore = productScore,
+                TractionScore = tractionScore,
+                FinancialScore = financialScore,
+                CalculatedAt = DateTime.UtcNow,
+                IsCurrentScore = true,
+                SubMetrics = subMetrics,
+                ImprovementRecommendations = recommendations
+            };
+
+            _db.StartupPotentialScores.Add(newScore);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Successfully synced AiEvaluationRun {RunId} to StartupPotentialScore {ScoreId} for Startup {StartupId}",
+                run.Id, newScore.ScoreID, run.StartupId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync AiEvaluationRun {RunId} to StartupPotentialScore", run.Id);
+        }
+    }
 }
+
