@@ -787,6 +787,7 @@ public class AiEvaluationService : IAiEvaluationService
                 FinancialScore = financialScore,
                 CalculatedAt = DateTime.UtcNow,
                 IsCurrentScore = true,
+                EvaluationRunID = run.Id,
                 SubMetrics = subMetrics,
                 ImprovementRecommendations = recommendations
             };

@@ -57,6 +57,7 @@ public class EvaluationReportResponse
 public class AIScoreLatestResponse
 {
     public int ScoreId { get; set; }
+    public int? EvaluationRunId { get; set; }
     public int StartupId { get; set; }
     public float OverallScore { get; set; }
     public float TeamScore { get; set; }
