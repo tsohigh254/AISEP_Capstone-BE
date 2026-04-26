@@ -254,6 +254,9 @@ public class EvaluationStatusResult
     public bool IsReportValid { get; set; }
     public DateTime SubmittedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    /// <summary>Document types evaluated in this run, e.g. ["pitch_deck", "business_plan"].</summary>
+    public List<string> EvaluatedDocumentTypes { get; set; } = new();
 }
 
 /// <summary>Returned to frontend with the full evaluation report.</summary>
@@ -266,4 +269,7 @@ public class EvaluationReportResult
     /// <summary>The canonical report object (weakly-typed JSON).</summary>
     public object? Report { get; set; }
     public string? ValidationMessage { get; set; }
+
+    /// <summary>Document types evaluated in this run, e.g. ["pitch_deck", "business_plan"].</summary>
+    public List<string> EvaluatedDocumentTypes { get; set; } = new();
 }
