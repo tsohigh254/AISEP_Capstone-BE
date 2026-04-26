@@ -128,6 +128,7 @@ builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IStaffDashboardService, StaffDashboardService>();
+builder.Services.AddScoped<IStaffFinanceService, StaffFinanceService>();
 builder.Services.AddScoped<IStaffMasterDataService, StaffMasterDataService>();
 builder.Services.AddScoped<IIssueReportService, IssueReportService>();
 builder.Services.AddTransient<ICloudinaryService, CloudinaryService>();
