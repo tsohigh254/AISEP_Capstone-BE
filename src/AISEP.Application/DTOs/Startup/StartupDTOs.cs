@@ -131,6 +131,7 @@ public class StartupMeDto
     public string? Description { get; set; }
     public int? IndustryID { get; set; }
     public string? IndustryName { get; set; }
+    public string? ParentIndustryName { get; set; }
     public int? StageID { get; set; }
     public string? StageName { get; set; }
     public DateTime? FoundedDate { get; set; }
