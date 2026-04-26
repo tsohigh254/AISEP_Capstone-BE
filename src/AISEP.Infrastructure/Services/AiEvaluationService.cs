@@ -113,12 +113,14 @@ public class AiEvaluationService : IAiEvaluationService
             var pythonResp = await _pythonClient.SubmitEvaluationAsync(pythonReq, correlationId);
 
             // Create local tracking record
+            var evaluatedTypes = string.Join(",", docs.Select(d => MapDocumentType(d.DocumentType)).Distinct());
             var run = new AiEvaluationRun
             {
                 StartupId = request.StartupId,
                 PythonRunId = pythonResp.EvaluationRunId,
                 Status = pythonResp.Status,
                 CorrelationId = correlationId,
+                EvaluatedDocumentTypes = evaluatedTypes,
                 SubmittedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -210,7 +212,8 @@ public class AiEvaluationService : IAiEvaluationService
                 StartupId = run.StartupId,
                 Status = run.Status,
                 IsReportValid = true,
-                Report = cached
+                Report = cached,
+                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
             });
         }
 
@@ -227,7 +230,8 @@ public class AiEvaluationService : IAiEvaluationService
                     StartupId = run.StartupId,
                     Status = run.Status,
                     IsReportValid = false,
-                    ValidationMessage = "Report is not ready yet. Please retry shortly."
+                    ValidationMessage = "Report is not ready yet. Please retry shortly.",
+                    EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
                 }, "Report not ready");
             }
 
@@ -262,7 +266,8 @@ public class AiEvaluationService : IAiEvaluationService
                 Status = run.Status,
                 IsReportValid = isValid,
                 Report = reportObj,
-                ValidationMessage = validationMsg
+                ValidationMessage = validationMsg,
+                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
             });
         }
         catch (PythonAiException ex)
@@ -600,8 +605,14 @@ public class AiEvaluationService : IAiEvaluationService
         IsReportReady = !string.IsNullOrEmpty(run.ReportJson),
         IsReportValid = run.IsReportValid,
         SubmittedAt = run.SubmittedAt,
-        UpdatedAt = run.UpdatedAt
+        UpdatedAt = run.UpdatedAt,
+        EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
     };
+
+    private static List<string> ParseDocumentTypes(string? csv)
+        => string.IsNullOrWhiteSpace(csv)
+            ? new List<string>()
+            : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     private static string MapDocumentType(Domain.Enums.DocumentType docType) => docType switch
     {
@@ -666,9 +677,8 @@ public class AiEvaluationService : IAiEvaluationService
             if (report == null || !report.OverallResult.HasValue || !report.CriteriaResults.HasValue) return;
 
             // 1. Map scores from criteria using flexible keyword matching
-            // Python AI criterion names vary (e.g. "Team & Execution Readiness" vs "Team_&_Execution_Readiness")
-            // so we use case-insensitive Contains instead of exact matching.
-            float teamScore = 0, marketScore = 0, productScore = 0, tractionScore = 0, financialScore = 0;
+            // Initialize with -1 to indicate "Not Applicable" or "Missing"
+            float teamScore = -1, marketScore = -1, productScore = -1, tractionScore = -1, financialScore = -1;
             var subMetrics = new List<ScoreSubMetric>();
 
             foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
@@ -694,11 +704,11 @@ public class AiEvaluationService : IAiEvaluationService
                     marketScore = scoreValue;
                 else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION"))
                     productScore = scoreValue;
-                else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION"))
+                else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION") || nameUpper.Contains("GROWTH") || nameUpper.Contains("MILESTONE"))
                     tractionScore = scoreValue;
                 else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("REVENUE") || 
                          nameUpper.Contains("GO_TO_MARKET") || nameUpper.Contains("GO-TO-MARKET") || nameUpper.Contains("GTM") ||
-                         nameUpper.Contains("MONETIZATION"))
+                         nameUpper.Contains("MONETIZATION") || nameUpper.Contains("UNIT ECONOMICS") || nameUpper.Contains("SCALABILITY"))
                     financialScore = scoreValue;
 
                 // Create sub-metric
@@ -712,8 +722,8 @@ public class AiEvaluationService : IAiEvaluationService
                 });
             }
 
-            // Fallback: if all sub-scores are 0 but overall_result has dimension breakdowns, extract from there
-            if (teamScore == 0 && marketScore == 0 && productScore == 0 && tractionScore == 0 && financialScore == 0)
+            // Fallback: if scores are still -1, try overall_result breakdown
+            if (teamScore == -1 && marketScore == -1 && productScore == -1 && tractionScore == -1 && financialScore == -1)
             {
                 try
                 {
@@ -804,6 +814,26 @@ public class AiEvaluationService : IAiEvaluationService
         {
             _logger.LogError(ex, "Failed to sync AiEvaluationRun {RunId} to StartupPotentialScore", run.Id);
         }
+    }
+
+    public async Task SyncAllScoresAsync()
+    {
+        var runs = await _db.AiEvaluationRuns
+            .Where(r => r.Status == "completed" && !string.IsNullOrEmpty(r.ReportJson))
+            .ToListAsync();
+
+        foreach (var run in runs)
+        {
+            try
+            {
+                await SyncToPotentialScoreAsync(run);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to re-sync score for run {RunId}", run.Id);
+            }
+        }
+        await _db.SaveChangesAsync();
     }
 }
 

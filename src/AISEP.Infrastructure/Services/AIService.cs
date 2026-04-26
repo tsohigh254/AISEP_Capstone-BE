@@ -214,7 +214,22 @@ public class AIService : IAIService
             return ApiResponse<AIScoreLatestResponse>.ErrorResponse(
                 "SCORE_NOT_FOUND", "No AI score found for this startup.");
 
-        return ApiResponse<AIScoreLatestResponse>.Ok(MapScore(score));
+        // Look up the evaluated document types from the associated run
+        List<string> evalDocTypes = new();
+        if (score.EvaluationRunID.HasValue)
+        {
+            var run = await _db.AiEvaluationRuns
+                .AsNoTracking()
+                .Where(r => r.Id == score.EvaluationRunID.Value)
+                .Select(r => r.EvaluatedDocumentTypes)
+                .FirstOrDefaultAsync(ct);
+            if (!string.IsNullOrWhiteSpace(run))
+                evalDocTypes = run.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+
+        var mapped = MapScore(score);
+        mapped.EvaluatedDocumentTypes = evalDocTypes;
+        return ApiResponse<AIScoreLatestResponse>.Ok(mapped);
     }
 
     public async Task<ApiResponse<AIScoreHistoryResponse>> GetScoreHistoryAsync(
@@ -402,11 +417,11 @@ public class AIService : IAIService
         ScoreId = s.ScoreID,
         StartupId = s.StartupID,
         OverallScore = s.OverallScore,
-        TeamScore = s.TeamScore,
-        MarketScore = s.MarketScore,
-        ProductScore = s.ProductScore,
-        TractionScore = s.TractionScore,
-        FinancialScore = s.FinancialScore,
+        TeamScore = s.TeamScore < 0 ? null : s.TeamScore,
+        MarketScore = s.MarketScore < 0 ? null : s.MarketScore,
+        ProductScore = s.ProductScore < 0 ? null : s.ProductScore,
+        TractionScore = s.TractionScore < 0 ? null : s.TractionScore,
+        FinancialScore = s.FinancialScore < 0 ? null : s.FinancialScore,
         CalculatedAt = s.CalculatedAt,
         EvaluationRunId = s.EvaluationRunID,
         SubMetrics = s.SubMetrics.Select(m => {

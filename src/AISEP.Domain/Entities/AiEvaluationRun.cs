@@ -33,6 +33,12 @@ public class AiEvaluationRun
     /// <summary>X-Correlation-Id used when submitting the run.</summary>
     public string? CorrelationId { get; set; }
 
+    /// <summary>
+    /// Comma-separated list of document types evaluated in this run (e.g. "pitch_deck,business_plan").
+    /// Populated at submission time from the actual documents selected.
+    /// </summary>
+    public string? EvaluatedDocumentTypes { get; set; }
+
     public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
