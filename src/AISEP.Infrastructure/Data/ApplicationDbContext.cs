@@ -153,6 +153,11 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<StartupKycSubmission>().Property(e => e.StartupVerificationType).HasConversion<short>();
         modelBuilder.Entity<StartupKycEvidenceFile>().Property(e => e.Kind).HasConversion<short>().HasDefaultValue(StartupKycEvidenceKind.Other);
 
+        // Investor KYC
+        modelBuilder.Entity<InvestorKycSubmission>().Property(e => e.WorkflowStatus).HasConversion<short>().HasDefaultValue(InvestorKycWorkflowStatus.Draft);
+        modelBuilder.Entity<InvestorKycSubmission>().Property(e => e.ResultLabel).HasConversion<short>().HasDefaultValue(InvestorKycResultLabel.None);
+        modelBuilder.Entity<InvestorKycEvidenceFile>().Property(e => e.Kind).HasConversion<short>().HasDefaultValue(InvestorKycEvidenceKind.Other);
+
         // Report
         modelBuilder.Entity<SavedReport>().Property(e => e.ReportType).HasConversion<short>();
 
@@ -360,6 +365,33 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(s => s.ReviewedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Investor KYC Relationships
+        modelBuilder.Entity<InvestorKycSubmission>()
+            .HasOne(s => s.Investor)
+            .WithMany(i => i.KycSubmissions)
+            .HasForeignKey(s => s.InvestorID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<InvestorKycSubmission>()
+            .HasOne(s => s.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(s => s.ReviewedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<InvestorKycSubmission>()
+            .HasIndex(s => new { s.InvestorID, s.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<InvestorKycSubmission>()
+            .HasIndex(s => new { s.InvestorID, s.IsActive })
+            .HasFilter("\"IsActive\" = true");
+
+        modelBuilder.Entity<InvestorKycEvidenceFile>()
+            .HasOne(e => e.Submission)
+            .WithMany(s => s.EvidenceFiles)
+            .HasForeignKey(e => e.SubmissionID)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<StartupKycEvidenceFile>()
             .HasOne(e => e.Submission)
