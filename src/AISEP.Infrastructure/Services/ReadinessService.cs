@@ -298,15 +298,26 @@ public class ReadinessService : IReadinessService
         if (hasSupporting) score += 3;
 
         // Metadata & visibility (+3)
-        // Key docs must be visible to investors
-        var keyDocs = docs.Where(d => d.DocumentType != DocumentType.Other).ToList();
-        if (keyDocs.Count > 0)
+        // Rule: Latest version of key docs must be visible to investors
+        var latestKeyDocs = docs
+            .Where(d => d.DocumentType != DocumentType.Other)
+            .GroupBy(d => d.DocumentType)
+            .Select(g => g.OrderByDescending(d => d.UploadedAt).First())
+            .ToList();
+
+        if (latestKeyDocs.Count > 0)
         {
-            bool allHaveVisibility = keyDocs.All(d => d.Visibility.HasFlag(DocumentVisibility.Investor));
+            bool allHaveVisibility = latestKeyDocs.All(d => d.Visibility.HasFlag(DocumentVisibility.Investor));
             if (allHaveVisibility) score += 3;
             else
             {
                 AddMissing(missing, "DOC_VISIBILITY", "documents", "Set document visibility to include investors");
+                actions.Add(new NextActionDto
+                {
+                    Code = "SET_DOC_VISIBILITY",
+                    Label = "Enable investor visibility for key documents",
+                    Target = "/startup/documents"
+                });
             }
         }
 
