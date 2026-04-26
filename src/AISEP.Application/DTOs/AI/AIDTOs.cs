@@ -65,6 +65,8 @@ public class AIScoreLatestResponse
     public float? ProductScore { get; set; }
     public float? TractionScore { get; set; }
     public float? FinancialScore { get; set; }
+    public float? PitchDeckScore { get; set; }
+    public float? BusinessPlanScore { get; set; }
     public DateTime CalculatedAt { get; set; }
     public List<SubMetricDto> SubMetrics { get; set; } = new();
     public List<ImprovementRecommendationDto> Recommendations { get; set; } = new();

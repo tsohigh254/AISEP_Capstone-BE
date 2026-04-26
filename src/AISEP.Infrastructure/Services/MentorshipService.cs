@@ -1008,6 +1008,8 @@ public class MentorshipService : IMentorshipService
             {
                 session.SessionStatus = SessionStatusValues.Completed;
                 session.UpdatedAt = now;
+                await _db.SaveChangesAsync(); // Commit session status before counting
+                await UpdateAdvisorStatsAsync(mentorshipId);
             }
 
             // Recalculate eligibility sau khi report Passed + session Completed
@@ -1136,6 +1138,8 @@ public class MentorshipService : IMentorshipService
                 {
                     session2.SessionStatus = SessionStatusValues.Completed;
                     session2.UpdatedAt = now2;
+                    await _db.SaveChangesAsync(); // Commit session status before counting
+                    await UpdateAdvisorStatsAsync(mentorshipId);
                 }
             }
 
@@ -1841,6 +1845,8 @@ public class MentorshipService : IMentorshipService
             {
                 RecalculateMentorshipStatus(mentorshipFull);
                 RecalculatePayoutEligibility(mentorshipFull);
+                await _db.SaveChangesAsync();
+                await UpdateAdvisorStatsAsync(mentorshipId);
             }
         }
 
@@ -1890,18 +1896,8 @@ public class MentorshipService : IMentorshipService
         RecalculateMentorshipStatus(session.Mentorship);
         RecalculatePayoutEligibility(session.Mentorship);
 
-        // Increment advisor's CompletedSessions counter
-        var advisor = await _db.Advisors
-            .FirstOrDefaultAsync(a => a.AdvisorID == session.Mentorship.AdvisorID);
-        if (advisor != null)
-        {
-            advisor.CompletedSessions = await _db.MentorshipSessions
-                .CountAsync(s => s.Mentorship.AdvisorID == advisor.AdvisorID
-                              && s.SessionStatus == SessionStatusValues.Completed) + 1;
-            // +1 because current session hasn't been SaveChanges yet
-        }
-
         await _db.SaveChangesAsync();
+        await UpdateAdvisorStatsAsync(mentorshipId);
         await _audit.LogAsync("STAFF_MARK_SESSION_COMPLETED", "MentorshipSession", sessionId, note);
 
         return ApiResponse<SessionOversightResultDto>.SuccessResponse(
@@ -2144,6 +2140,23 @@ public class MentorshipService : IMentorshipService
         MarkedByStaffID = session.MarkedByStaffID,
         MarkedAt = session.MarkedAt
     };
+
+    private async Task UpdateAdvisorStatsAsync(int mentorshipId)
+    {
+        var m = await _db.StartupAdvisorMentorships
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+        if (m == null) return;
+
+        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.AdvisorID == m.AdvisorID);
+        if (advisor != null)
+        {
+            advisor.CompletedSessions = await _db.MentorshipSessions
+                .CountAsync(s => s.Mentorship.AdvisorID == advisor.AdvisorID
+                              && s.SessionStatus == SessionStatusValues.Completed);
+            await _db.SaveChangesAsync();
+        }
+    }
 }
 
 

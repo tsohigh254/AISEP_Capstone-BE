@@ -679,7 +679,33 @@ public class AiEvaluationService : IAiEvaluationService
             // 1. Map scores from criteria using flexible keyword matching
             // Initialize with -1 to indicate "Not Applicable" or "Missing"
             float teamScore = -1, marketScore = -1, productScore = -1, tractionScore = -1, financialScore = -1;
+            float? pitchDeckOverall = null, businessPlanOverall = null;
             var subMetrics = new List<ScoreSubMetric>();
+
+            // Attempt to fetch source-specific overall scores (Option C)
+            try
+            {
+                var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
+                if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null && pdReport.OverallResult.HasValue)
+                {
+                    if (pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        pitchDeckOverall = (float)s.GetDouble();
+                }
+            }
+            catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* PD not present */ }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for pitch_deck"); }
+
+            try
+            {
+                var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
+                if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null && bpReport.OverallResult.HasValue)
+                {
+                    if (bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        businessPlanOverall = (float)s.GetDouble();
+                }
+            }
+            catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* BP not present */ }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for business_plan"); }
 
             foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
             {
@@ -799,6 +825,8 @@ public class AiEvaluationService : IAiEvaluationService
                 ProductScore = productScore,
                 TractionScore = tractionScore,
                 FinancialScore = financialScore,
+                PitchDeckOverallScore = pitchDeckOverall,
+                BusinessPlanOverallScore = businessPlanOverall,
                 CalculatedAt = DateTime.UtcNow,
                 IsCurrentScore = true,
                 EvaluationRunID = run.Id,
