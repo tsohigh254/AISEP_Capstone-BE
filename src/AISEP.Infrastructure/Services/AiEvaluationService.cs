@@ -205,6 +205,15 @@ public class AiEvaluationService : IAiEvaluationService
         // If we already have a valid cached report, return it
         if (!string.IsNullOrEmpty(run.ReportJson) && run.IsReportValid)
         {
+            // Ensure StartupPotentialScore exists — re-sync if missing
+            var hasScore = await _db.StartupPotentialScores
+                .AnyAsync(s => s.EvaluationRunID == run.Id);
+            if (!hasScore)
+            {
+                _logger.LogInformation("Re-triggering sync for run {RunId} — cached report exists but no PotentialScore found.", run.Id);
+                await SyncToPotentialScoreAsync(run);
+            }
+
             var cached = JsonSerializer.Deserialize<object>(run.ReportJson);
             return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
             {
