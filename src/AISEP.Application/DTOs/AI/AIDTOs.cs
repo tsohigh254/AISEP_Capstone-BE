@@ -59,19 +59,23 @@ public class AIScoreLatestResponse
     public int ScoreId { get; set; }
     public int? EvaluationRunId { get; set; }
     public int StartupId { get; set; }
-    public float OverallScore { get; set; }
-    public float TeamScore { get; set; }
-    public float MarketScore { get; set; }
-    public float ProductScore { get; set; }
-    public float TractionScore { get; set; }
-    public float FinancialScore { get; set; }
+    public float? OverallScore { get; set; }
+    public float? TeamScore { get; set; }
+    public float? MarketScore { get; set; }
+    public float? ProductScore { get; set; }
+    public float? TractionScore { get; set; }
+    public float? FinancialScore { get; set; }
     public DateTime CalculatedAt { get; set; }
     public List<SubMetricDto> SubMetrics { get; set; } = new();
     public List<ImprovementRecommendationDto> Recommendations { get; set; } = new();
+
+    /// <summary>Document types evaluated in this run, e.g. ["pitch_deck", "business_plan"].</summary>
+    public List<string> EvaluatedDocumentTypes { get; set; } = new();
 }
 
 public class SubMetricDto
 {
+    public string? Pillar { get; set; }
     public string Category { get; set; } = string.Empty;
     public string MetricName { get; set; } = string.Empty;
     public string? MetricValue { get; set; }
