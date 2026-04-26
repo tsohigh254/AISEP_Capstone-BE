@@ -173,6 +173,9 @@ public class StartupService : IStartupService
     {
         var startup = await _context.Startups
             .Include(s => s.TeamMembers)
+            .Include(s => s.Industry)
+            .Include(s => s.SubIndustryRef)
+            .Include(s => s.StageRef)
             .FirstOrDefaultAsync(s => s.UserID == userId);
 
         if (startup == null)
@@ -990,6 +993,7 @@ public class StartupService : IStartupService
             Description = s.Description,
             IndustryID = s.IndustryID,
             IndustryName = s.Industry?.IndustryName,
+            ParentIndustryName = s.Industry?.IndustryName,
             StageID = s.StageID,
             StageName = s.StageRef?.StageName,
             FoundedDate = s.FoundedDate,

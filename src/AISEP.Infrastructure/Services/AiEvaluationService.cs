@@ -665,28 +665,39 @@ public class AiEvaluationService : IAiEvaluationService
             var report = JsonSerializer.Deserialize<PythonCanonicalReport>(run.ReportJson);
             if (report == null || !report.OverallResult.HasValue || !report.CriteriaResults.HasValue) return;
 
-            // 1. Map scores from criteria
+            // 1. Map scores from criteria using flexible keyword matching
+            // Python AI criterion names vary (e.g. "Team & Execution Readiness" vs "Team_&_Execution_Readiness")
+            // so we use case-insensitive Contains instead of exact matching.
             float teamScore = 0, marketScore = 0, productScore = 0, tractionScore = 0, financialScore = 0;
             var subMetrics = new List<ScoreSubMetric>();
 
             foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
             {
-                var name = criterion.GetProperty("criterion").GetString();
+                string? name = null;
+                // Python may use "criterion" or "criterion_name" depending on report version
+                if (criterion.TryGetProperty("criterion", out var cProp))
+                    name = cProp.GetString();
+                else if (criterion.TryGetProperty("criterion_name", out var cnProp))
+                    name = cnProp.GetString();
+
                 float scoreValue = 0;
                 if (criterion.TryGetProperty("final_score", out var sProp) && sProp.ValueKind == JsonValueKind.Number)
-                {
                     scoreValue = (float)sProp.GetDouble();
-                }
+                else if (criterion.TryGetProperty("score", out var s2Prop) && s2Prop.ValueKind == JsonValueKind.Number)
+                    scoreValue = (float)s2Prop.GetDouble();
 
-                // Map to main scores
-                switch (name)
-                {
-                    case "Team_&_Execution_Readiness": teamScore = scoreValue; break;
-                    case "Market_Attractiveness_&_Timing": marketScore = scoreValue; break;
-                    case "Solution_&_Differentiation": productScore = scoreValue; break;
-                    case "Validation_Traction_Evidence_Quality": tractionScore = scoreValue; break;
-                    case "Business_Model_&_Go_to_Market": financialScore = scoreValue; break;
-                }
+                // Flexible keyword mapping — case-insensitive, handles both underscored and spaced names
+                var nameUpper = (name ?? "").ToUpperInvariant();
+                if (nameUpper.Contains("TEAM"))
+                    teamScore = scoreValue;
+                else if (nameUpper.Contains("MARKET"))
+                    marketScore = scoreValue;
+                else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION"))
+                    productScore = scoreValue;
+                else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION"))
+                    tractionScore = scoreValue;
+                else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("GO_TO_MARKET") || nameUpper.Contains("GO-TO-MARKET"))
+                    financialScore = scoreValue;
 
                 // Create sub-metric
                 subMetrics.Add(new ScoreSubMetric
@@ -697,6 +708,48 @@ public class AiEvaluationService : IAiEvaluationService
                     Explanation = criterion.TryGetProperty("explanation", out var exp) ? exp.GetString() : null,
                     MetricValue = criterion.TryGetProperty("evidence_strength_summary", out var ess) ? ess.GetString() : null
                 });
+            }
+
+            // Fallback: if all sub-scores are 0 but overall_result has dimension breakdowns, extract from there
+            if (teamScore == 0 && marketScore == 0 && productScore == 0 && tractionScore == 0 && financialScore == 0)
+            {
+                try
+                {
+                    var overall = report.OverallResult!.Value;
+                    if (overall.TryGetProperty("team_score", out var ts) && ts.ValueKind == JsonValueKind.Number)
+                        teamScore = (float)ts.GetDouble();
+                    if (overall.TryGetProperty("market_score", out var ms) && ms.ValueKind == JsonValueKind.Number)
+                        marketScore = (float)ms.GetDouble();
+                    if (overall.TryGetProperty("product_score", out var ps) && ps.ValueKind == JsonValueKind.Number)
+                        productScore = (float)ps.GetDouble();
+                    if (overall.TryGetProperty("traction_score", out var trs) && trs.ValueKind == JsonValueKind.Number)
+                        tractionScore = (float)trs.GetDouble();
+                    if (overall.TryGetProperty("financial_score", out var fs) && fs.ValueKind == JsonValueKind.Number)
+                        financialScore = (float)fs.GetDouble();
+
+                    // Also try alternative key names used by some Python versions
+                    if (teamScore == 0 && overall.TryGetProperty("dimension_scores", out var dims) && dims.ValueKind == JsonValueKind.Object)
+                    {
+                        if (dims.TryGetProperty("team", out var dt) && dt.ValueKind == JsonValueKind.Number)
+                            teamScore = (float)dt.GetDouble();
+                        if (dims.TryGetProperty("market", out var dm) && dm.ValueKind == JsonValueKind.Number)
+                            marketScore = (float)dm.GetDouble();
+                        if (dims.TryGetProperty("product", out var dp) && dp.ValueKind == JsonValueKind.Number)
+                            productScore = (float)dp.GetDouble();
+                        if (dims.TryGetProperty("traction", out var dtr) && dtr.ValueKind == JsonValueKind.Number)
+                            tractionScore = (float)dtr.GetDouble();
+                        if (dims.TryGetProperty("financial", out var df) && df.ValueKind == JsonValueKind.Number)
+                            financialScore = (float)df.GetDouble();
+                    }
+
+                    _logger.LogInformation(
+                        "Sub-scores extracted from overall_result fallback for run {RunId}: T={Team} M={Market} P={Product} Tr={Traction} F={Financial}",
+                        run.Id, teamScore, marketScore, productScore, tractionScore, financialScore);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to extract sub-scores from overall_result for run {RunId}", run.Id);
+                }
             }
 
             // 2. Map recommendations
@@ -734,6 +787,7 @@ public class AiEvaluationService : IAiEvaluationService
                 FinancialScore = financialScore,
                 CalculatedAt = DateTime.UtcNow,
                 IsCurrentScore = true,
+                EvaluationRunID = run.Id,
                 SubMetrics = subMetrics,
                 ImprovementRecommendations = recommendations
             };

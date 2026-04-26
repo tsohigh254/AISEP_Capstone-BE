@@ -13,6 +13,7 @@ public class StartupPotentialScore
     public float FinancialScore { get; set; }
     public DateTime CalculatedAt { get; set; }
     public bool IsCurrentScore { get; set; }
+    public int? EvaluationRunID { get; set; }
 
     // Navigation properties
     public Startup Startup { get; set; } = null!;

@@ -408,6 +408,7 @@ public class AIService : IAIService
         TractionScore = s.TractionScore,
         FinancialScore = s.FinancialScore,
         CalculatedAt = s.CalculatedAt,
+        EvaluationRunId = s.EvaluationRunID,
         SubMetrics = s.SubMetrics.Select(m => new SubMetricDto
         {
             Category = m.Category,
