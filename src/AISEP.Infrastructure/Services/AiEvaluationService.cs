@@ -704,11 +704,13 @@ public class AiEvaluationService : IAiEvaluationService
                     marketScore = scoreValue;
                 else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION"))
                     productScore = scoreValue;
-                else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION") || nameUpper.Contains("GROWTH") || nameUpper.Contains("MILESTONE"))
+                else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION") || nameUpper.Contains("GROWTH") || nameUpper.Contains("MILESTONE") || nameUpper.Contains("ADOPTION") || nameUpper.Contains("RETENTION"))
                     tractionScore = scoreValue;
                 else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("REVENUE") || 
                          nameUpper.Contains("GO_TO_MARKET") || nameUpper.Contains("GO-TO-MARKET") || nameUpper.Contains("GTM") ||
-                         nameUpper.Contains("MONETIZATION") || nameUpper.Contains("UNIT ECONOMICS") || nameUpper.Contains("SCALABILITY"))
+                         nameUpper.Contains("MONETIZATION") || nameUpper.Contains("UNIT ECONOMICS") || nameUpper.Contains("SCALABILITY") ||
+                         nameUpper.Contains("MODEL") || nameUpper.Contains("SALES") || nameUpper.Contains("COMMERCIAL") || 
+                         nameUpper.Contains("PROJECTION") || nameUpper.Contains("COST") || nameUpper.Contains("BUDGET"))
                     financialScore = scoreValue;
 
                 // Create sub-metric
