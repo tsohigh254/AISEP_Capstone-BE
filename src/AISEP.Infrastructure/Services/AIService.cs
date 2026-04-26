@@ -422,6 +422,8 @@ public class AIService : IAIService
         ProductScore = s.ProductScore < 0 ? null : s.ProductScore,
         TractionScore = s.TractionScore < 0 ? null : s.TractionScore,
         FinancialScore = s.FinancialScore < 0 ? null : s.FinancialScore,
+        PitchDeckScore = s.PitchDeckOverallScore,
+        BusinessPlanScore = s.BusinessPlanOverallScore,
         CalculatedAt = s.CalculatedAt,
         EvaluationRunId = s.EvaluationRunID,
         SubMetrics = s.SubMetrics.Select(m => {
