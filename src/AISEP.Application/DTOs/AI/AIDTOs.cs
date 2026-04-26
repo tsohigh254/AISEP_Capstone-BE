@@ -72,6 +72,7 @@ public class AIScoreLatestResponse
 
 public class SubMetricDto
 {
+    public string? Pillar { get; set; }
     public string Category { get; set; } = string.Empty;
     public string MetricName { get; set; } = string.Empty;
     public string? MetricValue { get; set; }

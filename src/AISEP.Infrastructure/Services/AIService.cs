@@ -409,13 +409,25 @@ public class AIService : IAIService
         FinancialScore = s.FinancialScore,
         CalculatedAt = s.CalculatedAt,
         EvaluationRunId = s.EvaluationRunID,
-        SubMetrics = s.SubMetrics.Select(m => new SubMetricDto
-        {
-            Category = m.Category,
-            MetricName = m.MetricName,
-            MetricValue = m.MetricValue,
-            MetricScore = m.MetricScore,
-            Explanation = m.Explanation
+        SubMetrics = s.SubMetrics.Select(m => {
+            var nameUpper = (m.MetricName ?? "").ToUpperInvariant();
+            string pillar = "OTHER";
+            if (nameUpper.Contains("TEAM")) pillar = "TEAM";
+            else if (nameUpper.Contains("MARKET")) pillar = "MARKET";
+            else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION")) pillar = "PRODUCT";
+            else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION")) pillar = "TRACTION";
+            else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("REVENUE") || 
+                     nameUpper.Contains("GTM") || nameUpper.Contains("MONETIZATION")) pillar = "FINANCIAL";
+
+            return new SubMetricDto
+            {
+                Pillar = pillar,
+                Category = m.Category,
+                MetricName = m.MetricName,
+                MetricValue = m.MetricValue,
+                MetricScore = m.MetricScore,
+                Explanation = m.Explanation
+            };
         }).ToList(),
         Recommendations = s.ImprovementRecommendations.Select(r => new ImprovementRecommendationDto
         {

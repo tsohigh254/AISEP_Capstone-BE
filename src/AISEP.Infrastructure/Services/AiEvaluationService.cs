@@ -696,7 +696,9 @@ public class AiEvaluationService : IAiEvaluationService
                     productScore = scoreValue;
                 else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION"))
                     tractionScore = scoreValue;
-                else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("GO_TO_MARKET") || nameUpper.Contains("GO-TO-MARKET"))
+                else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("REVENUE") || 
+                         nameUpper.Contains("GO_TO_MARKET") || nameUpper.Contains("GO-TO-MARKET") || nameUpper.Contains("GTM") ||
+                         nameUpper.Contains("MONETIZATION"))
                     financialScore = scoreValue;
 
                 // Create sub-metric
