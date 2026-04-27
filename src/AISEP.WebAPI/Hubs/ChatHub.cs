@@ -79,7 +79,9 @@ public class ChatHub : Hub
             SenderId     = saved.SenderUserId,
             Content      = saved.Content,
             AttachmentUrl = saved.AttachmentUrls,
-            CreatedAt    = saved.SentAt
+            CreatedAt    = saved.SentAt,
+            DocumentId   = saved.DocumentId,
+            RequiresPermission = saved.RequiresPermission
         };
 
         // Broadcast tới tất cả client đang ở trong group (kể cả người gửi)

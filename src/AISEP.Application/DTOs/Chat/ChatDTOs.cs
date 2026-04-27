@@ -67,6 +67,7 @@ public class ParticipantDto
     public int UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string UserType { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
 }
 
 public class MessageDto
@@ -81,6 +82,10 @@ public class MessageDto
     public bool IsRead { get; set; }
     public DateTime SentAt { get; set; }
     public DateTime? ReadAt { get; set; }
+
+    // Document sharing status
+    public int? DocumentId { get; set; }
+    public bool RequiresPermission { get; set; }
 }
 
 /// <summary>Payload broadcast qua SignalR event "ReceiveMessage" — aligned với FE IIncomingMessage.</summary>
@@ -92,4 +97,8 @@ public class SignalRMessageDto
     public string Content { get; set; } = string.Empty;
     public string? AttachmentUrl { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    // Document sharing status for real-time
+    public int? DocumentId { get; set; }
+    public bool RequiresPermission { get; set; }
 }
