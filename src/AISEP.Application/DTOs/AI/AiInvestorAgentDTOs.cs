@@ -17,6 +17,8 @@ public class InvestorAgentChatRequest
     /// Optional conversation thread ID.  Pass the same value to continue a thread;
     /// omit or send null to start a new conversation.
     /// </summary>
+    /// <remarks>FE sends snake_case <c>thread_id</c>; bind explicitly so MVC input JSON matches.</remarks>
+    [JsonPropertyName("thread_id")]
     public string? ThreadId { get; set; }
 }
 
