@@ -92,7 +92,7 @@ public class ChatService : IChatService
             lastMessages.TryGetValue(c.ConversationID, out var lastMsg);
             unreadCounts.TryGetValue(c.ConversationID, out var unread);
 
-            var (participantId, participantName, participantRole) = GetOtherParticipant(c, userId);
+            var (participantId, participantName, participantRole, participantAvatar) = GetOtherParticipant(c, userId);
             if (participantId == 0) continue; // Skip corrupted conversations
 
             items.Add(new ConversationListItemDto
@@ -105,6 +105,7 @@ public class ChatService : IChatService
                 ParticipantId = participantId,
                 ParticipantName = participantName,
                 ParticipantRole = participantRole,
+                ParticipantAvatarUrl = participantAvatar,
                 LastMessagePreview = lastMsg != null
                     ? (lastMsg.Length > 80 ? lastMsg[..80] + "…" : lastMsg)
                     : null,
@@ -306,7 +307,45 @@ public class ChatService : IChatService
             .Take(pageSize)
             .ToListAsync();
 
-        var items = messages.Select(m => MapToMessageDto(m, userId)).ToList();
+        // Get other participant to know recipient role
+        var (_, _, otherRole, _) = GetOtherParticipant(conv, userId);
+        
+        // Determine roles in this conversation
+        string myRole = "";
+        if (conv.Connection != null) {
+            myRole = (otherRole == "Startup") ? "Investor" : "Startup";
+        } else if (conv.Mentorship != null) {
+            myRole = (otherRole == "Startup") ? "Advisor" : "Startup";
+        }
+
+        string recipientRoleOfMine = otherRole; // If I send, recipient is 'other'
+        string recipientRoleOfOther = myRole;    // If 'other' sends, recipient is me
+
+        // Collect document IDs from attachments
+        var docIds = messages
+            .Select(m => ParseDocumentId(m.AttachmentURLs))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        var docs = await _db.Documents
+            .Where(d => docIds.Contains(d.DocumentID))
+            .ToDictionaryAsync(d => d.DocumentID, d => d.Visibility);
+
+        var items = messages.Select(m => {
+            var dto = MapToMessageDto(m, userId);
+            var docId = ParseDocumentId(m.AttachmentURLs);
+            if (docId.HasValue) {
+                dto.DocumentId = docId;
+                if (docs.TryGetValue(docId.Value, out var visibility)) {
+                    // Who is the recipient of this specific message?
+                    string recipientRole = m.SenderUserID == userId ? recipientRoleOfMine : recipientRoleOfOther;
+                    dto.RequiresPermission = !HasPermission(visibility, recipientRole);
+                }
+            }
+            return dto;
+        }).ToList();
 
         var paged = new PagedResponse<MessageDto>
         {
@@ -320,6 +359,23 @@ public class ChatService : IChatService
         };
 
         return ApiResponse<PagedResponse<MessageDto>>.SuccessResponse(paged);
+    }
+
+    private static bool HasPermission(DocumentVisibility visibility, string role)
+    {
+        if (visibility.HasFlag(DocumentVisibility.Public)) return true;
+        if (role == "Investor" && visibility.HasFlag(DocumentVisibility.Investor)) return true;
+        if (role == "Advisor" && visibility.HasFlag(DocumentVisibility.Advisor)) return true;
+        return false;
+    }
+
+    private static int? ParseDocumentId(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+        var match = System.Text.RegularExpressions.Regex.Match(url, @"/api/documents/(\d+)/content");
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var id))
+            return id;
+        return null;
     }
 
     public async Task<ApiResponse<MessageDto>> SendMessageAsync(
@@ -359,7 +415,7 @@ public class ChatService : IChatService
         await _db.Entry(message).Reference(m => m.SenderUser).LoadAsync();
 
         // Get recipient for notification
-        var (recipientUserId, senderName, recipientRole) = GetOtherParticipant(conv, userId);
+        var (recipientUserId, senderName, recipientRole, _) = GetOtherParticipant(conv, userId);
 
         // Push notification inline (NOT via Task.Run) to keep scoped DI services alive.
         // Task.Run would cause DbContext/NotificationService to be disposed before execution.
@@ -389,8 +445,20 @@ public class ChatService : IChatService
             _logger.LogWarning(ex, "Failed to send message notification to user {UserId}", recipientUserId);
         }
 
-        return ApiResponse<MessageDto>.SuccessResponse(
-            MapToMessageDto(message, userId), "Message sent successfully.");
+        var dto = MapToMessageDto(message, userId);
+        var docId = ParseDocumentId(message.AttachmentURLs);
+        if (docId.HasValue)
+        {
+            dto.DocumentId = docId;
+            var visibility = await _db.Documents
+                .Where(d => d.DocumentID == docId.Value)
+                .Select(d => d.Visibility)
+                .FirstOrDefaultAsync();
+            // Check if recipient has permission
+            dto.RequiresPermission = !HasPermission(visibility, recipientRole);
+        }
+
+        return ApiResponse<MessageDto>.SuccessResponse(dto, "Message sent successfully.");
     }
 
     public async Task<ApiResponse<string>> MarkReadAsync(int userId, int messageId)
@@ -518,7 +586,7 @@ public class ChatService : IChatService
         return false;
     }
 
-    private static (int id, string name, string role) GetOtherParticipant(Conversation conv, int userId)
+    private static (int id, string name, string role, string? avatar) GetOtherParticipant(Conversation conv, int userId)
     {
         if (conv.Connection != null)
         {
@@ -526,11 +594,13 @@ public class ChatService : IChatService
             {
                 return (conv.Connection.Investor?.UserID ?? 0, 
                         conv.Connection.Investor?.FullName ?? "Unknown Investor", 
-                        "Investor");
+                        "Investor",
+                        conv.Connection.Investor?.ProfilePhotoURL);
             }
             return (conv.Connection.Startup?.UserID ?? 0, 
                     conv.Connection.Startup?.CompanyName ?? "Unknown Startup", 
-                    "Startup");
+                    "Startup",
+                    conv.Connection.Startup?.LogoURL);
         }
         if (conv.Mentorship != null)
         {
@@ -538,13 +608,15 @@ public class ChatService : IChatService
             {
                 return (conv.Mentorship.Advisor?.UserID ?? 0, 
                         conv.Mentorship.Advisor?.FullName ?? "Unknown Advisor", 
-                        "Advisor");
+                        "Advisor",
+                        conv.Mentorship.Advisor?.ProfilePhotoURL);
             }
             return (conv.Mentorship.Startup?.UserID ?? 0, 
                     conv.Mentorship.Startup?.CompanyName ?? "Unknown Startup", 
-                    "Startup");
+                    "Startup",
+                    conv.Mentorship.Startup?.LogoURL);
         }
-        return (0, "Unknown", "Unknown");
+        return (0, "Unknown", "Unknown", null);
     }
 
     private static string BuildTitle(Conversation conv, int currentUserId)
@@ -577,13 +649,15 @@ public class ChatService : IChatService
             {
                 UserId = conv.Connection.Startup.UserID,
                 DisplayName = conv.Connection.Startup.CompanyName,
-                UserType = "Startup"
+                UserType = "Startup",
+                AvatarUrl = conv.Connection.Startup.LogoURL
             });
             list.Add(new ParticipantDto
             {
                 UserId = conv.Connection.Investor.UserID,
                 DisplayName = conv.Connection.Investor.FullName,
-                UserType = "Investor"
+                UserType = "Investor",
+                AvatarUrl = conv.Connection.Investor.ProfilePhotoURL
             });
         }
         else if (conv.Mentorship != null)
@@ -592,13 +666,15 @@ public class ChatService : IChatService
             {
                 UserId = conv.Mentorship.Startup.UserID,
                 DisplayName = conv.Mentorship.Startup.CompanyName,
-                UserType = "Startup"
+                UserType = "Startup",
+                AvatarUrl = conv.Mentorship.Startup.LogoURL
             });
             list.Add(new ParticipantDto
             {
                 UserId = conv.Mentorship.Advisor.UserID,
                 DisplayName = conv.Mentorship.Advisor.FullName,
-                UserType = "Advisor"
+                UserType = "Advisor",
+                AvatarUrl = conv.Mentorship.Advisor.ProfilePhotoURL
             });
         }
 
