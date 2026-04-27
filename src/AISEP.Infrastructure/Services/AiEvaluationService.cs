@@ -184,7 +184,11 @@ public class AiEvaluationService : IAiEvaluationService
             }
         }
 
-        return ApiResponse<EvaluationStatusResult>.SuccessResponse(MapToStatusResult(run));
+        var score = await _db.StartupPotentialScores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.EvaluationRunID == run.Id);
+
+        return ApiResponse<EvaluationStatusResult>.SuccessResponse(MapToStatusResult(run, score));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -222,6 +226,8 @@ public class AiEvaluationService : IAiEvaluationService
                 StartupId = run.StartupId,
                 Status = run.Status,
                 IsReportValid = true,
+                SubmittedAt = run.SubmittedAt,
+                UpdatedAt = run.UpdatedAt,
                 Report = cached,
                 EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes),
                 PitchDeckOverallScore = pdScore,
@@ -470,12 +476,16 @@ public class AiEvaluationService : IAiEvaluationService
                 return ApiResponse<List<EvaluationStatusResult>>.ErrorResponse("ACCESS_DENIED", "You do not have access to this startup's evaluation history.");
         }
 
-        var runs = await _db.AiEvaluationRuns
+        var runsWithScores = await _db.AiEvaluationRuns
             .Where(r => r.StartupId == startupId)
-            .OrderByDescending(r => r.SubmittedAt)
+            .GroupJoin(_db.StartupPotentialScores,
+                run => run.Id,
+                score => score.EvaluationRunID,
+                (run, scores) => new { Run = run, Score = scores.FirstOrDefault() })
+            .OrderByDescending(x => x.Run.SubmittedAt)
             .ToListAsync();
 
-        var results = runs.Select(MapToStatusResult).ToList();
+        var results = runsWithScores.Select(x => MapToStatusResult(x.Run, x.Score)).ToList();
         return ApiResponse<List<EvaluationStatusResult>>.SuccessResponse(results);
     }
 
@@ -614,12 +624,17 @@ public class AiEvaluationService : IAiEvaluationService
     //  Mapping Helpers
     // ═══════════════════════════════════════════════════════════
 
-    private static EvaluationStatusResult MapToStatusResult(AiEvaluationRun run) => new()
+    private static EvaluationStatusResult MapToStatusResult(AiEvaluationRun run, StartupPotentialScore? score = null) => new()
     {
         RunId = run.Id,
         StartupId = run.StartupId,
         Status = run.Status,
         OverallScore = run.OverallScore,
+        TeamScore = score?.TeamScore < 0 ? null : score?.TeamScore,
+        MarketScore = score?.MarketScore < 0 ? null : score?.MarketScore,
+        ProductScore = score?.ProductScore < 0 ? null : score?.ProductScore,
+        TractionScore = score?.TractionScore < 0 ? null : score?.TractionScore,
+        FinancialScore = score?.FinancialScore < 0 ? null : score?.FinancialScore,
         FailureReason = run.FailureReason,
         IsReportReady = !string.IsNullOrEmpty(run.ReportJson),
         IsReportValid = run.IsReportValid,
