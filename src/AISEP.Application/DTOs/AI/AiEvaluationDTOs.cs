@@ -272,4 +272,16 @@ public class EvaluationReportResult
 
     /// <summary>Document types evaluated in this run, e.g. ["pitch_deck", "business_plan"].</summary>
     public List<string> EvaluatedDocumentTypes { get; set; } = new();
+
+    /// <summary>Overall score from the Pitch Deck source report (null if not available).</summary>
+    public float? PitchDeckOverallScore { get; set; }
+
+    /// <summary>Overall score from the Business Plan source report (null if not available).</summary>
+    public float? BusinessPlanOverallScore { get; set; }
+
+    /// <summary>The full Pitch Deck report JSON (if available).</summary>
+    public object? PitchDeckReport { get; set; }
+
+    /// <summary>The full Business Plan report JSON (if available).</summary>
+    public object? BusinessPlanReport { get; set; }
 }

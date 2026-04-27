@@ -430,7 +430,6 @@ public class AIService : IAIService
             var nameUpper = (m.MetricName ?? "").ToUpperInvariant();
             string pillar = "OTHER";
             if (nameUpper.Contains("TEAM")) pillar = "TEAM";
-            else if (nameUpper.Contains("MARKET")) pillar = "MARKET";
             else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION")) pillar = "PRODUCT";
             else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION") || nameUpper.Contains("GROWTH") || nameUpper.Contains("MILESTONE") || nameUpper.Contains("ADOPTION") || nameUpper.Contains("RETENTION")) pillar = "TRACTION";
             else if (nameUpper.Contains("BUSINESS") || nameUpper.Contains("FINANCIAL") || nameUpper.Contains("REVENUE") || 
@@ -438,6 +437,7 @@ public class AIService : IAIService
                      nameUpper.Contains("ECONOMICS") || nameUpper.Contains("SCALABILITY") || nameUpper.Contains("SALES") || 
                      nameUpper.Contains("COMMERCIAL") || nameUpper.Contains("PROJECTION") || nameUpper.Contains("COST") || 
                      nameUpper.Contains("BUDGET")) pillar = "FINANCIAL";
+            else if (nameUpper.Contains("MARKET")) pillar = "MARKET";
 
             return new SubMetricDto
             {

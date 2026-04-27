@@ -215,6 +215,7 @@ public class AiEvaluationService : IAiEvaluationService
             }
 
             var cached = JsonSerializer.Deserialize<object>(run.ReportJson);
+            var (pdScore, pdReport, bpScore, bpReport) = await FetchSourceReportsAsync(run);
             return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
             {
                 RunId = run.Id,
@@ -222,7 +223,11 @@ public class AiEvaluationService : IAiEvaluationService
                 Status = run.Status,
                 IsReportValid = true,
                 Report = cached,
-                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
+                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes),
+                PitchDeckOverallScore = pdScore,
+                BusinessPlanOverallScore = bpScore,
+                PitchDeckReport = pdReport,
+                BusinessPlanReport = bpReport
             });
         }
 
@@ -268,6 +273,7 @@ public class AiEvaluationService : IAiEvaluationService
             await SyncToPotentialScoreAsync(run);
 
             var reportObj = JsonSerializer.Deserialize<object>(run.ReportJson);
+            var (pdScore2, pdReport2, bpScore2, bpReport2) = await FetchSourceReportsAsync(run);
             return ApiResponse<EvaluationReportResult>.SuccessResponse(new EvaluationReportResult
             {
                 RunId = run.Id,
@@ -276,7 +282,11 @@ public class AiEvaluationService : IAiEvaluationService
                 IsReportValid = isValid,
                 Report = reportObj,
                 ValidationMessage = validationMsg,
-                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes)
+                EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes),
+                PitchDeckOverallScore = pdScore2,
+                BusinessPlanOverallScore = bpScore2,
+                PitchDeckReport = pdReport2,
+                BusinessPlanReport = bpReport2
             });
         }
         catch (PythonAiException ex)
@@ -668,6 +678,58 @@ public class AiEvaluationService : IAiEvaluationService
             return fileUrl;
         }
     }
+
+    /// <summary>
+    /// Fetches source-specific reports (Pitch Deck / Business Plan) for a given run from Python.
+    /// Also includes the scores extracted.
+    /// </summary>
+    private async Task<(float? pdScore, object? pdReport, float? bpScore, object? bpReport)> FetchSourceReportsAsync(AiEvaluationRun run)
+    {
+        float? pdScore = null, bpScore = null;
+        object? pdReportObj = null, bpReportObj = null;
+
+        try
+        {
+            var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
+            if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null)
+            {
+                pdReportObj = pdReport;
+                if (pdReport.OverallResult.HasValue && pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
+                    pdScore = (float)s.GetDouble();
+            }
+        }
+        catch { /* PD not available */ }
+
+        try
+        {
+            var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
+            if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null)
+            {
+                bpReportObj = bpReport;
+                if (bpReport.OverallResult.HasValue && bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
+                    bpScore = (float)s.GetDouble();
+            }
+        }
+        catch { /* BP not available */ }
+
+        // If Python didn't return scores (rare), check DB as fallback
+        if (pdScore == null || bpScore == null)
+        {
+            var dbScore = await _db.StartupPotentialScores
+                .AsNoTracking()
+                .Where(s => s.EvaluationRunID == run.Id)
+                .Select(s => new { s.PitchDeckOverallScore, s.BusinessPlanOverallScore })
+                .FirstOrDefaultAsync();
+            if (dbScore != null)
+            {
+                pdScore ??= dbScore.PitchDeckOverallScore;
+                bpScore ??= dbScore.BusinessPlanOverallScore;
+            }
+        }
+
+        return (pdScore, pdReportObj, bpScore, bpReportObj);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  Sync to StartupPotentialScore
     // ═══════════════════════════════════════════════════════════
@@ -732,11 +794,11 @@ public class AiEvaluationService : IAiEvaluationService
                     scoreValue = (float)s2Prop.GetDouble();
 
                 // Flexible keyword mapping — case-insensitive, handles both underscored and spaced names
+                // IMPORTANT: FINANCIAL must be checked BEFORE MARKET because "Business_Model_&_Go_to_Market"
+                // contains both "MARKET" and "BUSINESS" — we want it to match FINANCIAL, not MARKET.
                 var nameUpper = (name ?? "").ToUpperInvariant();
                 if (nameUpper.Contains("TEAM"))
                     teamScore = scoreValue;
-                else if (nameUpper.Contains("MARKET"))
-                    marketScore = scoreValue;
                 else if (nameUpper.Contains("SOLUTION") || nameUpper.Contains("PRODUCT") || nameUpper.Contains("DIFFERENTIATION"))
                     productScore = scoreValue;
                 else if (nameUpper.Contains("TRACTION") || nameUpper.Contains("VALIDATION") || nameUpper.Contains("GROWTH") || nameUpper.Contains("MILESTONE") || nameUpper.Contains("ADOPTION") || nameUpper.Contains("RETENTION"))
@@ -747,6 +809,8 @@ public class AiEvaluationService : IAiEvaluationService
                          nameUpper.Contains("MODEL") || nameUpper.Contains("SALES") || nameUpper.Contains("COMMERCIAL") || 
                          nameUpper.Contains("PROJECTION") || nameUpper.Contains("COST") || nameUpper.Contains("BUDGET"))
                     financialScore = scoreValue;
+                else if (nameUpper.Contains("MARKET"))
+                    marketScore = scoreValue;
 
                 // Create sub-metric
                 subMetrics.Add(new ScoreSubMetric
