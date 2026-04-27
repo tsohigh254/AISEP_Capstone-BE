@@ -48,6 +48,7 @@ public class Startup
     public string? PitchDeckUrl { get; set; }
 
     public bool IsVisible { get; set; }              
+    public bool AllowInvestorAiInsight { get; set; }
 
     // Approval Workflow
     public ProfileStatus ProfileStatus { get; set; } = ProfileStatus.Draft;
