@@ -156,7 +156,7 @@ public class MentorshipService : IMentorshipService
             .Include(m => m.Reports)
             .Include(m => m.Sessions);
 
-        if (userType == "Startup")
+        if (string.Equals(userType, "Startup", StringComparison.OrdinalIgnoreCase))
         {
             var startup = await _db.Startups.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.UserID == userId);
@@ -165,7 +165,7 @@ public class MentorshipService : IMentorshipService
                     "STARTUP_PROFILE_NOT_FOUND", "Startup profile not found.");
             query = query.Where(m => m.StartupID == startup.StartupID);
         }
-        else if (userType == "Advisor")
+        else if (string.Equals(userType, "Advisor", StringComparison.OrdinalIgnoreCase))
         {
             var advisor = await _db.Advisors.AsNoTracking()
                 .FirstOrDefaultAsync(a => a.UserID == userId);
@@ -174,7 +174,8 @@ public class MentorshipService : IMentorshipService
                     "ADVISOR_PROFILE_NOT_FOUND", "Advisor profile not found.");
             query = query.Where(m => m.AdvisorID == advisor.AdvisorID);
         }
-        else if (userType == "Staff" || userType == "Admin")
+        else if (string.Equals(userType, "Staff", StringComparison.OrdinalIgnoreCase) || 
+                 string.Equals(userType, "Admin", StringComparison.OrdinalIgnoreCase))
         {
             // Staff/Admin: see all
         }
@@ -188,7 +189,40 @@ public class MentorshipService : IMentorshipService
             query = query.Where(m => m.MentorshipStatus == statusEnum);
 
         if (isPayoutEligible.HasValue)
+        {
+            // Self-healing: For staff viewing payout-eligible, ensure any "stuck" mentorships are recalculated
+            // (e.g. ones that were acknowledged before our recent auto-completion fix)
+            if (isPayoutEligible.Value && (string.Equals(userType, "Staff", StringComparison.OrdinalIgnoreCase) || string.Equals(userType, "Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                var potentiallyStuck = await _db.StartupAdvisorMentorships
+                    .Include(m => m.Sessions)
+                    .Include(m => m.Reports)
+                    .Where(m => !m.IsPayoutEligible && m.Reports.Any(r => r.StartupAcknowledgedAt != null))
+                    .ToListAsync();
+
+                if (potentiallyStuck.Any())
+                {
+                    foreach (var m in potentiallyStuck)
+                    {
+                        // Also force sessions to Completed if they have an acknowledged report
+                        foreach (var s in m.Sessions)
+                        {
+                            var acknowledgedReport = m.Reports.FirstOrDefault(r => r.SessionID == s.SessionID && r.StartupAcknowledgedAt != null);
+                            if (acknowledgedReport != null)
+                            {
+                                s.SessionStatus = SessionStatusValues.Completed;
+                                s.StartupConfirmedConductedAt ??= acknowledgedReport.StartupAcknowledgedAt;
+                                s.UpdatedAt = DateTime.UtcNow;
+                            }
+                        }
+                        RecalculateMentorshipStatus(m);
+                        RecalculatePayoutEligibility(m);
+                    }
+                    await _db.SaveChangesAsync();
+                }
+            }
             query = query.Where(m => m.IsPayoutEligible == isPayoutEligible.Value);
+        }
 
         query = query.OrderByDescending(m => m.CreatedAt);
 
@@ -272,6 +306,30 @@ public class MentorshipService : IMentorshipService
                 "You do not have access to this mentorship.");
 
         return ApiResponse<MentorshipDetailDto>.SuccessResponse(MapToDetailDto(mentorship, userType));
+    }
+
+    public async Task<ApiResponse<MentorshipDetailDto>> GetMentorshipBySessionIdAsync(int userId, string userType, int sessionId)
+    {
+        var session = await _db.MentorshipSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SessionID == sessionId);
+
+        if (session == null)
+            return ApiResponse<MentorshipDetailDto>.ErrorResponse("SESSION_NOT_FOUND", "Session not found.");
+
+        return await GetDetailAsync(userId, userType, session.MentorshipID);
+    }
+
+    public async Task<ApiResponse<MentorshipDetailDto>> GetMentorshipByReportIdAsync(int userId, string userType, int reportId)
+    {
+        var report = await _db.MentorshipReports
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.ReportID == reportId);
+
+        if (report == null)
+            return ApiResponse<MentorshipDetailDto>.ErrorResponse("REPORT_NOT_FOUND", "Mentorship report not found.");
+
+        return await GetDetailAsync(userId, userType, report.MentorshipID);
     }
 
     // ================================================================
@@ -702,6 +760,17 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<SessionDto>.ErrorResponse("MENTORSHIP_NOT_OWNED",
                 "You are not the advisor for this session's mentorship.");
 
+        // Guard: Cannot update session if mentorship or session is in a terminal or frozen state
+        var terminalMentorshipStatuses = new[] { MentorshipStatus.Completed, MentorshipStatus.InDispute, MentorshipStatus.Resolved, MentorshipStatus.Cancelled, MentorshipStatus.Rejected };
+        if (terminalMentorshipStatuses.Contains(session.Mentorship.MentorshipStatus))
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_MENTORSHIP_STATUS",
+                $"Cannot update session when mentorship status is {session.Mentorship.MentorshipStatus}.");
+
+        var frozenSessionStatuses = new[] { SessionStatusValues.InDispute, SessionStatusValues.Resolved, SessionStatusValues.Cancelled, SessionStatusValues.Completed };
+        if (frozenSessionStatuses.Contains(session.SessionStatus))
+            return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                $"Cannot update session when session status is {session.SessionStatus}.");
+
         if (request.SessionStatus != null && !SessionStatusValues.All.Contains(request.SessionStatus))
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"SessionStatus must be one of: {string.Join(", ", SessionStatusValues.All)}");
@@ -931,11 +1000,20 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<ReportDto>.ErrorResponse("SESSION_REQUIRED",
                 "SessionID is required when creating a report.");
 
-        var sessionExists = await _db.MentorshipSessions.AnyAsync(s =>
+        var session = await _db.MentorshipSessions.FirstOrDefaultAsync(s =>
             s.SessionID == request.SessionId.Value && s.MentorshipID == mentorshipId);
-        if (!sessionExists)
+        if (session == null)
             return ApiResponse<ReportDto>.ErrorResponse("SESSION_NOT_FOUND",
                 "Session not found or does not belong to this mentorship.");
+
+        // Guard: Cannot create report if session or mentorship is in dispute/resolved/cancelled
+        if (mentorship.MentorshipStatus == MentorshipStatus.InDispute || mentorship.MentorshipStatus == MentorshipStatus.Resolved || mentorship.MentorshipStatus == MentorshipStatus.Cancelled)
+            return ApiResponse<ReportDto>.ErrorResponse("INVALID_MENTORSHIP_STATUS", 
+                "Cannot submit report while mentorship is in dispute, resolved, or cancelled.");
+
+        if (session.SessionStatus == SessionStatusValues.InDispute || session.SessionStatus == SessionStatusValues.Resolved || session.SessionStatus == SessionStatusValues.Cancelled)
+            return ApiResponse<ReportDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                "Cannot submit report for a session that is in dispute, resolved, or cancelled.");
 
         // Guard: 1 active report (Draft or submitted) per session
         var existingActiveReport = await _db.MentorshipReports
@@ -1111,6 +1189,19 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<ReportDto>.ErrorResponse("REPORT_NOT_EDITABLE",
                 "Only Draft or NeedsMoreInfo reports can be updated via PATCH. For Failed reports, submit a new report via POST.");
 
+        // Guard: Cannot update report if session or mentorship is resolved/cancelled/disputed
+        if (mentorship.MentorshipStatus == MentorshipStatus.InDispute || mentorship.MentorshipStatus == MentorshipStatus.Resolved || mentorship.MentorshipStatus == MentorshipStatus.Cancelled)
+            return ApiResponse<ReportDto>.ErrorResponse("INVALID_MENTORSHIP_STATUS", 
+                "Cannot update report while mentorship is in dispute, resolved, or cancelled.");
+        
+        if (report.SessionID.HasValue)
+        {
+            var session = await _db.MentorshipSessions.FirstOrDefaultAsync(s => s.SessionID == report.SessionID.Value);
+            if (session != null && (session.SessionStatus == SessionStatusValues.InDispute || session.SessionStatus == SessionStatusValues.Resolved || session.SessionStatus == SessionStatusValues.Cancelled))
+                return ApiResponse<ReportDto>.ErrorResponse("INVALID_SESSION_STATUS",
+                    "Cannot update report for a session that is in dispute, resolved, or cancelled.");
+        }
+
         if (request.ReportSummary != null) report.ReportSummary = request.ReportSummary;
         if (request.DetailedFindings != null) report.DetailedFindings = request.DetailedFindings;
         if (request.Recommendations != null) report.Recommendations = request.Recommendations;
@@ -1214,6 +1305,17 @@ public class MentorshipService : IMentorshipService
         var now = DateTime.UtcNow;
         report.StartupAcknowledgedAt = now;
         report.UpdatedAt = now;
+
+        // Auto-complete session if it was Conducted or InDispute (acknowledgement implies acceptance)
+        if (report.Session != null && 
+            (report.Session.SessionStatus == SessionStatusValues.Conducted || 
+             report.Session.SessionStatus == SessionStatusValues.InDispute))
+        {
+            report.Session.SessionStatus = SessionStatusValues.Completed;
+            report.Session.UpdatedAt = now;
+            // Also update stats since it's now completed
+            await UpdateAdvisorStatsAsync(mentorshipId);
+        }
 
         // Recalculate payout eligibility
         var mentorshipFull = await _db.StartupAdvisorMentorships
@@ -1370,16 +1472,18 @@ public class MentorshipService : IMentorshipService
 
     private async Task<bool> IsParticipantOrStaff(int userId, string userType, StartupAdvisorMentorship mentorship)
     {
-        if (userType == "Staff" || userType == "Admin") return true;
+        if (string.Equals(userType, "Staff", StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(userType, "Admin", StringComparison.OrdinalIgnoreCase)) 
+            return true;
 
-        if (userType == "Startup")
+        if (string.Equals(userType, "Startup", StringComparison.OrdinalIgnoreCase))
         {
             var startup = await _db.Startups.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.UserID == userId);
             return startup != null && mentorship.StartupID == startup.StartupID;
         }
 
-        if (userType == "Advisor")
+        if (string.Equals(userType, "Advisor", StringComparison.OrdinalIgnoreCase))
         {
             var advisor = await _db.Advisors.AsNoTracking()
                 .FirstOrDefaultAsync(a => a.UserID == userId);
@@ -1449,10 +1553,10 @@ public class MentorshipService : IMentorshipService
         IsPayoutEligible = m.IsPayoutEligible,
         PayoutReleasedAt = m.PayoutReleasedAt,
         Sessions = m.Sessions.Select(s => MapSessionDto(s,
-            callerType == "Startup" && m.PaymentStatus != PaymentStatus.Completed)).ToList(),
-        Reports = (callerType == "Startup"
+            string.Equals(callerType, "Startup", StringComparison.OrdinalIgnoreCase) && m.PaymentStatus != PaymentStatus.Completed)).ToList(),
+        Reports = (string.Equals(callerType, "Startup", StringComparison.OrdinalIgnoreCase)
             ? m.Reports.Where(r => r.ReportReviewStatus == ReportReviewStatus.Passed)
-            : callerType is "Staff" or "Admin"
+            : (string.Equals(callerType, "Staff", StringComparison.OrdinalIgnoreCase) || string.Equals(callerType, "Admin", StringComparison.OrdinalIgnoreCase))
                 ? m.Reports.Where(r => r.ReportReviewStatus != ReportReviewStatus.Draft)
                 : m.Reports)  // Advisor sees all including own Drafts
             .OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt)
@@ -1575,7 +1679,7 @@ public class MentorshipService : IMentorshipService
         UpdatedAt = r.UpdatedAt,
         IsLatestForSession = r.SupersededByReportID == null,
         ReviewStatus = r.ReportReviewStatus.ToString(),
-        StaffReviewNote = callerType == "Startup" ? null : r.StaffReviewNote,
+        StaffReviewNote = string.Equals(callerType, "Startup", StringComparison.OrdinalIgnoreCase) ? null : r.StaffReviewNote,
         ReviewedAt = r.ReviewedAt,
         IssueReportDeadlineAt = r.SubmittedAt.HasValue ? r.SubmittedAt.Value.AddHours(24) : null,
         CanSubmitIssueReport = r.SubmittedAt.HasValue && DateTime.UtcNow <= r.SubmittedAt.Value.AddHours(24)
@@ -1774,6 +1878,16 @@ public class MentorshipService : IMentorshipService
         report.StaffReviewNote = request.Note;
         report.ReviewedAt = DateTime.UtcNow;
 
+        // Auto-complete session if report passed and already Conducted
+        if (newStatus == ReportReviewStatus.Passed && report.Session != null && report.Session.SessionStatus == SessionStatusValues.Conducted)
+        {
+            report.Session.SessionStatus = SessionStatusValues.Completed;
+            report.Session.MarkedByStaffID = staffUserId;
+            report.Session.MarkedAt = DateTime.UtcNow;
+            report.Session.UpdatedAt = DateTime.UtcNow;
+            await UpdateAdvisorStatsAsync(report.MentorshipID);
+        }
+
         RecalculatePayoutEligibility(report.Mentorship);
 
         await _db.SaveChangesAsync();
@@ -1914,6 +2028,8 @@ public class MentorshipService : IMentorshipService
         var session = await _db.MentorshipSessions
             .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
             .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
+            .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
             .FirstOrDefaultAsync(s => s.SessionID == sessionId);
 
         if (session == null || session.MentorshipID != mentorshipId)
@@ -1936,14 +2052,64 @@ public class MentorshipService : IMentorshipService
         session.MarkedAt = DateTime.UtcNow;
         session.UpdatedAt = DateTime.UtcNow;
 
+        // Link with IssueReports to show up in the Complaints & Disputes page
+        // A report could be linked to the Session, the Mentorship, or an AdvisorReport related to this session.
+        var issueReport = await _db.IssueReports
+            .FirstOrDefaultAsync(ir => (ir.RelatedEntityID == sessionId && ir.RelatedEntityType == "Session") ||
+                                       (ir.RelatedEntityID == session.MentorshipID && ir.RelatedEntityType == "Mentorship") ||
+                                       (ir.RelatedEntityType == "AdvisorReport" && _db.MentorshipReports.Any(mr => mr.ReportID == ir.RelatedEntityID && mr.SessionID == sessionId)));
+        
+        if (issueReport == null)
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("NO_EXISTING_REPORT", 
+                "Cannot open a dispute without an existing user-initiated issue report. Please ensure the user has reported this session or the entire mentorship.");
+
+        issueReport.Status = IssueReportStatus.Escalated;
+        issueReport.UpdatedAt = DateTime.UtcNow;
+        if (issueReport.AssignedToStaffID == null)
+            issueReport.AssignedToStaffID = staffUserId;
+
         RecalculateMentorshipStatus(session.Mentorship);
+
         RecalculatePayoutEligibility(session.Mentorship);
 
         await _db.SaveChangesAsync();
+
+        // Notify Startup and Advisor
+        var startupUserId = session.Mentorship.Startup?.UserID;
+        var advisorUserId = session.Mentorship.Advisor?.UserID;
+
+        if (startupUserId.HasValue)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startupUserId.Value,
+                NotificationType = "CONSULTING",
+                Title = "Phiên tư vấn bị tranh chấp",
+                Message = $"Phiên tư vấn #{sessionId} của bạn đã được chuyển sang trạng thái tranh chấp và đang được xem xét.",
+                RelatedEntityType = "MentorshipSession",
+                RelatedEntityId = sessionId,
+                ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+            });
+        }
+
+        if (advisorUserId.HasValue)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = advisorUserId.Value,
+                NotificationType = "CONSULTING",
+                Title = "Phiên tư vấn bị tranh chấp",
+                Message = $"Phiên tư vấn #{sessionId} với Startup '{session.Mentorship.Startup?.CompanyName}' đã bị khiếu nại và đang được xem xét.",
+                RelatedEntityType = "MentorshipSession",
+                RelatedEntityId = sessionId,
+                ActionUrl = $"/advisor/requests/{mentorshipId}"
+            });
+        }
+
         await _audit.LogAsync("STAFF_MARK_SESSION_DISPUTE", "MentorshipSession", sessionId, reason);
 
         return ApiResponse<SessionOversightResultDto>.SuccessResponse(
-            MapSessionOversightResult(session), "Session marked as in dispute.");
+            MapSessionOversightResult(session, session?.Mentorship), "Session marked as in dispute.");
     }
 
     // ================================================================
@@ -1953,35 +2119,258 @@ public class MentorshipService : IMentorshipService
     public async Task<ApiResponse<SessionOversightResultDto>> MarkSessionResolvedAsync(
         int staffUserId, int mentorshipId, int sessionId, ResolveDisputeRequest request)
     {
-        var session = await _db.MentorshipSessions
-            .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
-            .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
-            .FirstOrDefaultAsync(s => s.SessionID == sessionId);
+        try 
+        {
+            MentorshipSession? session = null;
+            StartupAdvisorMentorship? mentorship = null;
 
-        if (session == null || session.MentorshipID != mentorshipId)
-            return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_FOUND",
-                "Session not found.");
+            if (sessionId > 0)
+            {
+                session = await _db.MentorshipSessions
+                    .Include(s => s.Mentorship).ThenInclude(m => m.Sessions)
+                    .Include(s => s.Mentorship).ThenInclude(m => m.Reports)
+                    .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
+                    .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
+                    .FirstOrDefaultAsync(s => s.SessionID == sessionId);
 
-        if (session.SessionStatus != SessionStatusValues.InDispute)
-            return ApiResponse<SessionOversightResultDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
-                "Session must be InDispute to resolve.");
+                if (session == null || session.MentorshipID != mentorshipId)
+                    return ApiResponse<SessionOversightResultDto>.ErrorResponse("SESSION_NOT_FOUND",
+                        "Session not found.");
+                
+                mentorship = session.Mentorship;
+            }
+            else
+            {
+                mentorship = await _db.StartupAdvisorMentorships
+                    .Include(m => m.Sessions)
+                    .Include(m => m.Reports)
+                    .Include(m => m.Startup)
+                    .Include(m => m.Advisor)
+                    .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
+                    
+                if (mentorship == null)
+                    return ApiResponse<SessionOversightResultDto>.ErrorResponse("MENTORSHIP_NOT_FOUND",
+                        "Mentorship not found.");
+            }
 
-        session.SessionStatus = request.RestoreCompleted
-            ? SessionStatusValues.Completed
-            : SessionStatusValues.Resolved;
-        session.ResolutionNote = request.Resolution;
-        session.MarkedByStaffID = staffUserId;
-        session.MarkedAt = DateTime.UtcNow;
-        session.UpdatedAt = DateTime.UtcNow;
+            if (mentorship == null)
+                return ApiResponse<SessionOversightResultDto>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Mentorship not found.");
 
-        RecalculateMentorshipStatus(session.Mentorship);
-        RecalculatePayoutEligibility(session.Mentorship);
+            bool validStatus = false;
+            if (session != null && (session.SessionStatus == SessionStatusValues.InDispute || session.SessionStatus == SessionStatusValues.Resolved)) validStatus = true;
+            if (mentorship.MentorshipStatus == MentorshipStatus.InDispute || mentorship.MentorshipStatus == MentorshipStatus.Resolved) validStatus = true;
 
-        await _db.SaveChangesAsync();
-        await _audit.LogAsync("STAFF_RESOLVE_SESSION", "MentorshipSession", sessionId, request.Resolution);
+            if (!validStatus)
+                return ApiResponse<SessionOversightResultDto>.ErrorResponse("INVALID_STATUS_TRANSITION",
+                    "Session or Mentorship must be InDispute or already Resolved to update resolution.");
 
-        return ApiResponse<SessionOversightResultDto>.SuccessResponse(
-            MapSessionOversightResult(session), "Dispute resolved.");
+            // Guard: Must be paid to refund
+            if (request.RefundToStartup && mentorship.PaymentStatus != PaymentStatus.Completed)
+                return ApiResponse<SessionOversightResultDto>.ErrorResponse("PAYMENT_NOT_COMPLETED",
+                    "Cannot refund — startup has not completed payment for this mentorship.");
+
+            // Guard: Cannot refund if already refunded
+            if (request.RefundToStartup && mentorship.RefundedAt != null)
+                return ApiResponse<SessionOversightResultDto>.ErrorResponse("ALREADY_REFUNDED",
+                    "A refund has already been issued for this mentorship.");
+
+            // Guard: Cannot refund if payout already released to advisor
+            if (request.RefundToStartup && mentorship.PayoutReleasedAt != null)
+                return ApiResponse<SessionOversightResultDto>.ErrorResponse("PAYOUT_ALREADY_RELEASED",
+                    "Cannot refund — payout has already been released to advisor.");
+
+            if (session != null)
+            {
+                session.ResolutionNote = request.Resolution;
+                session.MarkedByStaffID = staffUserId;
+                session.MarkedAt = DateTime.UtcNow;
+                session.UpdatedAt = DateTime.UtcNow;
+
+                if (request.RestoreCompleted)
+                {
+                    session.SessionStatus = SessionStatusValues.Completed;
+                }
+                else
+                {
+                    session.SessionStatus = SessionStatusValues.Resolved;
+                }
+            }
+            else 
+            {
+                // If resolving at mentorship level, update all sessions that are currently in dispute or conducted
+                var sessionsToUpdate = mentorship.Sessions
+                    .Where(s => s.SessionStatus == SessionStatusValues.InDispute || s.SessionStatus == SessionStatusValues.Conducted)
+                    .ToList();
+                
+                foreach (var s in sessionsToUpdate)
+                {
+                    s.SessionStatus = request.RestoreCompleted ? SessionStatusValues.Completed : SessionStatusValues.Resolved;
+                    s.ResolutionNote = request.Resolution;
+                    s.MarkedByStaffID = staffUserId;
+                    s.MarkedAt = DateTime.UtcNow;
+                    s.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            if (request.RestoreCompleted)
+            {
+                // Automatically release payout to advisor
+                await ReleasePayoutAsync(staffUserId, mentorship.MentorshipID);
+                
+                // For rejections, we recalculate to see if it should be InProgress or Completed
+                RecalculateMentorshipStatus(mentorship);
+            }
+
+            // Refund logic
+            if (request.RefundToStartup)
+            {
+                var refundAmount = mentorship.SessionAmount; // Refund the whole paid amount
+
+                var wallet = await _db.StartupWallets.FirstOrDefaultAsync(w => w.StartupId == mentorship.StartupID);
+                if (wallet == null)
+                {
+                    wallet = new StartupWallet
+                    {
+                        StartupId = mentorship.StartupID,
+                        CreatedAt = DateTime.UtcNow,
+                        Balance = 0,
+                        TotalRefunded = 0,
+                        TotalWithdrawn = 0
+                    };
+                    _db.StartupWallets.Add(wallet);
+                }
+
+                var tx = new WalletTransaction
+                {
+                    StartupWallet = wallet,
+                    MentorshipID = mentorship.MentorshipID,
+                    Amount = refundAmount,
+                    Type = TransactionType.Refund,
+                    Status = TransactionStatus.Completed,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.WalletTransactions.Add(tx);
+
+                wallet.Balance += refundAmount;
+                wallet.TotalRefunded += refundAmount;
+
+                // Mark as refunded
+                mentorship.RefundedAt = DateTime.UtcNow;
+
+                // Close all remaining sessions since 100% refund issued
+                var allSessions = mentorship.Sessions.ToList();
+                foreach (var s in allSessions)
+                {
+                    if (s.SessionStatus != SessionStatusValues.Cancelled && s.SessionStatus != SessionStatusValues.Completed)
+                    {
+                        s.SessionStatus = SessionStatusValues.Resolved;
+                        s.ResolutionNote = "Mentorship fully refunded: " + request.Resolution;
+                        s.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            // ALWAYS mark mentorship as Resolved if we are refunding or if it's currently InDispute
+            // OR if a specific session was in dispute and now it's being resolved
+            if (request.RefundToStartup || 
+                mentorship.MentorshipStatus == MentorshipStatus.InDispute || 
+                (session != null && session.SessionStatus == SessionStatusValues.InDispute))
+            {
+                mentorship.MentorshipStatus = MentorshipStatus.Resolved;
+                mentorship.UpdatedAt = DateTime.UtcNow;
+            }
+
+            RecalculatePayoutEligibility(mentorship);
+
+            // Update related IssueReport status
+            IssueReport? relatedReport = null;
+            if (session != null)
+            {
+                relatedReport = await _db.IssueReports
+                    .FirstOrDefaultAsync(ir => ir.RelatedEntityID == sessionId && ir.RelatedEntityType == "Session");
+            }
+            
+            if (relatedReport == null)
+            {
+                // Also try matching by mentorshipId (Mentorship or Payment disputes)
+                relatedReport = await _db.IssueReports
+                    .FirstOrDefaultAsync(ir => ir.RelatedEntityID == mentorshipId && 
+                                               (ir.RelatedEntityType == "Mentorship" || ir.RelatedEntityType == "Payment"));
+            }
+            if (relatedReport == null && mentorship.Reports != null && mentorship.Reports.Any())
+            {
+                // Also try matching by AdvisorReport disputes linked to this mentorship
+                var reportIds = mentorship.Reports.Select(r => r.ReportID).ToList();
+                if (reportIds.Any())
+                {
+                    var issueReports = await _db.IssueReports
+                        .Where(ir => ir.RelatedEntityType == "AdvisorReport" && ir.RelatedEntityID != null)
+                        .ToListAsync();
+                        
+                    relatedReport = issueReports
+                        .FirstOrDefault(ir => ir.RelatedEntityID.HasValue && reportIds.Contains(ir.RelatedEntityID.Value));
+                }
+            }
+            if (relatedReport != null)
+            {
+                relatedReport.Status = request.RefundToStartup
+                    ? IssueReportStatus.Resolved
+                    : IssueReportStatus.Dismissed;
+                relatedReport.StaffNote = request.Resolution;
+                relatedReport.AssignedToStaffID = staffUserId;
+                relatedReport.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _db.SaveChangesAsync();
+
+            // Notify Startup and Advisor
+            var startupUserId = mentorship.Startup?.UserID;
+            var advisorUserId = mentorship.Advisor?.UserID;
+            var resolutionType = request.RestoreCompleted ? "đã được khôi phục hoàn thành" : (request.RefundToStartup ? "đã hoàn tiền cho Startup" : "đã được giải quyết");
+
+            if (startupUserId.HasValue)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = startupUserId.Value,
+                    NotificationType = "CONSULTING",
+                    Title = "Tranh chấp đã được xử lý",
+                    Message = session != null 
+                        ? $"Tranh chấp tại phiên tư vấn #{sessionId} đã được xử lý: {resolutionType}."
+                        : $"Tranh chấp yêu cầu tư vấn #{mentorshipId} đã được xử lý: {resolutionType}.",
+                    RelatedEntityType = "MentorshipSession",
+                    RelatedEntityId = session?.SessionID ?? mentorshipId,
+                    ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+                });
+            }
+
+            if (advisorUserId.HasValue)
+            {
+                await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+                {
+                    UserId = advisorUserId.Value,
+                    NotificationType = "CONSULTING",
+                    Title = "Tranh chấp đã được xử lý",
+                    Message = session != null 
+                        ? $"Tranh chấp tại phiên tư vấn #{sessionId} của bạn đã được xử lý: {resolutionType}."
+                        : $"Tranh chấp yêu cầu tư vấn #{mentorshipId} của bạn đã được xử lý: {resolutionType}.",
+                    RelatedEntityType = "MentorshipSession",
+                    RelatedEntityId = session?.SessionID ?? mentorshipId,
+                    ActionUrl = $"/advisor/requests/{mentorshipId}"
+                });
+            }
+
+            await _audit.LogAsync("STAFF_RESOLVE_DISPUTE", "Mentorship", mentorshipId, 
+                $"SessionId: {sessionId}, Resolution: {request.Resolution}, Refund: {request.RefundToStartup}");
+
+            return ApiResponse<SessionOversightResultDto>.SuccessResponse(
+                MapSessionOversightResult(session, mentorship), "Dispute resolved.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<SessionOversightResultDto>.ErrorResponse("MARK_RESOLVED_ERROR", 
+                $"An error occurred in MarkSessionResolvedAsync: {ex.Message}. Inner: {ex.InnerException?.Message}");
+        }
     }
 
     // ================================================================
@@ -2002,6 +2391,11 @@ public class MentorshipService : IMentorshipService
         if (!mentorship.IsPayoutEligible)
             return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("NOT_ELIGIBLE",
                 "Mentorship is not yet eligible for payout.");
+
+        // Guard: Cannot release payout if already refunded
+        if (mentorship.RefundedAt != null)
+            return ApiResponse<ReleasePayoutResultDto>.ErrorResponse("ALREADY_REFUNDED",
+                "Cannot release payout — this mentorship has been refunded to the startup.");
 
         // Guard idempotency — tránh credit 2 lần nếu staff bấm 2 lần
         if (mentorship.PayoutReleasedAt != null)
@@ -2026,7 +2420,7 @@ public class MentorshipService : IMentorshipService
         // Tạo WalletTransaction ghi nhận khoản deposit
         var transaction = new WalletTransaction
         {
-            WalletId = wallet.WalletId,
+            Wallet = wallet,
             MentorshipID = mentorshipId,
             Amount = amount,
             Type = TransactionType.Deposit,
@@ -2061,6 +2455,7 @@ public class MentorshipService : IMentorshipService
 
     private static void RecalculateMentorshipStatus(StartupAdvisorMentorship mentorship)
     {
+        if (mentorship.Sessions == null) return;
         var sessions = mentorship.Sessions
             .Where(s => s.SessionStatus != SessionStatusValues.Cancelled
                       && s.SessionStatus != SessionStatusValues.ProposedByStartup
@@ -2068,6 +2463,12 @@ public class MentorshipService : IMentorshipService
             .ToList();
 
         if (!sessions.Any()) return;
+
+        if (mentorship.MentorshipStatus == MentorshipStatus.Resolved || mentorship.MentorshipStatus == MentorshipStatus.Cancelled)
+        {
+            // Do not recalculate if already in a terminal state that isn't Completed
+            return;
+        }
 
         if (sessions.Any(s => s.SessionStatus == SessionStatusValues.InDispute))
         {
@@ -2097,6 +2498,15 @@ public class MentorshipService : IMentorshipService
 
     private static void RecalculatePayoutEligibility(StartupAdvisorMentorship mentorship)
     {
+        if (mentorship.Sessions == null || mentorship.Reports == null) return;
+
+        // If already refunded, it's never eligible for payout
+        if (mentorship.RefundedAt != null)
+        {
+            mentorship.IsPayoutEligible = false;
+            return;
+        }
+
         var activeSessions = mentorship.Sessions
             .Where(s => s.SessionStatus != SessionStatusValues.Cancelled
                       && s.SessionStatus != SessionStatusValues.ProposedByStartup
@@ -2106,7 +2516,7 @@ public class MentorshipService : IMentorshipService
         var allSessionsCompleted = activeSessions.Any()
             && activeSessions.All(s => s.SessionStatus == SessionStatusValues.Completed);
 
-        var allStartupConfirmed = activeSessions.All(s => s.StartupConfirmedConductedAt != null);
+        var allStartupConfirmed = activeSessions.All(s => s.StartupConfirmedConductedAt != null || s.SessionStatus == SessionStatusValues.Completed);
 
         var currentReports = mentorship.Reports
             .Where(r => r.SupersededByReportID == null);
@@ -2128,34 +2538,44 @@ public class MentorshipService : IMentorshipService
     // HELPER: Map Session Oversight Result
     // ================================================================
 
-    private static SessionOversightResultDto MapSessionOversightResult(MentorshipSession session) => new()
+    private static SessionOversightResultDto MapSessionOversightResult(MentorshipSession? session, StartupAdvisorMentorship? mentorship = null)
     {
-        SessionID = session.SessionID,
-        SessionStatus = session.SessionStatus ?? string.Empty,
-        DisputeReason = session.DisputeReason,
-        ResolutionNote = session.ResolutionNote,
-        MentorshipID = session.MentorshipID,
-        MentorshipStatus = session.Mentorship.MentorshipStatus.ToString(),
-        IsPayoutEligible = session.Mentorship.IsPayoutEligible,
-        MarkedByStaffID = session.MarkedByStaffID,
-        MarkedAt = session.MarkedAt
-    };
+        var targetMentorship = session?.Mentorship ?? mentorship;
+        if (targetMentorship == null) return new SessionOversightResultDto();
+
+        return new SessionOversightResultDto
+        {
+            SessionID = session?.SessionID ?? 0,
+            SessionStatus = session?.SessionStatus ?? string.Empty,
+            DisputeReason = session?.DisputeReason,
+            ResolutionNote = session?.ResolutionNote,
+            MentorshipID = targetMentorship.MentorshipID,
+            MentorshipStatus = targetMentorship.MentorshipStatus.ToString(),
+            IsPayoutEligible = targetMentorship.IsPayoutEligible,
+            MarkedByStaffID = session?.MarkedByStaffID,
+            MarkedAt = session?.MarkedAt
+        };
+    }
+    // ================================================================
+    // HELPER: Update Advisor Stats (SVC-10)
+    // ================================================================
 
     private async Task UpdateAdvisorStatsAsync(int mentorshipId)
     {
-        var m = await _db.StartupAdvisorMentorships
-            .AsNoTracking()
+        var mentorship = await _db.StartupAdvisorMentorships
+            .Include(m => m.Advisor)
             .FirstOrDefaultAsync(m => m.MentorshipID == mentorshipId);
-        if (m == null) return;
 
-        var advisor = await _db.Advisors.FirstOrDefaultAsync(a => a.AdvisorID == m.AdvisorID);
-        if (advisor != null)
-        {
-            advisor.CompletedSessions = await _db.MentorshipSessions
-                .CountAsync(s => s.Mentorship.AdvisorID == advisor.AdvisorID
-                              && s.SessionStatus == SessionStatusValues.Completed);
-            await _db.SaveChangesAsync();
-        }
+        if (mentorship == null || mentorship.Advisor == null) return;
+
+        var advisor = mentorship.Advisor;
+
+        // Count all completed sessions for this advisor across all mentorships
+        advisor.CompletedSessions = await _db.MentorshipSessions
+            .CountAsync(s => s.Mentorship.AdvisorID == advisor.AdvisorID
+                          && s.SessionStatus == SessionStatusValues.Completed);
+
+        await _db.SaveChangesAsync();
     }
 }
 

@@ -103,8 +103,18 @@ namespace AISEP.WebAPI.Controllers
         {
             var result = await _paymentService.CallBack(Request);
             return Ok(result);
-            //return Ok("Ok");
-            
+        }
+
+        /// <summary>
+        /// Manually synchronize payment status with PayOS (useful for local dev or missing webhooks)
+        /// </summary>
+        [HttpPost("sync/{orderCode}")]
+        [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<ApiResponse<string>>> Sync(long orderCode, [FromQuery] int? mentorshipId)
+        {
+            var result = await _paymentService.SyncPaymentStatusAsync(orderCode, mentorshipId);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
         }
 
         /// <summary>

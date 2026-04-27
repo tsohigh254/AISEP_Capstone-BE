@@ -335,8 +335,9 @@ public class ReviewReportRequest
 /// <summary>Resolve dispute request (session-level).</summary>
 public class ResolveDisputeRequest
 {
-    public string Resolution { get; set; } = null!;
+    public string Resolution { get; set; } = string.Empty;
     public bool RestoreCompleted { get; set; }
+    public bool RefundToStartup { get; set; }
 }
 
 /// <summary>Staff mark session completed request.</summary>

@@ -27,4 +27,7 @@ public interface IIssueReportService
 
     /// <summary>Staff/Admin updates status and note.</summary>
     Task<ApiResponse<IssueReportDetailDto>> UpdateStatusAsync(int staffUserId, int issueReportId, UpdateIssueReportStatusRequest request);
+
+    /// <summary>Staff escalates an issue to a formal dispute.</summary>
+    Task<ApiResponse<IssueReportDetailDto>> EscalateToDisputeAsync(int staffUserId, int issueReportId);
 }

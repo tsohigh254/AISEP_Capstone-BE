@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260426132857_AddStartupWalletAndRefundFlow")]
+    partial class AddStartupWalletAndRefundFlow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -350,9 +353,6 @@ namespace AISEP.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("CorrelationId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("EvaluatedDocumentTypes")
                         .HasColumnType("text");
 
                     b.Property<string>("FailureReason")
@@ -1057,9 +1057,7 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<short>("Kind")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)2);
+                        .HasColumnType("smallint");
 
                     b.Property<string>("StorageKey")
                         .HasColumnType("text");
@@ -1125,14 +1123,15 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<short>("ResultLabel")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)0);
+                        .HasColumnType("smallint");
 
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("ReviewedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ReviewedByUserUserID")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("SubmittedAt")
@@ -1154,19 +1153,13 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<short>("WorkflowStatus")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((short)1);
+                        .HasColumnType("smallint");
 
                     b.HasKey("SubmissionID");
 
-                    b.HasIndex("ReviewedBy");
+                    b.HasIndex("InvestorID");
 
-                    b.HasIndex("InvestorID", "IsActive")
-                        .HasFilter("\"IsActive\" = true");
-
-                    b.HasIndex("InvestorID", "Version")
-                        .IsUnique();
+                    b.HasIndex("ReviewedByUserUserID");
 
                     b.ToTable("InvestorKycSubmissions");
                 });
@@ -2446,9 +2439,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<string>("PreferredFormat")
                         .HasColumnType("text");
 
-                    b.Property<DateTime?>("RefundedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime?>("RejectedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2709,16 +2699,10 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ScoreID"));
 
-                    b.Property<float?>("BusinessPlanOverallScore")
-                        .HasColumnType("real");
-
                     b.Property<DateTime>("CalculatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("ConfigID")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("EvaluationRunID")
                         .HasColumnType("integer");
 
                     b.Property<float>("FinancialScore")
@@ -2731,9 +2715,6 @@ namespace AISEP.Infrastructure.Migrations
                         .HasColumnType("real");
 
                     b.Property<float>("OverallScore")
-                        .HasColumnType("real");
-
-                    b.Property<float?>("PitchDeckOverallScore")
                         .HasColumnType("real");
 
                     b.Property<float>("ProductScore")
@@ -3419,8 +3400,7 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.HasOne("AISEP.Domain.Entities.User", "ReviewedByUser")
                         .WithMany()
-                        .HasForeignKey("ReviewedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("ReviewedByUserUserID");
 
                     b.Navigation("Investor");
 

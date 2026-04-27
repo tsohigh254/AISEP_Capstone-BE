@@ -317,7 +317,8 @@ public enum InvestorKycEvidenceKind : short
 public enum TransactionType : short
 {
     Deposit = 0,    // Tiền từ session
-    Withdrawal = 1  // Rút tiền
+    Withdrawal = 1, // Rút tiền
+    Refund = 2      // Hoàn tiền cho Startup (từ tranh chấp)
 }
 
 public enum PaymentStatus : short
@@ -403,7 +404,8 @@ public enum IssueReportStatus : short
     New         = 0,
     UnderReview = 1,
     Resolved    = 2,
-    Dismissed   = 3
+    Dismissed   = 3,
+    Escalated   = 4
 }
 
 // ───────────────────────── Readiness ─────────────────────────

@@ -96,8 +96,17 @@ namespace AISEP.Infrastructure.Services
                 mentorship.PaidAt = DateTime.UtcNow;
                 mentorship.UpdatedAt = DateTime.UtcNow;
 
+                // Also update mentorship status to InProgress after payment
+                if (mentorship.MentorshipStatus == MentorshipStatus.Accepted || mentorship.MentorshipStatus == MentorshipStatus.Requested)
+                {
+                    mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+                    mentorship.InProgressAt = DateTime.UtcNow;
+                }
+
                 _context.StartupAdvisorMentorships.Update(mentorship);
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Successfully updated Mentorship {Id} to PaymentStatus.Completed and MentorshipStatus.InProgress via Webhook", mentorship.MentorshipID);
 
                 return ApiResponse<string>.SuccessResponse("Webhook processed successfully for mentorship");
             }
@@ -260,6 +269,91 @@ namespace AISEP.Infrastructure.Services
             await _context.SaveChangesAsync();
 
             return ApiResponse<string>.SuccessResponse("CASH_OUT_SUCCESSFULLY", "Cash out successfully");
+        }
+
+        public async Task<ApiResponse<string>> SyncPaymentStatusAsync(long orderCode, int? mentorshipId = null)
+        {
+            _logger.LogInformation("Syncing payment status for OrderCode: {OrderCode}, MentorshipID: {MentorshipId}", orderCode, mentorshipId);
+            try
+            {
+                var paymentInfo = await _orderClient.PaymentRequests.GetAsync(orderCode);
+                if (paymentInfo == null)
+                {
+                    _logger.LogWarning("Payment info not found on PayOS for OrderCode: {OrderCode}", orderCode);
+                    return ApiResponse<string>.ErrorResponse("PAYMENT_NOT_FOUND", "Payment information not found on PayOS.");
+                }
+
+                _logger.LogInformation("PayOS Status for OrderCode {OrderCode}: {Status}", orderCode, paymentInfo.Status);
+
+                if (!string.Equals(paymentInfo.Status.ToString(), "PAID", StringComparison.OrdinalIgnoreCase))
+                    return ApiResponse<string>.ErrorResponse("PAYMENT_NOT_PAID", $"Payment status is {paymentInfo.Status}");
+
+                // 1. Check Mentorship
+                // Try to find by MentorshipId first (most reliable), then by TransactionCode
+                var mentorship = await _context.StartupAdvisorMentorships
+                    .FirstOrDefaultAsync(m => (mentorshipId.HasValue && m.MentorshipID == mentorshipId.Value) 
+                                           || m.TransactionCode == (int)orderCode);
+
+                if (mentorship != null)
+                {
+                    _logger.LogInformation("Found mentorship {Id} for sync. Current Status: {Status}, Payment: {Payment}", 
+                        mentorship.MentorshipID, mentorship.MentorshipStatus, mentorship.PaymentStatus);
+
+                    if (mentorship.PaymentStatus == PaymentStatus.Completed)
+                        return ApiResponse<string>.SuccessResponse("Mentorship already marked as paid.");
+
+                    var sessionAmount = (decimal)paymentInfo.Amount;
+                    var platformFeeAmount = Math.Round(sessionAmount * PLATFORM_FEE_PERCENTAGE / 100, 2);
+                    var actualAmount = sessionAmount - platformFeeAmount;
+
+                    mentorship.SessionAmount = sessionAmount;
+                    mentorship.PlatformFeeAmount = platformFeeAmount;
+                    mentorship.ActualAmount = actualAmount;
+                    mentorship.PaymentStatus = PaymentStatus.Completed;
+                    mentorship.PaidAt = DateTime.UtcNow;
+                    mentorship.UpdatedAt = DateTime.UtcNow;
+
+                    if (mentorship.MentorshipStatus == MentorshipStatus.Accepted || mentorship.MentorshipStatus == MentorshipStatus.Requested)
+                    {
+                        mentorship.MentorshipStatus = MentorshipStatus.InProgress;
+                        mentorship.InProgressAt = DateTime.UtcNow;
+                    }
+
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Mentorship {Id} sync completed successfully.", mentorship.MentorshipID);
+                    return ApiResponse<string>.SuccessResponse("Mentorship payment synchronized successfully.");
+                }
+
+                // 2. Check Subscription
+                var subPayment = await _context.StartupSubscriptionPayments
+                    .Include(p => p.Startup)
+                    .FirstOrDefaultAsync(p => p.TransactionCode == (int)orderCode);
+
+                if (subPayment != null)
+                {
+                    if (subPayment.PaymentStatus == PaymentStatus.Completed)
+                        return ApiResponse<string>.SuccessResponse("Subscription already marked as paid.");
+
+                    subPayment.PaymentStatus = PaymentStatus.Completed;
+                    subPayment.PaidAt = DateTime.UtcNow;
+
+                    var startup = subPayment.Startup;
+                    startup.SubscriptionPlan = subPayment.TargetPlan;
+                    startup.SubscriptionEndDate = DateTime.UtcNow.AddDays(30);
+
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Subscription payment for Startup {Id} sync completed successfully.", startup.StartupID);
+                    return ApiResponse<string>.SuccessResponse("Subscription payment synchronized successfully.");
+                }
+
+                _logger.LogWarning("No record found in DB for OrderCode: {OrderCode}", orderCode);
+                return ApiResponse<string>.ErrorResponse("TRANSACTION_NOT_FOUND", "Transaction code not found in our database.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error synchronizing payment status for order {OrderCode}", orderCode);
+                return ApiResponse<string>.ErrorResponse("SYNC_ERROR", ex.Message);
+            }
         }
 
         public async Task<PayoutAccountInfo> GetAccountBalance()

@@ -33,6 +33,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentBlockchainProof> DocumentBlockchainProofs => Set<DocumentBlockchainProof>();
     public DbSet<StartupSubscriptionPayment> StartupSubscriptionPayments => Set<StartupSubscriptionPayment>();
+    public DbSet<StartupWallet> StartupWallets => Set<StartupWallet>();
+
 
     // Advisor
     public DbSet<Advisor> Advisors => Set<Advisor>();
@@ -228,7 +230,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AdvisorIndustryFocus>().HasKey(aif => aif.IndustryFocusID);
         modelBuilder.Entity<AdvisorTestimonial>().HasKey(at => at.TestimonialID);
         modelBuilder.Entity<AdvisorWallet>().HasKey(aw => aw.WalletId);
+        modelBuilder.Entity<StartupWallet>().HasKey(sw => sw.WalletId);
         modelBuilder.Entity<WalletTransaction>().HasKey(t => t.TransactionID);
+
 
         // Investor
         modelBuilder.Entity<Investor>().HasKey(i => i.InvestorID);
@@ -562,6 +566,21 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(t => t.MentorshipID)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // StartupWallet - WalletTransaction (1-many)
+        modelBuilder.Entity<WalletTransaction>()
+            .HasOne(t => t.StartupWallet)
+            .WithMany(w => w.Transactions)
+            .HasForeignKey(t => t.StartupWalletId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Startup - StartupWallet (1-1)
+        modelBuilder.Entity<Startup>()
+            .HasOne<StartupWallet>()
+            .WithOne(w => w.Startup)
+            .HasForeignKey<StartupWallet>(w => w.StartupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
 
         // Incident relationships
         modelBuilder.Entity<Incident>()

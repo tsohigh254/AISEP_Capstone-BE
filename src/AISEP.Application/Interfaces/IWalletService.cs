@@ -12,8 +12,9 @@ namespace AISEP.Application.Interfaces
     public interface IWalletService
     {
         public Task<ApiResponse<WalletDto>> GetWalletByAdvisorAsync(int userId);
-        public Task<ApiResponse<PagedResponse<TransactionDto>>> GetTransactionsAsync(int walletId, WalletTransactionQueryParams transactionQueryParams);
-        public Task<ApiResponse<WalletDto>> UpdateBankInfoAsync(int userId, UpdateBankInfoDto request);
-        public Task<ApiResponse<WalletDto>> CreateWalletAsync(int userId, CreateWalletDto request);
+        public Task<ApiResponse<WalletDto>> GetWalletByStartupAsync(int userId);
+        public Task<ApiResponse<PagedResponse<TransactionDto>>> GetTransactionsAsync(int walletId, string userType, WalletTransactionQueryParams transactionQueryParams);
+        public Task<ApiResponse<WalletDto>> UpdateBankInfoAsync(int userId, string userType, UpdateBankInfoDto request);
+        public Task<ApiResponse<WalletDto>> CreateWalletAsync(int userId, string userType, CreateWalletDto request);
     }
 }
