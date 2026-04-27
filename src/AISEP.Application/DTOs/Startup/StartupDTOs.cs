@@ -119,6 +119,16 @@ public class ToggleVisibilityRequest
     public bool IsVisible { get; set; }
 }
 
+public class ToggleAiInsightVisibilityRequest
+{
+    public bool AllowInvestorAiInsight { get; set; }
+}
+
+public class AiInsightVisibilityDto
+{
+    public bool AllowInvestorAiInsight { get; set; }
+}
+
 // ========== RESPONSE DTOs ==========
 
 /// <summary>Full profile for startup owner (/me endpoint)</summary>
@@ -158,6 +168,7 @@ public class StartupMeDto
     public string? ProblemStatement { get; set; }
     public string? SolutionSummary { get; set; }
     public bool IsVisible { get; set; }
+    public bool AllowInvestorAiInsight { get; set; }
     public List<string> CurrentNeeds { get; set; } = new();
     public string? MetricSummary { get; set; }
     public string? TeamSize { get; set; }
@@ -222,6 +233,7 @@ public class StartupPublicDto
     public string? ContactPhone { get; set; }
     public string? TeamSize { get; set; }
     public double? AiScore { get; set; }
+    public bool AllowInvestorAiInsight { get; set; }
 
     /// <summary>
     /// Mã đăng ký doanh nghiệp từ KYC đã được duyệt (Approved).

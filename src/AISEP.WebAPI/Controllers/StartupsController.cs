@@ -138,6 +138,28 @@ public class StartupsController : ControllerBase
         return result.ToActionResult();
     }
 
+    [HttpGet("me/ai-insight-visibility")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AiInsightVisibilityDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AiInsightVisibilityDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAiInsightVisibility()
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.GetAiInsightVisibilityAsync(userId);
+        return result.ToActionResult();
+    }
+
+    [HttpPut("me/ai-insight-visibility")]
+    [Authorize(Policy = "StartupOnly")]
+    [ProducesResponseType(typeof(ApiResponse<AiInsightVisibilityDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AiInsightVisibilityDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleAiInsightVisibility([FromBody] ToggleAiInsightVisibilityRequest request)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _startupService.ToggleAiInsightVisibilityAsync(userId, request.AllowInvestorAiInsight);
+        return result.ToActionResult();
+    }
+
     // ================================================================
     // KYC / VERIFICATION ENDPOINTS
     // ================================================================
