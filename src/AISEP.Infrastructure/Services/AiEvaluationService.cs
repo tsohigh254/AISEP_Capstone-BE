@@ -648,6 +648,61 @@ public class AiEvaluationService : IAiEvaluationService
             ? new List<string>()
             : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
+    private sealed class SourceAvailability
+    {
+        public bool ShouldFetchPitchDeck { get; init; }
+        public bool ShouldFetchBusinessPlan { get; init; }
+    }
+
+    private async Task<SourceAvailability> ResolveSourceAvailabilityAsync(AiEvaluationRun run)
+    {
+        var evaluatedTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes);
+        var fallbackPitchDeck = evaluatedTypes.Contains("pitch_deck", StringComparer.OrdinalIgnoreCase);
+        var fallbackBusinessPlan = evaluatedTypes.Contains("business_plan", StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var status = await _pythonClient.GetEvaluationStatusAsync(run.PythonRunId, run.CorrelationId);
+            var mode = (status.EvaluationMode ?? string.Empty).Trim().ToLowerInvariant();
+
+            return mode switch
+            {
+                "pitch_deck_only" => new SourceAvailability
+                {
+                    ShouldFetchPitchDeck = status.HasPitchDeckResult,
+                    ShouldFetchBusinessPlan = false
+                },
+                "business_plan_only" => new SourceAvailability
+                {
+                    ShouldFetchPitchDeck = false,
+                    ShouldFetchBusinessPlan = status.HasBusinessPlanResult
+                },
+                "combined" => new SourceAvailability
+                {
+                    ShouldFetchPitchDeck = status.HasPitchDeckResult,
+                    ShouldFetchBusinessPlan = status.HasBusinessPlanResult
+                },
+                _ => new SourceAvailability
+                {
+                    ShouldFetchPitchDeck = fallbackPitchDeck || status.HasPitchDeckResult,
+                    ShouldFetchBusinessPlan = fallbackBusinessPlan || status.HasBusinessPlanResult
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex,
+                "Failed to resolve evaluation source availability from status for run {RunId}. Falling back to evaluated document types.",
+                run.Id);
+
+            return new SourceAvailability
+            {
+                ShouldFetchPitchDeck = fallbackPitchDeck,
+                ShouldFetchBusinessPlan = fallbackBusinessPlan
+            };
+        }
+    }
+
     private static bool HasEvaluationAccess(Startup? startup, int currentUserId, string? currentUserType)
     {
         if (currentUserId == 0) return true;
@@ -719,30 +774,37 @@ public class AiEvaluationService : IAiEvaluationService
     {
         float? pdScore = null, bpScore = null;
         object? pdReportObj = null, bpReportObj = null;
+        var availability = await ResolveSourceAvailabilityAsync(run);
 
-        try
+        if (availability.ShouldFetchPitchDeck)
         {
-            var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
-            if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null)
+            try
             {
-                pdReportObj = pdReport;
-                if (pdReport.OverallResult.HasValue && pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
-                    pdScore = (float)s.GetDouble();
+                var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
+                if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null)
+                {
+                    pdReportObj = pdReport;
+                    if (pdReport.OverallResult.HasValue && pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
+                        pdScore = (float)s.GetDouble();
+                }
             }
+            catch { /* PD not available */ }
         }
-        catch { /* PD not available */ }
 
-        try
+        if (availability.ShouldFetchBusinessPlan)
         {
-            var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
-            if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null)
+            try
             {
-                bpReportObj = bpReport;
-                if (bpReport.OverallResult.HasValue && bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
-                    bpScore = (float)s.GetDouble();
+                var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
+                if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null)
+                {
+                    bpReportObj = bpReport;
+                    if (bpReport.OverallResult.HasValue && bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == JsonValueKind.Number)
+                        bpScore = (float)s.GetDouble();
+                }
             }
+            catch { /* BP not available */ }
         }
-        catch { /* BP not available */ }
 
         // If Python didn't return scores (rare), check DB as fallback
         if (pdScore == null || bpScore == null)
@@ -784,31 +846,38 @@ public class AiEvaluationService : IAiEvaluationService
             float teamScore = -1, marketScore = -1, productScore = -1, tractionScore = -1, financialScore = -1;
             float? pitchDeckOverall = null, businessPlanOverall = null;
             var subMetrics = new List<ScoreSubMetric>();
+            var availability = await ResolveSourceAvailabilityAsync(run);
 
             // Attempt to fetch source-specific overall scores (Option C)
-            try
+            if (availability.ShouldFetchPitchDeck)
             {
-                var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
-                if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null && pdReport.OverallResult.HasValue)
+                try
                 {
-                    if (pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        pitchDeckOverall = (float)s.GetDouble();
+                    var (pdReport, pdStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "pitch_deck", run.CorrelationId);
+                    if (pdStatus == System.Net.HttpStatusCode.OK && pdReport != null && pdReport.OverallResult.HasValue)
+                    {
+                        if (pdReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            pitchDeckOverall = (float)s.GetDouble();
+                    }
                 }
+                catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* PD not present */ }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for pitch_deck"); }
             }
-            catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* PD not present */ }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for pitch_deck"); }
 
-            try
+            if (availability.ShouldFetchBusinessPlan)
             {
-                var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
-                if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null && bpReport.OverallResult.HasValue)
+                try
                 {
-                    if (bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        businessPlanOverall = (float)s.GetDouble();
+                    var (bpReport, bpStatus) = await _pythonClient.GetSourceReportAsync(run.PythonRunId, "business_plan", run.CorrelationId);
+                    if (bpStatus == System.Net.HttpStatusCode.OK && bpReport != null && bpReport.OverallResult.HasValue)
+                    {
+                        if (bpReport.OverallResult.Value.TryGetProperty("overall_score", out var s) && s.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            businessPlanOverall = (float)s.GetDouble();
+                    }
                 }
+                catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* BP not present */ }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for business_plan"); }
             }
-            catch (PythonAiException ex) when (ex.HttpStatus == System.Net.HttpStatusCode.NotFound) { /* BP not present */ }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to fetch source report for business_plan"); }
 
             foreach (var criterion in report.CriteriaResults.Value.EnumerateArray())
             {
