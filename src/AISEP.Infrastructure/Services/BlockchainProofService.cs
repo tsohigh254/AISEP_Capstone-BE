@@ -336,16 +336,41 @@ public class BlockchainProofService : IBlockchainProofService
             });
         }
 
-        // Use stored hash from DB (computed at upload time) instead of re-downloading from Cloudinary.
-        // This avoids DoS via repeated verify calls and ensures we verify against the original file hash,
-        // not a potentially tampered file on Cloudinary.
+        // Recompute hash from the live file on Cloudinary so tampering after registration is detectable.
+        string freshHash;
+        try
+        {
+            freshHash = await ComputeFileHashAsync(doc.FileURL, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download file from storage for document {DocumentID}", doc.DocumentID);
+            return ApiResponse<VerifyChainResponseDto>.ErrorResponse("FILE_DOWNLOAD_FAILED",
+                "Failed to download file from storage to verify hash.");
+        }
+
         var storedHash = proof.FileHash;
 
-        // Verify on-chain using the stored hash
+        // If the live file's hash no longer matches the hash recorded at upload time,
+        // the file has been modified after registration.
+        if (!string.Equals(freshHash, storedHash, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResponse<VerifyChainResponseDto>.SuccessResponse(new VerifyChainResponseDto
+            {
+                DocumentID = doc.DocumentID,
+                ComputedHash = freshHash,
+                OnChainVerified = false,
+                Status = "Mismatch",
+                AnchoredAt = proof.AnchoredAt,
+                EtherscanUrl = BuildEtherscanUrl(proof.TransactionHash)
+            });
+        }
+
+        // Live hash matches DB — confirm it is actually anchored on-chain.
         bool onChain;
         try
         {
-            onChain = await _blockchain.VerifyHashAsync(storedHash, ct);
+            onChain = await _blockchain.VerifyHashAsync(freshHash, ct);
         }
         catch (Exception ex)
         {
@@ -356,7 +381,6 @@ public class BlockchainProofService : IBlockchainProofService
 
         string status = onChain ? "Verified" : "NotFound";
 
-        // Update proof status if verified
         if (onChain && proof.ProofStatus != ProofStatus.Anchored)
         {
             proof.ProofStatus = ProofStatus.Anchored;
@@ -366,7 +390,7 @@ public class BlockchainProofService : IBlockchainProofService
         return ApiResponse<VerifyChainResponseDto>.SuccessResponse(new VerifyChainResponseDto
         {
             DocumentID = doc.DocumentID,
-            ComputedHash = storedHash,
+            ComputedHash = freshHash,
             OnChainVerified = onChain,
             Status = status,
             AnchoredAt = proof.AnchoredAt,
