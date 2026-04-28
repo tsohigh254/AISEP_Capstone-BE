@@ -1080,8 +1080,6 @@ public class MentorshipService : IMentorshipService
             // Auto-complete session nếu Startup đã confirm (Conducted).
             // Nếu chưa confirm (Scheduled/InProgress), để session nguyên —
             // khi Startup confirm sau sẽ tự động Completed (xử lý trong ConfirmConductedAsync).
-            var session = await _db.MentorshipSessions
-                .FirstOrDefaultAsync(s => s.SessionID == request.SessionId.Value);
             if (session != null && session.SessionStatus == SessionStatusValues.Conducted)
             {
                 session.SessionStatus = SessionStatusValues.Completed;
@@ -1700,10 +1698,10 @@ public class MentorshipService : IMentorshipService
     // COMPLETE MENTORSHIP (Advisor) — DISABLED (BR-09: only Staff marks completed)
     // ================================================================
 
-    public async Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId)
+    public Task<ApiResponse<MentorshipDto>> CompleteAsync(int userId, int mentorshipId)
     {
-        return ApiResponse<MentorshipDto>.ErrorResponse("COMPLETION_BY_ADVISOR_DISABLED",
-            "Mentorship completion is now handled by Operations Staff. Please submit your report and wait for staff review.");
+        return Task.FromResult(ApiResponse<MentorshipDto>.ErrorResponse("COMPLETION_BY_ADVISOR_DISABLED",
+            "Mentorship completion is now handled by Operations Staff. Please submit your report and wait for staff review."));
     }
 
     // ================================================================

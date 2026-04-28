@@ -400,8 +400,8 @@ public class IssueReportService : IIssueReportService
                 session.Mentorship.UpdatedAt = DateTime.UtcNow;
             }
 
-            startupUserId = session.Mentorship.Startup?.UserID;
-            advisorUserId = session.Mentorship.Advisor?.UserID;
+            startupUserId = session.Mentorship?.Startup?.UserID;
+            advisorUserId = session.Mentorship?.Advisor?.UserID;
             mentorshipId = session.MentorshipID;
             entityLabel = $"phiên tư vấn #{session.SessionID}";
         }
