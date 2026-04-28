@@ -11,17 +11,9 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<float>(
-                name: "BusinessPlanOverallScore",
-                table: "StartupPotentialScores",
-                type: "real",
-                nullable: true);
-
-            migrationBuilder.AddColumn<float>(
-                name: "PitchDeckOverallScore",
-                table: "StartupPotentialScores",
-                type: "real",
-                nullable: true);
+            // BusinessPlanOverallScore / PitchDeckOverallScore đã được migration
+            // 20260427005635_AddPitchDeckBusinessPlanOverallScoreColumns thêm (idempotent IF NOT EXISTS).
+            // Không AddColumn lại — tránh 42701 column already exists trên DB đã có cột.
 
             migrationBuilder.AddColumn<DateTime>(
                 name: "RefundedAt",
@@ -33,14 +25,6 @@ namespace AISEP.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "BusinessPlanOverallScore",
-                table: "StartupPotentialScores");
-
-            migrationBuilder.DropColumn(
-                name: "PitchDeckOverallScore",
-                table: "StartupPotentialScores");
-
             migrationBuilder.DropColumn(
                 name: "RefundedAt",
                 table: "StartupAdvisorMentorships");
