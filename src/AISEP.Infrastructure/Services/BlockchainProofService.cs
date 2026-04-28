@@ -11,6 +11,7 @@ using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text.RegularExpressions;
 
 namespace AISEP.Infrastructure.Services;
 
@@ -293,6 +294,66 @@ public class BlockchainProofService : IBlockchainProofService
         }
 
         return result;
+    }
+
+    public async Task<ApiResponse<VerifyHashLookupResponseDto>> VerifyHashLookupAsync(
+        string hash, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(hash))
+        {
+            return ApiResponse<VerifyHashLookupResponseDto>.ErrorResponse(
+                "INVALID_HASH",
+                "Hash is required.");
+        }
+
+        var normalizedHash = hash.Trim().ToLowerInvariant();
+        if (normalizedHash.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedHash = normalizedHash[2..];
+        }
+
+        if (!Regex.IsMatch(normalizedHash, "^[0-9a-f]{64}$"))
+        {
+            return ApiResponse<VerifyHashLookupResponseDto>.ErrorResponse(
+                "INVALID_HASH",
+                "Hash must be a valid 64-character SHA-256 hex string.");
+        }
+
+        bool onChain;
+        try
+        {
+            onChain = await _blockchain.VerifyHashAsync(normalizedHash, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Blockchain hash lookup failed for hash {Hash}", normalizedHash);
+            return ApiResponse<VerifyHashLookupResponseDto>.ErrorResponse(
+                "BLOCKCHAIN_ERROR",
+                "Failed to verify hash on blockchain.");
+        }
+
+        var proof = await _context.DocumentBlockchainProofs
+            .AsNoTracking()
+            .Where(p => p.FileHash.ToLower() == normalizedHash)
+            .OrderByDescending(p => p.AnchoredAt ?? DateTime.MinValue)
+            .ThenByDescending(p => p.ProofID)
+            .FirstOrDefaultAsync(ct);
+
+        var recordedInSystem = proof != null;
+        var status = onChain
+            ? (recordedInSystem ? "Verified" : "OnChainOnly")
+            : "NotFound";
+
+        return ApiResponse<VerifyHashLookupResponseDto>.SuccessResponse(new VerifyHashLookupResponseDto
+        {
+            Hash = normalizedHash,
+            OnChainVerified = onChain,
+            RecordedInSystem = recordedInSystem,
+            Status = status,
+            DocumentID = proof?.DocumentID,
+            AnchoredAt = proof?.AnchoredAt,
+            EtherscanUrl = BuildEtherscanUrl(proof?.TransactionHash)
+        });
     }
 
     // ================================================================
