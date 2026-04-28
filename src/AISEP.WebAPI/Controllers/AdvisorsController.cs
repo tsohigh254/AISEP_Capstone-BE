@@ -208,6 +208,24 @@ public class AdvisorsController : ControllerBase
         return result.ToActionResult();
     }
 
+    /// <summary>
+    /// Lịch tuần cho startup: khung rảnh lặp lại + khoảng bận (không tiết lộ đối tác).
+    /// </summary>
+    /// <param name="id">Advisor ID</param>
+    /// <param name="weekStartMonday">Thứ Hai của tuần (yyyy-MM-dd), giờ địa phương VN</param>
+    [HttpGet("{id:int}/week-calendar")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorWeekCalendarStartupDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<AdvisorWeekCalendarStartupDto>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAdvisorWeekCalendar(int id, [FromQuery] string weekStartMonday, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(weekStartMonday) || !DateOnly.TryParse(weekStartMonday, out var monday))
+            return BadRequest(new { message = "weekStartMonday must be yyyy-MM-dd (Monday of the week)." });
+
+        var result = await _advisorService.GetAdvisorWeekCalendarForStartupAsync(id, monday, GetCurrentUserType());
+        return result.ToActionResult();
+    }
+
     // ================================================================
     // FEEDBACK MANAGEMENT (advisor-facing)
     // ================================================================

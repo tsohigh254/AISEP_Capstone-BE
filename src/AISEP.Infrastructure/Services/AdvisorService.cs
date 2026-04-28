@@ -518,7 +518,91 @@ public class AdvisorService : IAdvisorService
 
         return ApiResponse<AdvisorDetailDto>.SuccessResponse(dto);
     }
-    
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<AdvisorWeekCalendarStartupDto>> GetAdvisorWeekCalendarForStartupAsync(
+        int advisorId,
+        DateOnly weekStartMonday,
+        string userType)
+    {
+        var isStaff = userType == "Staff" || userType == "Admin";
+        var advisor = await _db.Advisors
+            .Include(a => a.TimeSlots)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AdvisorID == advisorId);
+
+        if (advisor == null || (!isStaff && advisor.ProfileStatus != ProfileStatus.Approved && advisor.ProfileStatus != ProfileStatus.PendingKYC))
+            return ApiResponse<AdvisorWeekCalendarStartupDto>.ErrorResponse("NOT_FOUND",
+                "Advisor not found or profile is not active.");
+
+        var vnTz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+        var weekStartLocal = DateTime.SpecifyKind(weekStartMonday.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
+        var weekEndExclusiveLocal = weekStartLocal.AddDays(7);
+        var weekStartUtc = TimeZoneInfo.ConvertTimeToUtc(weekStartLocal, vnTz);
+        var weekEndUtc = TimeZoneInfo.ConvertTimeToUtc(weekEndExclusiveLocal, vnTz);
+
+        const int maxDurationMinutes = 480;
+        var fetchFromUtc = weekStartUtc.AddMinutes(-maxDurationMinutes);
+
+        var mentorshipBlocked = new[]
+        {
+            MentorshipStatus.Rejected,
+            MentorshipStatus.Cancelled,
+            MentorshipStatus.Expired,
+        };
+
+        var rawSessions = await _db.MentorshipSessions
+            .AsNoTracking()
+            .Include(s => s.Mentorship)
+            .Where(s =>
+                s.Mentorship.AdvisorID == advisorId
+                && s.ScheduledStartAt != null
+                && s.ScheduledStartAt >= fetchFromUtc
+                && s.ScheduledStartAt < weekEndUtc
+                && !mentorshipBlocked.Contains(s.Mentorship.MentorshipStatus))
+            .Where(s =>
+                s.SessionStatus != SessionStatusValues.Cancelled
+                && s.SessionStatus != SessionStatusValues.Completed)
+            .OrderBy(s => s.ScheduledStartAt)
+            .Select(s => new { s.ScheduledStartAt, s.DurationMinutes })
+            .ToListAsync();
+
+        static DateTime SessionEndUtc(DateTime startUtc, int? durationMinutes)
+        {
+            var dm = durationMinutes is >= 15 and <= 24 * 60 ? durationMinutes.Value : 60;
+            return startUtc.AddMinutes(dm);
+        }
+
+        var busyIntervals = new List<AdvisorCalendarBusyIntervalDto>();
+        foreach (var row in rawSessions)
+        {
+            var startUtc = row.ScheduledStartAt!.Value;
+            if (startUtc.Kind != DateTimeKind.Utc)
+                startUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
+
+            var endUtc = SessionEndUtc(startUtc, row.DurationMinutes);
+            if (endUtc <= weekStartUtc || startUtc >= weekEndUtc)
+                continue;
+
+            var clippedStart = startUtc < weekStartUtc ? weekStartUtc : startUtc;
+            var clippedEnd = endUtc > weekEndUtc ? weekEndUtc : endUtc;
+            busyIntervals.Add(new AdvisorCalendarBusyIntervalDto { StartAt = clippedStart, EndAt = clippedEnd });
+        }
+
+        var weeklySlots = advisor.TimeSlots
+            .OrderBy(t => t.DayOfWeek).ThenBy(t => t.StartTime)
+            .Select(t => new TimeSlotDto { DayOfWeek = t.DayOfWeek, StartTime = t.StartTime, EndTime = t.EndTime })
+            .ToList();
+
+        var dto = new AdvisorWeekCalendarStartupDto
+        {
+            WeeklyTimeSlots = weeklySlots,
+            BusyIntervals = busyIntervals,
+        };
+
+        return ApiResponse<AdvisorWeekCalendarStartupDto>.SuccessResponse(dto);
+    }
+
     #region helper method
     private static List<string> SplitCsv(string? csv)
         => string.IsNullOrEmpty(csv) ? new() : csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();

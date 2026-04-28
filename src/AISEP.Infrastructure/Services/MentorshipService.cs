@@ -82,6 +82,34 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<MentorshipDto>.ErrorResponse("MENTORSHIP_ALREADY_EXISTS",
                 "An active or pending mentorship with this advisor already exists.");
 
+        if (request.RequestedSlots != null && request.RequestedSlots.Count > 0)
+        {
+            var slots = request.RequestedSlots;
+            for (var i = 0; i < slots.Count; i++)
+            {
+                for (var j = i + 1; j < slots.Count; j++)
+                {
+                    var aStart = slots[i].StartAt.ToUniversalTime();
+                    var aEnd = slots[i].EndAt.ToUniversalTime();
+                    var bStart = slots[j].StartAt.ToUniversalTime();
+                    var bEnd = slots[j].EndAt.ToUniversalTime();
+                    if (aStart < bEnd && aEnd > bStart)
+                        return ApiResponse<MentorshipDto>.ErrorResponse("REQUESTED_SLOTS_OVERLAP",
+                            "Proposed time slots must not overlap each other.");
+                }
+            }
+
+            foreach (var slot in slots)
+            {
+                var wStart = slot.StartAt.ToUniversalTime();
+                var wEnd = slot.EndAt.ToUniversalTime();
+                var overlap = await FindAdvisorScheduleOverlapAsync(request.AdvisorId, wStart, wEnd, excludeSessionId: null);
+                if (overlap != null)
+                    return ApiResponse<MentorshipDto>.ErrorResponse("ADVISOR_SCHEDULE_CONFLICT",
+                        "One or more proposed times overlap with the advisor's existing schedule.");
+            }
+        }
+
         var mentorship = new StartupAdvisorMentorship
         {
             StartupID = startup.StartupID,
@@ -595,6 +623,12 @@ public class MentorshipService : IMentorshipService
         var resolvedMeetingUrl = request.MeetingUrl
             ?? ResolveAdvisorMeetingUrl(advisor, resolvedFormat);
 
+        var windowEnd = GetSessionWindowEndUtc(scheduledAt, request.DurationMinutes);
+        var overlapCreate = await FindAdvisorScheduleOverlapAsync(mentorship.AdvisorID, scheduledAt, windowEnd, excludeSessionId: null);
+        if (overlapCreate != null)
+            return ApiResponse<SessionDto>.ErrorResponse("ADVISOR_SCHEDULE_CONFLICT",
+                "This time overlaps with another session already on your calendar.");
+
         var session = new MentorshipSession
         {
             MentorshipID = mentorshipId,
@@ -706,6 +740,27 @@ public class MentorshipService : IMentorshipService
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"SessionStatus must be one of: {string.Join(", ", SessionStatusValues.All)}");
 
+        var effectiveStatusPreview = request.SessionStatus ?? session.SessionStatus;
+        if (effectiveStatusPreview != SessionStatusValues.Cancelled && effectiveStatusPreview != SessionStatusValues.Completed)
+        {
+            var prospectStart = request.ScheduledStartAt.HasValue
+                ? NormalizeToUtc(request.ScheduledStartAt.Value)
+                : (session.ScheduledStartAt.HasValue ? NormalizeToUtc(session.ScheduledStartAt.Value) : (DateTime?)null);
+            if (prospectStart.HasValue)
+            {
+                var prospectDur = request.DurationMinutes ?? session.DurationMinutes;
+                var prospectEnd = GetSessionWindowEndUtc(prospectStart.Value, prospectDur);
+                var overlapUpdate = await FindAdvisorScheduleOverlapAsync(
+                    session.Mentorship.AdvisorID,
+                    prospectStart.Value,
+                    prospectEnd,
+                    session.SessionID);
+                if (overlapUpdate != null)
+                    return ApiResponse<SessionDto>.ErrorResponse("ADVISOR_SCHEDULE_CONFLICT",
+                        "This time overlaps with another session already on your calendar.");
+            }
+        }
+
         if (request.ScheduledStartAt.HasValue) session.ScheduledStartAt = request.ScheduledStartAt.Value;
         if (request.DurationMinutes.HasValue) session.DurationMinutes = request.DurationMinutes.Value;
         // SessionFormat không cho Advisor override — luôn giữ theo mentorship.PreferredFormat
@@ -742,6 +797,16 @@ public class MentorshipService : IMentorshipService
         if (session.SessionStatus != SessionStatusValues.ProposedByStartup)
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"Only sessions with status '{SessionStatusValues.ProposedByStartup}' can be accepted by advisor.");
+
+        if (!session.ScheduledStartAt.HasValue)
+            return ApiResponse<SessionDto>.ErrorResponse("SESSION_TIME_MISSING", "Session has no scheduled start time.");
+
+        var acceptStart = NormalizeToUtc(session.ScheduledStartAt.Value);
+        var acceptEnd = GetSessionWindowEndUtc(acceptStart, session.DurationMinutes);
+        var overlapAccept = await FindAdvisorScheduleOverlapAsync(mentorship.AdvisorID, acceptStart, acceptEnd, sessionId);
+        if (overlapAccept != null)
+            return ApiResponse<SessionDto>.ErrorResponse("ADVISOR_SCHEDULE_CONFLICT",
+                "This time overlaps with another session already on your calendar.");
 
         // Luôn enforce SessionFormat theo mentorship.PreferredFormat — không cho data cũ ghi đè
         session.SessionFormat = mentorship.PreferredFormat;
@@ -841,6 +906,16 @@ public class MentorshipService : IMentorshipService
         if (session.SessionStatus != SessionStatusValues.ProposedByAdvisor)
             return ApiResponse<SessionDto>.ErrorResponse("INVALID_SESSION_STATUS",
                 $"Only sessions with status '{SessionStatusValues.ProposedByAdvisor}' can be confirmed by startup.");
+
+        if (!session.ScheduledStartAt.HasValue)
+            return ApiResponse<SessionDto>.ErrorResponse("SESSION_TIME_MISSING", "Session has no scheduled start time.");
+
+        var confirmStart = NormalizeToUtc(session.ScheduledStartAt.Value);
+        var confirmEnd = GetSessionWindowEndUtc(confirmStart, session.DurationMinutes);
+        var overlapConfirm = await FindAdvisorScheduleOverlapAsync(mentorship.AdvisorID, confirmStart, confirmEnd, sessionId);
+        if (overlapConfirm != null)
+            return ApiResponse<SessionDto>.ErrorResponse("ADVISOR_SCHEDULE_CONFLICT",
+                "This time overlaps with another session already on the advisor's calendar.");
 
         // Luôn enforce SessionFormat và re-resolve MeetingURL theo mentorship.PreferredFormat
         session.SessionFormat = mentorship.PreferredFormat;
@@ -1533,6 +1608,69 @@ public class MentorshipService : IMentorshipService
             });
 
         return events.OrderBy(e => e.HappenedAt).ToList();
+    }
+
+    /// <summary>Giới hạn “lùi” khi query session bắt đầu trước nhưng kéo dài vào cửa sổ đang kiểm tra.</summary>
+    private const int MaxOverlapFetchMinutesPastStart = 480;
+
+    private static DateTime NormalizeToUtc(DateTime dt) =>
+        dt.Kind switch
+        {
+            DateTimeKind.Utc => dt,
+            DateTimeKind.Local => dt.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc),
+        };
+
+    private static DateTime GetSessionWindowEndUtc(DateTime startUtc, int? durationMinutes)
+    {
+        var dm = durationMinutes is >= 15 and <= 24 * 60 ? durationMinutes!.Value : 60;
+        return startUtc.AddMinutes(dm);
+    }
+
+    /// <summary>
+    /// Trả về session khác (nếu có) của cùng advisor có khoảng thời gian trùng [windowStartUtc, windowEndUtc).
+    /// </summary>
+    private async Task<MentorshipSession?> FindAdvisorScheduleOverlapAsync(
+        int advisorId,
+        DateTime windowStartUtc,
+        DateTime windowEndUtc,
+        int? excludeSessionId)
+    {
+        if (windowEndUtc <= windowStartUtc)
+            return null;
+
+        var blockedMentorshipStatuses = new[]
+        {
+            MentorshipStatus.Rejected,
+            MentorshipStatus.Cancelled,
+            MentorshipStatus.Expired,
+            MentorshipStatus.Completed,
+        };
+
+        var fetchFromUtc = windowStartUtc.AddMinutes(-MaxOverlapFetchMinutesPastStart);
+
+        var candidates = await _db.MentorshipSessions
+            .AsNoTracking()
+            .Include(s => s.Mentorship)
+            .Where(s => s.Mentorship.AdvisorID == advisorId)
+            .Where(s => s.ScheduledStartAt != null)
+            .Where(s => !blockedMentorshipStatuses.Contains(s.Mentorship.MentorshipStatus))
+            .Where(s =>
+                s.SessionStatus != SessionStatusValues.Cancelled
+                && s.SessionStatus != SessionStatusValues.Completed)
+            .Where(s => excludeSessionId == null || s.SessionID != excludeSessionId.Value)
+            .Where(s => s.ScheduledStartAt >= fetchFromUtc && s.ScheduledStartAt < windowEndUtc)
+            .ToListAsync();
+
+        foreach (var s in candidates)
+        {
+            var sStart = NormalizeToUtc(s.ScheduledStartAt!.Value);
+            var sEnd = GetSessionWindowEndUtc(sStart, s.DurationMinutes);
+            if (windowStartUtc < sEnd && windowEndUtc > sStart)
+                return s;
+        }
+
+        return null;
     }
 
     private static SessionDto MapSessionDto(MentorshipSession s, bool hideMeetingUrl = false) => new()
