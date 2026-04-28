@@ -18,10 +18,12 @@ namespace AISEP.WebAPI.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly IAdminService _svc;
+    private readonly IAiLogsService _aiLogs;
 
-    public AdminController(IAdminService svc)
+    public AdminController(IAdminService svc, IAiLogsService aiLogs)
     {
         _svc = svc;
+        _aiLogs = aiLogs;
     }
 
     private int GetCurrentUserId()
@@ -112,6 +114,27 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> ReadLogFile(string fileName, [FromQuery] int tail = 500)
     {
         var result = await _svc.ReadLogFileAsync(fileName, tail);
+        return result.ToEnvelope();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  AI Service Logs (JSON-structured, from shared volume)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Read last N AI service log entries (api + worker merged, newest first).
+    /// Filter by level (INFO/WARN/ERROR/DEBUG), free-text search, or correlationId.
+    /// Default tail 200, max 1000.
+    /// </summary>
+    [HttpGet("ai-logs")]
+    public async Task<IActionResult> GetAiLogs(
+        [FromQuery] int tail = 200,
+        [FromQuery] string? level = null,
+        [FromQuery] string? search = null,
+        [FromQuery] string? correlationId = null,
+        CancellationToken ct = default)
+    {
+        var result = await _aiLogs.GetLogsAsync(tail, level, search, correlationId, ct);
         return result.ToEnvelope();
     }
 

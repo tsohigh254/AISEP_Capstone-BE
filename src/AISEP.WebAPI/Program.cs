@@ -127,6 +127,7 @@ builder.Services.AddScoped<IModerationService, ModerationService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationApprovalService>();
 builder.Services.AddScoped<IBlockchainProofService, BlockchainProofService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IAiLogsService, AiLogsService>();
 builder.Services.AddScoped<IStaffDashboardService, StaffDashboardService>();
 builder.Services.AddScoped<IStaffFinanceService, StaffFinanceService>();
 builder.Services.AddScoped<IStaffMasterDataService, StaffMasterDataService>();
