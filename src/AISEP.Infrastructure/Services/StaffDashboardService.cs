@@ -33,6 +33,8 @@ public class StaffDashboardService : IStaffDashboardService
             s.IsActive && s.WorkflowStatus == StartupKycWorkflowStatus.UnderReview);
         var pendingInvestorKyc = await _db.InvestorKycSubmissions.CountAsync(s =>
             s.IsActive && s.WorkflowStatus == InvestorKycWorkflowStatus.UnderReview);
+        var escalatedComplaints = await _db.IssueReports.CountAsync(r =>
+            r.Status == IssueReportStatus.Escalated);
 
         var aiOnline = false;
         try { aiOnline = await _pythonClient.IsHealthyAsync(); }
@@ -43,6 +45,7 @@ public class StaffDashboardService : IStaffDashboardService
             TotalUsers = totalUsers,
             LockedAccounts = lockedAccounts,
             PendingKycCount = pendingStartupKyc + pendingInvestorKyc,
+            EscalatedComplaintsCount = escalatedComplaints,
             AiServiceOnline = aiOnline,
             CheckedAt = DateTime.UtcNow
         });

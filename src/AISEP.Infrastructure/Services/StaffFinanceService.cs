@@ -34,6 +34,7 @@ public class StaffFinanceService : IStaffFinanceService
                 m.PlatformFeeAmount, 
                 m.PaidAt, 
                 m.MentorshipStatus, 
+                m.RefundedAt,
                 StartupName = m.Startup.CompanyName,
                 m.ActualAmount,
                 m.PayoutReleasedAt,
@@ -58,17 +59,17 @@ public class StaffFinanceService : IStaffFinanceService
         var filteredSubscriptions = subscriptions.Where(s => s.PaidAt >= fromDate).ToList();
         var filteredPayouts = payouts.Where(p => p.CreatedAt >= fromDate).ToList();
 
-        var totalMentorshipRevenue = filteredMentorships.Where(m => m.MentorshipStatus != MentorshipStatus.Cancelled).Sum(m => m.SessionAmount);
-        var totalRefunds = filteredMentorships.Where(m => m.MentorshipStatus == MentorshipStatus.Cancelled).Sum(m => m.SessionAmount);
+        var totalMentorshipRevenue = filteredMentorships.Sum(m => m.SessionAmount);
+        var totalRefunds = filteredMentorships.Where(m => m.RefundedAt != null).Sum(m => m.SessionAmount);
         var totalSubscriptionRevenue = filteredSubscriptions.Sum(s => s.Amount);
-        var totalCommission = filteredMentorships.Where(m => m.MentorshipStatus != MentorshipStatus.Cancelled).Sum(m => m.PlatformFeeAmount) + totalSubscriptionRevenue;
+        var totalCommission = filteredMentorships.Where(m => m.RefundedAt == null).Sum(m => m.PlatformFeeAmount) + totalSubscriptionRevenue;
         var totalPayouts = filteredPayouts.Sum(p => p.Amount);
         
         var totalRevenue = totalMentorshipRevenue + totalSubscriptionRevenue;
 
         // Balance always calculated from ALL completed transactions for accuracy
-        var allTimeRevenue = mentorships.Where(m => m.MentorshipStatus != MentorshipStatus.Cancelled).Sum(m => m.SessionAmount) + subscriptions.Sum(s => s.Amount);
-        var allTimeOutflow = payouts.Sum(p => p.Amount) + mentorships.Where(m => m.MentorshipStatus == MentorshipStatus.Cancelled).Sum(m => m.SessionAmount);
+        var allTimeRevenue = mentorships.Sum(m => m.SessionAmount) + subscriptions.Sum(s => s.Amount);
+        var allTimeOutflow = payouts.Sum(p => p.Amount) + mentorships.Where(m => m.RefundedAt != null).Sum(m => m.SessionAmount);
         var currentBalance = allTimeRevenue - allTimeOutflow;
 
         var incomeSources = new List<FinanceSourceDto>
@@ -101,19 +102,18 @@ public class StaffFinanceService : IStaffFinanceService
 
         // 4. Map all transactions in range (Actual realized transactions)
         var transMentorships = filteredMentorships
-            .Where(m => m.PayoutReleasedAt != null || m.MentorshipStatus == MentorshipStatus.Cancelled) // Only realized ones for the list
+            .Where(m => m.PayoutReleasedAt != null || m.RefundedAt != null) // Only realized money out for the list
             .Select(m => new FinanceTransactionDto
             {
-                Description = m.MentorshipStatus == MentorshipStatus.Cancelled ? "Hoàn tiền cho Startup" : $"Hệ thống trả tiền tư vấn #{m.MentorshipID}",
-                Amount = m.MentorshipStatus == MentorshipStatus.Cancelled ? m.SessionAmount : m.ActualAmount,
+                Description = m.RefundedAt != null ? "Hoàn tiền cho Startup" : $"Hệ thống trả tiền tư vấn #{m.MentorshipID}",
+                Amount = m.RefundedAt != null ? m.SessionAmount : m.ActualAmount,
                 Type = "OUT",
-                Source = m.MentorshipStatus == MentorshipStatus.Cancelled ? m.StartupName : m.AdvisorName,
-                Date = m.PayoutReleasedAt ?? m.PaidAt ?? DateTime.UtcNow
+                Source = m.RefundedAt != null ? m.StartupName : m.AdvisorName,
+                Date = m.RefundedAt ?? m.PayoutReleasedAt ?? m.PaidAt ?? DateTime.UtcNow
             });
 
         // Add Startup Income transactions
         var transIncome = filteredMentorships
-            .Where(m => m.MentorshipStatus != MentorshipStatus.Cancelled)
             .Select(m => new FinanceTransactionDto
             {
                 Description = $"Startup gửi tiền tư vấn #{m.MentorshipID}",
@@ -148,13 +148,12 @@ public class StaffFinanceService : IStaffFinanceService
         // 5. Calculate Pending Liabilities (Obligations)
         // Tiền nợ Mentor: Đã xong cuộc họp nhưng chưa bấm Release
         var pendingAdvisorPayouts = mentorships
-            .Where(m => m.MentorshipStatus == MentorshipStatus.Completed && m.PayoutReleasedAt == null)
+            .Where(m => m.MentorshipStatus == MentorshipStatus.Completed && m.PayoutReleasedAt == null && m.RefundedAt == null)
             .Sum(m => m.ActualAmount);
 
-        // Tiền nợ Startup: Đã hủy nhưng chưa thực hiện hoàn tiền (Giả sử chưa refund nếu status vẫn là Completed payment)
-        // Chú ý: Ở đây ta coi như các bản ghi Cancelled trong bảng mentorship mà Payment=Completed là đang "treo" tiền hoàn
+        // Tiền nợ Startup: Có kết quả hủy nhưng chưa hoàn tiền xong
         var pendingStartupRefunds = mentorships
-            .Where(m => m.MentorshipStatus == MentorshipStatus.Cancelled && m.PaymentStatus == PaymentStatus.Completed)
+            .Where(m => m.MentorshipStatus == MentorshipStatus.Cancelled && m.PaymentStatus == PaymentStatus.Completed && m.RefundedAt == null)
             .Sum(m => m.SessionAmount);
 
         // Total realized payouts (money that actually left the system)
