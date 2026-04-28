@@ -398,6 +398,68 @@ public class BlockchainProofService : IBlockchainProofService
         });
     }
 
+    // ================================================================
+    // 6) Verify a client-supplied hash (startup/investor self-service)
+    // ================================================================
+    public async Task<ApiResponse<HashLookupResponseDto>> VerifyHashLookupAsync(
+        string hash, CancellationToken ct = default)
+    {
+        var normalized = NormalizeHash(hash);
+        if (normalized == null)
+            return ApiResponse<HashLookupResponseDto>.ErrorResponse("HASH_INVALID",
+                "Hash must be a 64-character hex SHA-256 string (optional 0x prefix).");
+
+        var proof = await _context.DocumentBlockchainProofs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.FileHash != null && p.FileHash.ToLower() == normalized, ct);
+
+        bool onChain;
+        try
+        {
+            onChain = await _blockchain.VerifyHashAsync(normalized, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Blockchain RPC failed during hash lookup");
+            return ApiResponse<HashLookupResponseDto>.ErrorResponse("BLOCKCHAIN_RPC_FAILED",
+                "Failed to query blockchain. Please try again later.");
+        }
+
+        var recordedInSystem = proof != null;
+        var status = (onChain, recordedInSystem) switch
+        {
+            (true, true) => "Verified",
+            (true, false) => "OnChainOnly",
+            _ => "NotFound"
+        };
+
+        return ApiResponse<HashLookupResponseDto>.SuccessResponse(new HashLookupResponseDto
+        {
+            Hash = normalized,
+            OnChainVerified = onChain,
+            RecordedInSystem = recordedInSystem,
+            Status = status,
+            DocumentID = proof?.DocumentID,
+            AnchoredAt = proof?.AnchoredAt,
+            EtherscanUrl = BuildEtherscanUrl(proof?.TransactionHash)
+        });
+    }
+
+    private static string? NormalizeHash(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var s = input.Trim();
+        if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) s = s[2..];
+        if (s.Length != 64) return null;
+        for (int i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            var hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!hex) return null;
+        }
+        return s.ToLowerInvariant();
+    }
+
     /// <summary>Get document belonging to the user's startup (tracked).</summary>
     private async Task<Document?> GetOwnedDocumentAsync(int documentId, int userId, CancellationToken ct)
     {

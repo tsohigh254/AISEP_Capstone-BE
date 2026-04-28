@@ -129,7 +129,27 @@ public class BlockchainController : ControllerBase
     }
 
     // ================================================================
-    // 5) POST /api/staff/documents/{documentId}/verify-hash — Staff verify
+    // 5) POST /api/blockchain/verify-hash — Self-service hash lookup
+    // ================================================================
+
+    /// <summary>
+    /// Verify a SHA-256 hash that the caller computed locally from a downloaded file.
+    /// Returns whether the hash is anchored on-chain and/or recorded in AISEP.
+    /// Lets startups and investors confirm a downloaded document hasn't been tampered with.
+    /// </summary>
+    [HttpPost("api/blockchain/verify-hash")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<HashLookupResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<HashLookupResponseDto>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse<HashLookupResponseDto>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> VerifyHashLookup([FromBody] HashLookupRequestDto request, CancellationToken ct)
+    {
+        var result = await _proofService.VerifyHashLookupAsync(request?.Hash ?? string.Empty, ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 6) POST /api/staff/documents/{documentId}/verify-hash — Staff verify
     // ================================================================
 
     /// <summary>
