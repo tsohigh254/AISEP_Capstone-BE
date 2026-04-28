@@ -25,6 +25,11 @@ public class BlockchainController : ControllerBase
         _proofService = proofService;
     }
 
+    public class VerifyHashLookupRequest
+    {
+        public string Hash { get; set; } = string.Empty;
+    }
+
     private int GetCurrentUserId()
     {
         var claim = User.FindFirst("sub")?.Value
@@ -144,6 +149,24 @@ public class BlockchainController : ControllerBase
     {
         var staffUserId = GetCurrentUserId();
         var result = await _proofService.StaffVerifyHashAsync(documentId, staffUserId, ct);
+        return result.ToActionResult();
+    }
+
+    // ================================================================
+    // 6) POST /api/blockchain/verify-hash — Hash lookup for downloaded files
+    // ================================================================
+
+    /// <summary>
+    /// Verify a raw SHA-256 hash against blockchain, then map it to AISEP document proof records.
+    /// Used by "verify downloaded file" modal.
+    /// </summary>
+    [HttpPost("api/blockchain/verify-hash")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<VerifyHashLookupResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<VerifyHashLookupResponseDto>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> VerifyHashLookup([FromBody] VerifyHashLookupRequest? request, CancellationToken ct)
+    {
+        var result = await _proofService.VerifyHashLookupAsync(request?.Hash ?? string.Empty, ct);
         return result.ToActionResult();
     }
 }

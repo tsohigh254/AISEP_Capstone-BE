@@ -52,3 +52,17 @@ public class TxStatusResponseDto
     public DateTime? ConfirmedAt { get; set; }
     public string? EtherscanUrl { get; set; }
 }
+
+/// <summary>
+/// Response from verifying a raw SHA-256 hash against blockchain + AISEP records.
+/// </summary>
+public class VerifyHashLookupResponseDto
+{
+    public string Hash { get; set; } = null!;
+    public bool OnChainVerified { get; set; }
+    public bool RecordedInSystem { get; set; }
+    public string Status { get; set; } = null!; // Verified | OnChainOnly | NotFound
+    public int? DocumentID { get; set; }
+    public DateTime? AnchoredAt { get; set; }
+    public string? EtherscanUrl { get; set; }
+}

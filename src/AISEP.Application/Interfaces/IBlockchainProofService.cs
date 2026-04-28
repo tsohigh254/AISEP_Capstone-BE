@@ -23,4 +23,7 @@ public interface IBlockchainProofService
 
     /// <summary>Staff/Admin: cross-check file hash with on-chain record.</summary>
     Task<ApiResponse<VerifyChainResponseDto>> StaffVerifyHashAsync(int documentId, int staffUserId, CancellationToken ct = default);
+
+    /// <summary>Lookup a raw hash against blockchain and AISEP proof records.</summary>
+    Task<ApiResponse<VerifyHashLookupResponseDto>> VerifyHashLookupAsync(string hash, CancellationToken ct = default);
 }
