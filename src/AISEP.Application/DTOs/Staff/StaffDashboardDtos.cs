@@ -5,6 +5,7 @@ public class StaffDashboardStatsDto
     public int TotalUsers { get; set; }
     public int LockedAccounts { get; set; }
     public int PendingKycCount { get; set; }
+    public int EscalatedComplaintsCount { get; set; }
     public bool AiServiceOnline { get; set; }
     public DateTime CheckedAt { get; set; }
 }
