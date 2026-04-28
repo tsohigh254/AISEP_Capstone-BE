@@ -99,7 +99,7 @@ public class WalletServiceTests
         SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Completed);
         SeedTransaction(wallet.WalletId, TransactionType.Withdrawal, TransactionStatus.Pending);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams { Page = 1, PageSize = 10 });
 
         result.Success.Should().BeTrue();
@@ -113,7 +113,7 @@ public class WalletServiceTests
         SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Completed);
         SeedTransaction(wallet.WalletId, TransactionType.Withdrawal, TransactionStatus.Completed);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams
             {
                 Page = 1,
@@ -133,7 +133,7 @@ public class WalletServiceTests
         SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Completed);
         SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Pending);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams
             {
                 Page = 1,
@@ -151,7 +151,7 @@ public class WalletServiceTests
     {
         var (wallet, _, _) = SeedWalletWithAdvisor(userId: 1);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams { Page = 1, PageSize = 10 });
 
         result.Success.Should().BeTrue();
@@ -165,7 +165,7 @@ public class WalletServiceTests
         for (int i = 0; i < 5; i++)
             SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Completed);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams { Page = 1, PageSize = 2 });
 
         result.Data!.Items.Should().HaveCount(2);
@@ -183,7 +183,7 @@ public class WalletServiceTests
         SeedTransaction(wallet.WalletId, TransactionType.Deposit, TransactionStatus.Completed);
         SeedTransaction(wallet.WalletId, TransactionType.Withdrawal, TransactionStatus.Pending);
 
-        var result = await _sut.GetTransactionsAsync(wallet.WalletId,
+        var result = await _sut.GetTransactionsAsync(wallet.WalletId, "Advisor",
             new WalletTransactionQueryParams { Page = 1, PageSize = 1 });
 
         result.Success.Should().BeTrue();

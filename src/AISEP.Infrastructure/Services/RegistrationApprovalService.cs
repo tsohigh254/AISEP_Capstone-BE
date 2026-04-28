@@ -569,7 +569,7 @@ namespace AISEP.Infrastructure.Services
         {
             var submissionQuery = _context.StartupKycSubmissions
                 .AsNoTracking()
-                .Include(s => s.Startup).ThenInclude(s => s.Industry).ThenInclude(i => i.ParentIndustry)
+                .Include(s => s.Startup).ThenInclude(s => s.Industry!).ThenInclude(i => i.ParentIndustry)
                 .Include(s => s.Startup).ThenInclude(s => s.StageRef)
                 .Include(s => s.Startup).ThenInclude(s => s.SubIndustryRef)
                 .Where(s => s.IsActive

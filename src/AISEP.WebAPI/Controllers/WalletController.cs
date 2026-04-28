@@ -28,45 +28,57 @@ public class WalletController : ControllerBase
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
+    private string GetCurrentUserType()
+        => User.FindFirst("userType")?.Value ?? string.Empty;
+
     [HttpGet("me")]
-    [Authorize(Policy = "AdvisorOnly")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyWallet()
     {
         var userId = GetCurrentUserId();
-        var result = await _walletService.GetWalletByAdvisorAsync(userId);
+        var userType = GetCurrentUserType();
+
+        ApiResponse<WalletDto> result;
+        if (userType == "Advisor")
+            result = await _walletService.GetWalletByAdvisorAsync(userId);
+        else if (userType == "Startup")
+            result = await _walletService.GetWalletByStartupAsync(userId);
+        else
+            return Unauthorized();
+
         return result.ToActionResult();
     }
 
     [HttpGet("{walletId:int}/transactions")]
-    [Authorize(Policy = "AdvisorOnly")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<TransactionDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetTransactions(int walletId, [FromQuery] WalletTransactionQueryParams queryParams)
     {
-        var result = await _walletService.GetTransactionsAsync(walletId, queryParams);
+        var result = await _walletService.GetTransactionsAsync(walletId, GetCurrentUserType(), queryParams);
         return result.ToActionResult();
     }
 
     [HttpPut("bank-info")]
-    [Authorize(Policy = "AdvisorOnly")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateBankInfo([FromBody] UpdateBankInfoDto request)
     {
         var userId = GetCurrentUserId();
-        var result = await _walletService.UpdateBankInfoAsync(userId, request);
+        var result = await _walletService.UpdateBankInfoAsync(userId, GetCurrentUserType(), request);
         return result.ToActionResult();
     }
 
     [HttpPost]
-    [Authorize(Policy = "AdvisorOnly")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<WalletDto>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateWallet([FromBody] CreateWalletDto request)
     {
         var userId = GetCurrentUserId();
-        var result = await _walletService.CreateWalletAsync(userId, request);
+        var result = await _walletService.CreateWalletAsync(userId, GetCurrentUserType(), request);
         return result.ToActionResult();
     }
 }

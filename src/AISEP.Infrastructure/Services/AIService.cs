@@ -442,11 +442,11 @@ public class AIService : IAIService
             return new SubMetricDto
             {
                 Pillar = pillar,
-                Category = m.Category,
-                MetricName = m.MetricName,
+                Category = m.Category ?? "",
+                MetricName = m.MetricName ?? "",
                 MetricValue = m.MetricValue,
                 MetricScore = m.MetricScore,
-                Explanation = m.Explanation
+                Explanation = m.Explanation ?? ""
             };
         }).ToList(),
         Recommendations = s.ImprovementRecommendations.Select(r => new ImprovementRecommendationDto

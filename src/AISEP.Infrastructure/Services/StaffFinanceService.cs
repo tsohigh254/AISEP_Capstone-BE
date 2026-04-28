@@ -51,7 +51,7 @@ public class StaffFinanceService : IStaffFinanceService
         // 3. Get Payouts (Withdrawals)
         var payouts = await _db.WalletTransactions
             .Where(t => t.Type == TransactionType.Withdrawal && t.Status == TransactionStatus.Completed)
-            .Select(t => new { t.Amount, t.CreatedAt, AdvisorName = t.Wallet.Advisor.FullName })
+            .Select(t => new { t.Amount, t.CreatedAt, AdvisorName = t.Wallet!.Advisor!.FullName })
             .ToListAsync();
 
         var filteredMentorships = mentorships.Where(m => m.PaidAt >= fromDate).ToList();

@@ -1,4 +1,4 @@
-﻿using AISEP.Domain.Enums;
+using AISEP.Domain.Enums;
 
 namespace AISEP.Domain.Entities;
 
@@ -29,6 +29,9 @@ public class StartupAdvisorMentorship
     public bool IsPayoutEligible { get; set; }
     /// <summary>Thời điểm Staff release payout vào AdvisorWallet. Null = chưa release.</summary>
     public DateTime? PayoutReleasedAt { get; set; }
+
+    /// <summary>Thời điểm Staff thực hiện hoàn tiền (100%) cho Startup. Null = chưa hoàn.</summary>
+    public DateTime? RefundedAt { get; set; }
 
     // ===== PAYMENT FIELDS =====
     public decimal SessionAmount { get; set; }           // Giá gốc của mentorship

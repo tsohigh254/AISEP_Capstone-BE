@@ -112,6 +112,27 @@ public class MentorshipsController : ControllerBase
         return result.ToActionResult();
     }
 
+    [HttpGet("by-session/{sessionId:int}")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBySessionId(int sessionId)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetMentorshipBySessionIdAsync(userId, userType, sessionId);
+        return result.ToActionResult();
+    }
+
+    [HttpGet("by-report/{reportId:int}")]
+    [ProducesResponseType(typeof(ApiResponse<MentorshipDetailDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetByReportId(int reportId)
+    {
+        var userId = GetCurrentUserId();
+        var userType = GetCurrentUserType();
+        var result = await _mentorshipService.GetMentorshipByReportIdAsync(userId, userType, reportId);
+        return result.ToActionResult();
+    }
+
+
     // ================================================================
     // 4) POST /api/mentorships/{id}/accept — Accept (Advisor)
     // ================================================================

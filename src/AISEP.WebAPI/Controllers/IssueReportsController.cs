@@ -83,4 +83,13 @@ public class IssueReportsController : ControllerBase
         var result = await _service.UpdateStatusAsync(GetCurrentUserId(), id, request);
         return result.ToActionResult();
     }
+
+    // ── POST /api/issue-reports/{id}/escalate — Escalate to formal dispute (Staff/Admin only)
+    [HttpPost("{id:int}/escalate")]
+    [Authorize(Policy = "StaffOrAdmin")]
+    public async Task<IActionResult> EscalateToDispute(int id)
+    {
+        var result = await _service.EscalateToDisputeAsync(GetCurrentUserId(), id);
+        return result.ToActionResult();
+    }
 }

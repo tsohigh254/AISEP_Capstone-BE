@@ -18,6 +18,7 @@ namespace AISEP.Application.Interfaces
         public Task<string> ConfirmWebHook(string webhookUrl);
         public Task<ApiResponse<string>> Cashout(int userId, CashoutRequestDto cashoutRequestDto);
         public Task<ApiResponse<string>> CallBack(HttpRequest request);
+        public Task<ApiResponse<string>> SyncPaymentStatusAsync(long orderCode, int? mentorshipId = null);
         public Task<PayoutAccountInfo> GetAccountBalance();
     }
 }

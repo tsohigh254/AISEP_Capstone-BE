@@ -22,40 +22,47 @@ namespace AISEP.Infrastructure.Services
         {
             _context = context;
         }
-        public async Task<ApiResponse<PagedResponse<TransactionDto>>> GetTransactionsAsync(int walletId, WalletTransactionQueryParams transactionQueryParams)
+        public async Task<ApiResponse<PagedResponse<TransactionDto>>> GetTransactionsAsync(int walletId, string userType, WalletTransactionQueryParams transactionQueryParams)
         {
-            var transactions = _context.WalletTransactions
+            var query = _context.WalletTransactions
                 .OrderByDescending(t => t.CreatedAt)
-                .Where(t => t.WalletId == walletId)
                 .AsQueryable();
 
+            if (userType == "Advisor")
+            {
+                query = query.Where(t => t.WalletId == walletId);
+            }
+            else // Startup
+            {
+                query = query.Where(t => t.StartupWalletId == walletId);
+            }
+
             if (transactionQueryParams.TransactionType.HasValue)
-                transactions = transactions.Where(t => t.Type == transactionQueryParams.TransactionType.Value);
+                query = query.Where(t => t.Type == transactionQueryParams.TransactionType.Value);
 
             if (transactionQueryParams.TransactionStatus.HasValue)
-                transactions = transactions.Where(t => t.Status == transactionQueryParams.TransactionStatus.Value);
+                query = query.Where(t => t.Status == transactionQueryParams.TransactionStatus.Value);
 
-            var transactionsToDto = transactions.Select(t => new TransactionDto
-            {
-                TransactionID = t.TransactionID,
-                WalletId = t.WalletId,
-                Amount = t.Amount,
-                Type = t.Type,
-                Status = t.Status,
-                CreatedAt = t.CreatedAt,
-            }).Paging(transactionQueryParams.Page, transactionQueryParams.PageSize);
-
-            return ApiResponse<PagedResponse<TransactionDto>>.SuccessResponse
-                (new PagedResponse<TransactionDto>
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((transactionQueryParams.Page - 1) * transactionQueryParams.PageSize)
+                .Take(transactionQueryParams.PageSize)
+                .Select(t => new TransactionDto
                 {
-                    Items = await transactionsToDto.ToListAsync(),
-                    Paging = new PagingInfo
-                    {
-                        Page = transactionQueryParams.Page,
-                        PageSize = transactionQueryParams.PageSize,
-                        TotalItems = await transactions.CountAsync()
-                    }
-                });
+                    TransactionID = t.TransactionID,
+                    WalletId = t.WalletId ?? t.StartupWalletId ?? 0,
+                    Amount = t.Amount,
+                    Type = t.Type,
+                    Status = t.Status,
+                    CreatedAt = t.CreatedAt,
+                })
+                .ToListAsync();
+
+            return ApiResponse<PagedResponse<TransactionDto>>.SuccessResponse(new PagedResponse<TransactionDto>
+            {
+                Items = items,
+                Paging = new PagingInfo { Page = transactionQueryParams.Page, PageSize = transactionQueryParams.PageSize, TotalItems = total }
+            });
         }
 
         public async Task<ApiResponse<WalletDto>> GetWalletByAdvisorAsync(int userId)
@@ -67,90 +74,121 @@ namespace AISEP.Infrastructure.Services
             if (wallet == null)
                 return ApiResponse<WalletDto>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Ví không tồn tại");
 
-            var walletToDto = new WalletDto
-            {
-                WalletId = wallet.WalletId,
-                AdvisorId = wallet.AdvisorId,
-                Balance = wallet.Balance,
-                TotalEarned = wallet.TotalEarned,
-                TotalWithdrawn = wallet.TotalWithdrawn,
-                BankAccountNumber = wallet.BankAccountNumber,
-                BankBin = wallet.BankBin,
-                BankName = wallet.BankName,
-                CreatedAt  = wallet.CreatedAt,
-            };
-
-            return ApiResponse<WalletDto>.SuccessResponse(walletToDto, "Lấy ví thành công");
+            return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
         }
 
-        public async Task<ApiResponse<WalletDto>> UpdateBankInfoAsync(int userId, UpdateBankInfoDto request)
+        public async Task<ApiResponse<WalletDto>> GetWalletByStartupAsync(int userId)
         {
-            var wallet = await _context.AdvisorWallets
-                .Include(w => w.Advisor)
-                .FirstOrDefaultAsync(a => a.Advisor.UserID == userId);
+            var wallet = await _context.StartupWallets
+                .Include(w => w.Startup)
+                .FirstOrDefaultAsync(s => s.Startup.UserID == userId);
 
             if (wallet == null)
                 return ApiResponse<WalletDto>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Ví không tồn tại");
 
-            wallet.BankAccountNumber = request.BankAccountNumber;
-            wallet.BankBin = request.BankBin;
-            wallet.BankName = request.BankName;
-
-            _context.AdvisorWallets.Update(wallet);
-            await _context.SaveChangesAsync();
-
-            var walletToDto = new WalletDto
-            {
-                WalletId = wallet.WalletId,
-                AdvisorId = wallet.AdvisorId,
-                Balance = wallet.Balance,
-                TotalEarned = wallet.TotalEarned,
-                TotalWithdrawn = wallet.TotalWithdrawn,
-                BankAccountNumber = wallet.BankAccountNumber,
-                BankBin = wallet.BankBin,
-                BankName = wallet.BankName,
-                CreatedAt  = wallet.CreatedAt,
-            };
-
-            return ApiResponse<WalletDto>.SuccessResponse(walletToDto, "Cập nhật thông tin ngân hàng thành công");
+            return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
         }
 
-        public async Task<ApiResponse<WalletDto>> CreateWalletAsync(int userId, CreateWalletDto request)
+        public async Task<ApiResponse<WalletDto>> UpdateBankInfoAsync(int userId, string userType, UpdateBankInfoDto request)
         {
-            var advisor = await _context.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
-            if (advisor == null)
-                return ApiResponse<WalletDto>.ErrorResponse("ADVISOR_NOT_FOUND", "Tài khoản advisor không tồn tại.");
-
-            var existingWallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == advisor.AdvisorID);
-            if (existingWallet != null)
-                return ApiResponse<WalletDto>.ErrorResponse("WALLET_ALREADY_EXISTS", "Ví đã được tạo.");
-
-            var wallet = new AdvisorWallet
+            if (userType == "Advisor")
             {
-                AdvisorId = advisor.AdvisorID,
-                BankAccountNumber = request.BankAccountNumber,
-                BankBin = request.BankBin,
-                BankName = request.BankName,
-                CreatedAt = DateTime.UtcNow
-            };
+                var wallet = await _context.AdvisorWallets
+                    .Include(w => w.Advisor)
+                    .FirstOrDefaultAsync(a => a.Advisor.UserID == userId);
 
-            await _context.AdvisorWallets.AddAsync(wallet);
-            await _context.SaveChangesAsync();
+                if (wallet == null) return ApiResponse<WalletDto>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Ví không tồn tại");
 
-            var walletToDto = new WalletDto
+                wallet.BankAccountNumber = request.BankAccountNumber;
+                wallet.BankBin = request.BankBin;
+                wallet.BankName = request.BankName;
+                await _context.SaveChangesAsync();
+                return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
+            }
+            else
             {
-                WalletId = wallet.WalletId,
-                AdvisorId = wallet.AdvisorId,
-                Balance = wallet.Balance,
-                TotalEarned = wallet.TotalEarned,
-                TotalWithdrawn = wallet.TotalWithdrawn,
-                BankAccountNumber = wallet.BankAccountNumber,
-                BankBin = wallet.BankBin,
-                BankName = wallet.BankName,
-                CreatedAt = wallet.CreatedAt,
-            };
+                var wallet = await _context.StartupWallets
+                    .Include(w => w.Startup)
+                    .FirstOrDefaultAsync(s => s.Startup.UserID == userId);
 
-            return ApiResponse<WalletDto>.SuccessResponse(walletToDto, "Tạo ví thành công");
+                if (wallet == null) return ApiResponse<WalletDto>.ErrorResponse("WALLET_DOES_NOT_EXIST", "Ví không tồn tại");
+
+                wallet.BankAccountNumber = request.BankAccountNumber;
+                wallet.BankBin = request.BankBin;
+                wallet.BankName = request.BankName;
+                await _context.SaveChangesAsync();
+                return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
+            }
         }
+
+        public async Task<ApiResponse<WalletDto>> CreateWalletAsync(int userId, string userType, CreateWalletDto request)
+        {
+            if (userType == "Advisor")
+            {
+                var advisor = await _context.Advisors.FirstOrDefaultAsync(a => a.UserID == userId);
+                if (advisor == null) return ApiResponse<WalletDto>.ErrorResponse("ADVISOR_NOT_FOUND", "Tài khoản advisor không tồn tại.");
+
+                var existingWallet = await _context.AdvisorWallets.FirstOrDefaultAsync(w => w.AdvisorId == advisor.AdvisorID);
+                if (existingWallet != null) return ApiResponse<WalletDto>.ErrorResponse("WALLET_ALREADY_EXISTS", "Ví đã được tạo.");
+
+                var wallet = new AdvisorWallet
+                {
+                    AdvisorId = advisor.AdvisorID,
+                    BankAccountNumber = request.BankAccountNumber,
+                    BankBin = request.BankBin,
+                    BankName = request.BankName,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.AdvisorWallets.AddAsync(wallet);
+                await _context.SaveChangesAsync();
+                return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
+            }
+            else
+            {
+                var startup = await _context.Startups.FirstOrDefaultAsync(s => s.UserID == userId);
+                if (startup == null) return ApiResponse<WalletDto>.ErrorResponse("STARTUP_NOT_FOUND", "Tài khoản startup không tồn tại.");
+
+                var existingWallet = await _context.StartupWallets.FirstOrDefaultAsync(w => w.StartupId == startup.StartupID);
+                if (existingWallet != null) return ApiResponse<WalletDto>.ErrorResponse("WALLET_ALREADY_EXISTS", "Ví đã được tạo.");
+
+                var wallet = new StartupWallet
+                {
+                    StartupId = startup.StartupID,
+                    BankAccountNumber = request.BankAccountNumber,
+                    BankBin = request.BankBin,
+                    BankName = request.BankName,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.StartupWallets.AddAsync(wallet);
+                await _context.SaveChangesAsync();
+                return ApiResponse<WalletDto>.SuccessResponse(MapWalletToDto(wallet));
+            }
+        }
+
+        private WalletDto MapWalletToDto(AdvisorWallet w) => new WalletDto
+        {
+            WalletId = w.WalletId,
+            AdvisorId = w.AdvisorId,
+            Balance = w.Balance,
+            TotalEarned = w.TotalEarned,
+            TotalWithdrawn = w.TotalWithdrawn,
+            BankAccountNumber = w.BankAccountNumber,
+            BankBin = w.BankBin,
+            BankName = w.BankName,
+            CreatedAt = w.CreatedAt
+        };
+
+        private WalletDto MapWalletToDto(StartupWallet w) => new WalletDto
+        {
+            WalletId = w.WalletId,
+            StartupId = w.StartupId,
+            Balance = w.Balance,
+            TotalRefunded = w.TotalRefunded,
+            TotalWithdrawn = w.TotalWithdrawn,
+            BankAccountNumber = w.BankAccountNumber,
+            BankBin = w.BankBin,
+            BankName = w.BankName,
+            CreatedAt = w.CreatedAt
+        };
     }
 }

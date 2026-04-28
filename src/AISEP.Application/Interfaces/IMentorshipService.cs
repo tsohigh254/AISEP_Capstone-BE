@@ -11,6 +11,8 @@ public interface IMentorshipService
     Task<ApiResponse<PagedResponse<MentorshipListItemDto>>> GetMyMentorshipsAsync(
         int userId, string userType, string? status, int page, int pageSize, bool? isPayoutEligible = null);
     Task<ApiResponse<MentorshipDetailDto>> GetDetailAsync(int userId, string userType, int mentorshipId);
+    Task<ApiResponse<MentorshipDetailDto>> GetMentorshipBySessionIdAsync(int userId, string userType, int sessionId);
+    Task<ApiResponse<MentorshipDetailDto>> GetMentorshipByReportIdAsync(int userId, string userType, int reportId);
     Task<ApiResponse<MentorshipDto>> AcceptAsync(int userId, int mentorshipId);
     Task<ApiResponse<MentorshipDto>> RejectAsync(int userId, int mentorshipId, string? reason);
     Task<ApiResponse<MentorshipDto>> CancelAsync(int userId, int mentorshipId, string? reason);

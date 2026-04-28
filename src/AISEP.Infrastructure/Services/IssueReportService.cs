@@ -57,13 +57,25 @@ public class IssueReportService : IIssueReportService
         {
             var advisorReport = await _db.MentorshipReports
                 .FirstOrDefaultAsync(r => r.ReportID == request.RelatedEntityID.Value);
-            if (advisorReport != null && advisorReport.SubmittedAt.HasValue)
+            if (advisorReport != null)
             {
-                var deadline = advisorReport.SubmittedAt.Value.AddHours(24);
-                if (now > deadline)
+                // Enforce 24h window
+                if (advisorReport.SubmittedAt.HasValue)
+                {
+                    var deadline = advisorReport.SubmittedAt.Value.AddHours(24);
+                    if (now > deadline)
+                        return ApiResponse<IssueReportSummaryDto>.ErrorResponse(
+                            "ISSUE_REPORT_WINDOW_EXPIRED",
+                            $"The 24-hour window to report this advisor report has expired (deadline: {deadline:O}).");
+                }
+
+                // If acknowledged, cannot report issue
+                if (advisorReport.StartupAcknowledgedAt.HasValue)
+                {
                     return ApiResponse<IssueReportSummaryDto>.ErrorResponse(
-                        "ISSUE_REPORT_WINDOW_EXPIRED",
-                        $"The 24-hour window to report this advisor report has expired (deadline: {deadline:O}).");
+                        "ALREADY_ACKNOWLEDGED",
+                        "Cannot report an issue for an advisor report that you have already acknowledged.");
+                }
             }
         }
 
@@ -238,8 +250,8 @@ public class IssueReportService : IIssueReportService
     // ================================================================
     // UPDATE STATUS (Staff/Admin)
     // ================================================================
-
     public async Task<ApiResponse<IssueReportDetailDto>> UpdateStatusAsync(int staffUserId, int issueReportId, UpdateIssueReportStatusRequest request)
+
     {
         var report = await _db.IssueReports
             .Include(r => r.Reporter)
@@ -257,7 +269,52 @@ public class IssueReportService : IIssueReportService
 
         await _db.SaveChangesAsync();
 
-        // Notify reporter — use role-prefixed route matching FE layout
+        // --- NEW: Sync with related entities (Mentorship/Session) ---
+        if (request.Status == IssueReportStatus.Resolved || request.Status == IssueReportStatus.Dismissed)
+        {
+            try
+            {
+                if (report.RelatedEntityType == "Session" && report.RelatedEntityID.HasValue)
+                {
+                    var session = await _db.MentorshipSessions
+                        .Include(s => s.Mentorship)
+                        .FirstOrDefaultAsync(s => s.SessionID == report.RelatedEntityID.Value);
+                        
+                    if (session != null && session.SessionStatus == SessionStatusValues.InDispute)
+                    {
+                        session.SessionStatus = (request.Status == IssueReportStatus.Resolved) 
+                            ? SessionStatusValues.Completed // Refund cases often mark session as "de-facto" completed or just closed
+                            : SessionStatusValues.Completed; // Dismissed means we trust the advisor's completion
+                        
+                        if (session.Mentorship != null && session.Mentorship.MentorshipStatus == MentorshipStatus.InDispute)
+                        {
+                            session.Mentorship.MentorshipStatus = MentorshipStatus.Resolved;
+                            session.Mentorship.UpdatedAt = now;
+                        }
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else if ((report.RelatedEntityType == "Mentorship" || report.RelatedEntityType == "Payment") && report.RelatedEntityID.HasValue)
+                {
+                    var mentorship = await _db.StartupAdvisorMentorships
+                        .FirstOrDefaultAsync(m => m.MentorshipID == report.RelatedEntityID.Value);
+                        
+                    if (mentorship != null && mentorship.MentorshipStatus == MentorshipStatus.InDispute)
+                    {
+                        mentorship.MentorshipStatus = MentorshipStatus.Resolved;
+                        mentorship.UpdatedAt = now;
+                        await _db.SaveChangesAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sync Mentorship/Session status for IssueReport {Id}", report.IssueReportID);
+            }
+        }
+        // --- END Sync ---
+
+        // Notify reporter
         try
         {
             var rolePrefix = (report.Reporter?.UserType?.ToLower()) switch
@@ -287,6 +344,161 @@ public class IssueReportService : IIssueReportService
             $"Status={report.Status}, StaffId={staffUserId}");
 
         return ApiResponse<IssueReportDetailDto>.SuccessResponse(MapDetail(report), "Status updated.");
+    }
+
+    public async Task<ApiResponse<IssueReportDetailDto>> EscalateToDisputeAsync(int staffUserId, int issueReportId)
+    {
+        var report = await _db.IssueReports
+            .Include(r => r.Reporter)
+            .Include(r => r.Attachments)
+            .FirstOrDefaultAsync(r => r.IssueReportID == issueReportId);
+
+        if (report == null)
+            return ApiResponse<IssueReportDetailDto>.ErrorResponse("ISSUE_REPORT_NOT_FOUND", "Issue report not found.");
+
+        if (report.Status == IssueReportStatus.Resolved || report.Status == IssueReportStatus.Dismissed)
+            return ApiResponse<IssueReportDetailDto>.ErrorResponse("INVALID_STATUS", "Resolved or Dismissed reports cannot be escalated.");
+
+        // Check if it's related to a Session, Mentorship, or AdvisorReport
+        if (report.RelatedEntityType != IssueRelatedEntityType.Session && 
+            report.RelatedEntityType != IssueRelatedEntityType.Mentorship &&
+            report.RelatedEntityType != IssueRelatedEntityType.AdvisorReport)
+        {
+             return ApiResponse<IssueReportDetailDto>.ErrorResponse("INVALID_RELATED_ENTITY", 
+                 "Only session, mentorship, or advisor report issues can be escalated to dispute.");
+        }
+
+        if (!report.RelatedEntityID.HasValue)
+             return ApiResponse<IssueReportDetailDto>.ErrorResponse("MISSING_ENTITY_ID", "Related entity ID is missing.");
+
+        // 1. Mark session/mentorship as InDispute
+        int? startupUserId = null;
+        int? advisorUserId = null;
+        int? mentorshipId = null;
+        string entityLabel = "";
+
+        if (report.RelatedEntityType == IssueRelatedEntityType.Session)
+        {
+            var session = await _db.MentorshipSessions
+                .Include(s => s.Mentorship).ThenInclude(m => m.Startup)
+                .Include(s => s.Mentorship).ThenInclude(m => m.Advisor)
+                .FirstOrDefaultAsync(s => s.SessionID == report.RelatedEntityID.Value);
+
+            if (session == null)
+                 return ApiResponse<IssueReportDetailDto>.ErrorResponse("SESSION_NOT_FOUND", "Related session not found.");
+
+            session.SessionStatus = SessionStatusValues.InDispute;
+            session.DisputeReason = report.Description;
+            session.MarkedByStaffID = staffUserId;
+            session.MarkedAt = DateTime.UtcNow;
+            session.UpdatedAt = DateTime.UtcNow;
+
+            // Update mentorship status to InDispute if it wasn't already
+            if (session.Mentorship != null && session.Mentorship.MentorshipStatus != MentorshipStatus.InDispute)
+            {
+                session.Mentorship.MentorshipStatus = MentorshipStatus.InDispute;
+                session.Mentorship.UpdatedAt = DateTime.UtcNow;
+            }
+
+            startupUserId = session.Mentorship?.Startup?.UserID;
+            advisorUserId = session.Mentorship?.Advisor?.UserID;
+            mentorshipId = session.MentorshipID;
+            entityLabel = $"phiên tư vấn #{session.SessionID}";
+        }
+        else if (report.RelatedEntityType == IssueRelatedEntityType.AdvisorReport)
+        {
+            var reportEntity = await _db.MentorshipReports
+                .Include(r => r.Mentorship).ThenInclude(m => m.Startup)
+                .Include(r => r.Mentorship).ThenInclude(m => m.Advisor)
+                .Include(r => r.Session)
+                .FirstOrDefaultAsync(r => r.ReportID == report.RelatedEntityID.Value);
+
+            if (reportEntity == null)
+                 return ApiResponse<IssueReportDetailDto>.ErrorResponse("REPORT_NOT_FOUND", "Related advisor report not found.");
+
+            if (reportEntity.Session != null)
+            {
+                reportEntity.Session.SessionStatus = SessionStatusValues.InDispute;
+                reportEntity.Session.DisputeReason = report.Description;
+                reportEntity.Session.MarkedByStaffID = staffUserId;
+                reportEntity.Session.MarkedAt = DateTime.UtcNow;
+                reportEntity.Session.UpdatedAt = DateTime.UtcNow;
+                entityLabel = $"phiên tư vấn #{reportEntity.Session.SessionID} (thông qua báo cáo #{reportEntity.ReportID})";
+            }
+            else
+            {
+                entityLabel = $"báo cáo tư vấn #{reportEntity.ReportID}";
+            }
+
+            if (reportEntity.Mentorship.MentorshipStatus != MentorshipStatus.InDispute)
+            {
+                reportEntity.Mentorship.MentorshipStatus = MentorshipStatus.InDispute;
+                reportEntity.Mentorship.UpdatedAt = DateTime.UtcNow;
+            }
+
+            startupUserId = reportEntity.Mentorship.Startup?.UserID;
+            advisorUserId = reportEntity.Mentorship.Advisor?.UserID;
+            mentorshipId = reportEntity.MentorshipID;
+        }
+        else // Mentorship
+        {
+            var mentorship = await _db.StartupAdvisorMentorships
+                .Include(m => m.Startup)
+                .Include(m => m.Advisor)
+                .FirstOrDefaultAsync(m => m.MentorshipID == report.RelatedEntityID.Value);
+
+            if (mentorship == null)
+                 return ApiResponse<IssueReportDetailDto>.ErrorResponse("MENTORSHIP_NOT_FOUND", "Related mentorship not found.");
+
+            mentorship.MentorshipStatus = MentorshipStatus.InDispute;
+            mentorship.UpdatedAt = DateTime.UtcNow;
+
+            startupUserId = mentorship.Startup?.UserID;
+            advisorUserId = mentorship.Advisor?.UserID;
+            mentorshipId = mentorship.MentorshipID;
+            entityLabel = $"yêu cầu tư vấn #{mentorship.MentorshipID}";
+        }
+
+        // 2. Update IssueReport status to Escalated
+        report.Status = IssueReportStatus.Escalated;
+        report.StaffNote = (report.StaffNote ?? "") + $"\n[SYSTEM] {DateTime.UtcNow:O}: Escalated to formal dispute by staff.";
+        report.AssignedToStaffID = staffUserId;
+        report.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        // 3. Send Notifications
+        if (startupUserId.HasValue)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = startupUserId.Value,
+                NotificationType = "CONSULTING",
+                Title = "Tranh chấp đã được mở",
+                Message = $"Báo cáo sự cố liên quan đến {entityLabel} đã được chuyển thành tranh chấp chính thức và đang được xem xét.",
+                RelatedEntityType = "IssueReport",
+                RelatedEntityId = report.IssueReportID,
+                ActionUrl = $"/startup/mentorship-requests/{mentorshipId}"
+            });
+        }
+
+        if (advisorUserId.HasValue)
+        {
+            await _notifications.CreateAndPushAsync(new CreateNotificationRequest
+            {
+                UserId = advisorUserId.Value,
+                NotificationType = "CONSULTING",
+                Title = "Tranh chấp đã được mở",
+                Message = $"Có tranh chấp chính thức liên quan đến {entityLabel} và đang được nhân viên hệ thống xem xét.",
+                RelatedEntityType = "IssueReport",
+                RelatedEntityId = report.IssueReportID,
+                ActionUrl = $"/advisor/requests/{mentorshipId}"
+            });
+        }
+
+        await _audit.LogAsync("ESCALATE_TO_DISPUTE", "IssueReport", issueReportId, $"StaffId={staffUserId}");
+
+        return ApiResponse<IssueReportDetailDto>.SuccessResponse(MapDetail(report), "Issue escalated to formal dispute.");
     }
 
     // ================================================================
