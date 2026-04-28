@@ -337,3 +337,21 @@ public class UpsertTimeSlotsRequest
 {
     public List<TimeSlotInputDto> Slots { get; set; } = new();
 }
+
+/// <summary>
+/// Khoảng thời gian bận (UTC) — dành cho startup xem lịch, không kèm tên đối tác.
+/// </summary>
+public class AdvisorCalendarBusyIntervalDto
+{
+    public DateTime StartAt { get; set; }
+    public DateTime EndAt { get; set; }
+}
+
+/// <summary>
+/// Lịch tuần cho startup: mẫu khung rảnh + các khoảng bận đã có hẹn.
+/// </summary>
+public class AdvisorWeekCalendarStartupDto
+{
+    public List<TimeSlotDto> WeeklyTimeSlots { get; set; } = new();
+    public List<AdvisorCalendarBusyIntervalDto> BusyIntervals { get; set; } = new();
+}
