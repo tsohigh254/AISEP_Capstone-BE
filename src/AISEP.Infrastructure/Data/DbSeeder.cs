@@ -329,8 +329,10 @@ public static class DbSeeder
 
         foreach (var t in tables)
         {
+#pragma warning disable EF1002
             await context.Database.ExecuteSqlRawAsync(
                 $"SELECT setval(pg_get_serial_sequence('\"{t.Table}\"', '{t.Id}'), COALESCE(MAX(\"{t.Id}\"), 1)) FROM \"{t.Table}\"");
+#pragma warning restore EF1002
         }
     }
 }
