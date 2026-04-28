@@ -249,6 +249,11 @@ public class EvaluationStatusResult
     public int StartupId { get; set; }
     public string Status { get; set; } = string.Empty;
     public double? OverallScore { get; set; }
+    public double? TeamScore { get; set; }
+    public double? MarketScore { get; set; }
+    public double? ProductScore { get; set; }
+    public double? TractionScore { get; set; }
+    public double? FinancialScore { get; set; }
     public string? FailureReason { get; set; }
     public bool IsReportReady { get; set; }
     public bool IsReportValid { get; set; }
@@ -266,6 +271,8 @@ public class EvaluationReportResult
     public int StartupId { get; set; }
     public string Status { get; set; } = string.Empty;
     public bool IsReportValid { get; set; }
+    public DateTime SubmittedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
     /// <summary>The canonical report object (weakly-typed JSON).</summary>
     public object? Report { get; set; }
     public string? ValidationMessage { get; set; }

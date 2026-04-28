@@ -3,6 +3,7 @@ using System;
 using AISEP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AISEP.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260427005635_AddPitchDeckBusinessPlanOverallScoreColumns")]
+    partial class AddPitchDeckBusinessPlanOverallScoreColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2189,9 +2192,6 @@ namespace AISEP.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StartupID"));
 
-                    b.Property<bool>("AllowInvestorAiInsight")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime?>("ApprovedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2448,9 +2448,6 @@ namespace AISEP.Infrastructure.Migrations
 
                     b.Property<string>("PreferredFormat")
                         .HasColumnType("text");
-
-                    b.Property<DateTime?>("RefundedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("RejectedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2852,46 +2849,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.ToTable("StartupSubscriptionPayments");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.StartupWallet", b =>
-                {
-                    b.Property<int>("WalletId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("WalletId"));
-
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("BankAccountNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankBin")
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankName")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StartupId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("TotalRefunded")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalWithdrawn")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("WalletId");
-
-                    b.HasIndex("StartupId")
-                        .IsUnique();
-
-                    b.ToTable("StartupWallets");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.SystemSettings", b =>
                 {
                     b.Property<int>("SettingID")
@@ -3068,23 +3025,18 @@ namespace AISEP.Infrastructure.Migrations
                     b.Property<int>("MentorshipID")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("StartupWalletId")
-                        .HasColumnType("integer");
-
                     b.Property<short>("Status")
                         .HasColumnType("smallint");
 
                     b.Property<short>("Type")
                         .HasColumnType("smallint");
 
-                    b.Property<int?>("WalletId")
+                    b.Property<int>("WalletId")
                         .HasColumnType("integer");
 
                     b.HasKey("TransactionID");
 
                     b.HasIndex("MentorshipID");
-
-                    b.HasIndex("StartupWalletId");
 
                     b.HasIndex("WalletId");
 
@@ -3885,17 +3837,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("Startup");
                 });
 
-            modelBuilder.Entity("AISEP.Domain.Entities.StartupWallet", b =>
-                {
-                    b.HasOne("AISEP.Domain.Entities.Startup", "Startup")
-                        .WithOne()
-                        .HasForeignKey("AISEP.Domain.Entities.StartupWallet", "StartupId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Startup");
-                });
-
             modelBuilder.Entity("AISEP.Domain.Entities.SystemSettings", b =>
                 {
                     b.HasOne("AISEP.Domain.Entities.User", "UpdatedByUser")
@@ -3950,19 +3891,13 @@ namespace AISEP.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("AISEP.Domain.Entities.StartupWallet", "StartupWallet")
-                        .WithMany("Transactions")
-                        .HasForeignKey("StartupWalletId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AISEP.Domain.Entities.AdvisorWallet", "Wallet")
                         .WithMany("Transactions")
                         .HasForeignKey("WalletId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Mentorship");
-
-                    b.Navigation("StartupWallet");
 
                     b.Navigation("Wallet");
                 });
@@ -4129,11 +4064,6 @@ namespace AISEP.Infrastructure.Migrations
                     b.Navigation("ImprovementRecommendations");
 
                     b.Navigation("SubMetrics");
-                });
-
-            modelBuilder.Entity("AISEP.Domain.Entities.StartupWallet", b =>
-                {
-                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("AISEP.Domain.Entities.User", b =>

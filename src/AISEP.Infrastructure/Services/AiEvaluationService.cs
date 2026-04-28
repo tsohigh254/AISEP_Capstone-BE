@@ -157,7 +157,7 @@ public class AiEvaluationService : IAiEvaluationService
     //  Status (with reconciliation)
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<EvaluationStatusResult>> GetEvaluationStatusAsync(int runId, int currentUserId = 0)
+    public async Task<ApiResponse<EvaluationStatusResult>> GetEvaluationStatusAsync(int runId, int currentUserId = 0, string? currentUserType = null)
     {
         var run = await _db.AiEvaluationRuns
             .Include(r => r.Startup)
@@ -165,7 +165,7 @@ public class AiEvaluationService : IAiEvaluationService
         if (run == null)
             return ApiResponse<EvaluationStatusResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
 
-        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+        if (!HasEvaluationAccess(run.Startup, currentUserId, currentUserType))
             return ApiResponse<EvaluationStatusResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
 
         // If not terminal, poll Python for fresh status
@@ -184,14 +184,18 @@ public class AiEvaluationService : IAiEvaluationService
             }
         }
 
-        return ApiResponse<EvaluationStatusResult>.SuccessResponse(MapToStatusResult(run));
+        var score = await _db.StartupPotentialScores
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.EvaluationRunID == run.Id);
+
+        return ApiResponse<EvaluationStatusResult>.SuccessResponse(MapToStatusResult(run, score));
     }
 
     // ═══════════════════════════════════════════════════════════
     //  Report (with validation gate)
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<EvaluationReportResult>> GetEvaluationReportAsync(int runId, int currentUserId = 0)
+    public async Task<ApiResponse<EvaluationReportResult>> GetEvaluationReportAsync(int runId, int currentUserId = 0, string? currentUserType = null)
     {
         var run = await _db.AiEvaluationRuns
             .Include(r => r.Startup)
@@ -199,7 +203,7 @@ public class AiEvaluationService : IAiEvaluationService
         if (run == null)
             return ApiResponse<EvaluationReportResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
 
-        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+        if (!HasEvaluationAccess(run.Startup, currentUserId, currentUserType))
             return ApiResponse<EvaluationReportResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
 
         // If we already have a valid cached report, return it
@@ -222,6 +226,8 @@ public class AiEvaluationService : IAiEvaluationService
                 StartupId = run.StartupId,
                 Status = run.Status,
                 IsReportValid = true,
+                SubmittedAt = run.SubmittedAt,
+                UpdatedAt = run.UpdatedAt,
                 Report = cached,
                 EvaluatedDocumentTypes = ParseDocumentTypes(run.EvaluatedDocumentTypes),
                 PitchDeckOverallScore = pdScore,
@@ -312,7 +318,7 @@ public class AiEvaluationService : IAiEvaluationService
         new(StringComparer.OrdinalIgnoreCase) { "pitch_deck", "business_plan" };
 
     public async Task<ApiResponse<EvaluationReportResult>> GetSourceReportAsync(
-        int runId, string documentType, int currentUserId = 0)
+        int runId, string documentType, int currentUserId = 0, string? currentUserType = null)
     {
         // Validate document type before any DB call (matches Python's validation order)
         if (string.IsNullOrWhiteSpace(documentType) || !ValidDocumentTypes.Contains(documentType))
@@ -326,7 +332,7 @@ public class AiEvaluationService : IAiEvaluationService
         if (run == null)
             return ApiResponse<EvaluationReportResult>.ErrorResponse("NOT_FOUND", "Evaluation run not found.");
 
-        if (currentUserId != 0 && run.Startup?.UserID != currentUserId)
+        if (!HasEvaluationAccess(run.Startup, currentUserId, currentUserType))
             return ApiResponse<EvaluationReportResult>.ErrorResponse("ACCESS_DENIED", "You do not have access to this evaluation run.");
 
         try
@@ -457,7 +463,7 @@ public class AiEvaluationService : IAiEvaluationService
     //  History
     // ═══════════════════════════════════════════════════════════
 
-    public async Task<ApiResponse<List<EvaluationStatusResult>>> GetEvaluationHistoryAsync(int startupId, int currentUserId = 0)
+    public async Task<ApiResponse<List<EvaluationStatusResult>>> GetEvaluationHistoryAsync(int startupId, int currentUserId = 0, string? currentUserType = null)
     {
         if (currentUserId != 0)
         {
@@ -466,16 +472,20 @@ public class AiEvaluationService : IAiEvaluationService
                 .FirstOrDefaultAsync(s => s.StartupID == startupId);
             if (startup == null)
                 return ApiResponse<List<EvaluationStatusResult>>.ErrorResponse("NOT_FOUND", "Startup not found.");
-            if (startup.UserID != currentUserId)
+            if (!HasHistoryAccess(startup, currentUserId, currentUserType))
                 return ApiResponse<List<EvaluationStatusResult>>.ErrorResponse("ACCESS_DENIED", "You do not have access to this startup's evaluation history.");
         }
 
-        var runs = await _db.AiEvaluationRuns
+        var runsWithScores = await _db.AiEvaluationRuns
             .Where(r => r.StartupId == startupId)
-            .OrderByDescending(r => r.SubmittedAt)
+            .GroupJoin(_db.StartupPotentialScores,
+                run => run.Id,
+                score => score.EvaluationRunID,
+                (run, scores) => new { Run = run, Score = scores.FirstOrDefault() })
+            .OrderByDescending(x => x.Run.SubmittedAt)
             .ToListAsync();
 
-        var results = runs.Select(MapToStatusResult).ToList();
+        var results = runsWithScores.Select(x => MapToStatusResult(x.Run, x.Score)).ToList();
         return ApiResponse<List<EvaluationStatusResult>>.SuccessResponse(results);
     }
 
@@ -614,12 +624,17 @@ public class AiEvaluationService : IAiEvaluationService
     //  Mapping Helpers
     // ═══════════════════════════════════════════════════════════
 
-    private static EvaluationStatusResult MapToStatusResult(AiEvaluationRun run) => new()
+    private static EvaluationStatusResult MapToStatusResult(AiEvaluationRun run, StartupPotentialScore? score = null) => new()
     {
         RunId = run.Id,
         StartupId = run.StartupId,
         Status = run.Status,
         OverallScore = run.OverallScore,
+        TeamScore = score?.TeamScore < 0 ? null : score?.TeamScore,
+        MarketScore = score?.MarketScore < 0 ? null : score?.MarketScore,
+        ProductScore = score?.ProductScore < 0 ? null : score?.ProductScore,
+        TractionScore = score?.TractionScore < 0 ? null : score?.TractionScore,
+        FinancialScore = score?.FinancialScore < 0 ? null : score?.FinancialScore,
         FailureReason = run.FailureReason,
         IsReportReady = !string.IsNullOrEmpty(run.ReportJson),
         IsReportValid = run.IsReportValid,
@@ -632,6 +647,23 @@ public class AiEvaluationService : IAiEvaluationService
         => string.IsNullOrWhiteSpace(csv)
             ? new List<string>()
             : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static bool HasEvaluationAccess(Startup? startup, int currentUserId, string? currentUserType)
+    {
+        if (currentUserId == 0) return true;
+        if (startup == null) return false;
+        if (startup.UserID == currentUserId) return true;
+
+        var role = (currentUserType ?? string.Empty).Trim();
+        return role.Equals("Investor", StringComparison.OrdinalIgnoreCase) && startup.AllowInvestorAiInsight;
+    }
+
+    private static bool HasHistoryAccess(Startup startup, int currentUserId, string? currentUserType)
+    {
+        if (startup.UserID == currentUserId) return true;
+        var role = (currentUserType ?? string.Empty).Trim();
+        return role.Equals("Investor", StringComparison.OrdinalIgnoreCase) && startup.AllowInvestorAiInsight;
+    }
 
     private static string MapDocumentType(Domain.Enums.DocumentType docType) => docType switch
     {

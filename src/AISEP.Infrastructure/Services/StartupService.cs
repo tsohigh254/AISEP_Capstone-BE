@@ -95,6 +95,7 @@ public class StartupService : IStartupService
 
             ProfileStatus = ProfileStatus.Approved,
             IsVisible = false,
+            AllowInvestorAiInsight = false,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -325,6 +326,46 @@ public class StartupService : IStartupService
             $"Startup visibility {action}");
 
         return ApiResponse<string>.SuccessResponse($"Visibility {action}", $"Your profile is now {(isVisible ? "visible" : "hidden")} to investors.");
+    }
+
+    public async Task<ApiResponse<AiInsightVisibilityDto>> GetAiInsightVisibilityAsync(int userId)
+    {
+        var startup = await _context.Startups
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<AiInsightVisibilityDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
+
+        return ApiResponse<AiInsightVisibilityDto>.SuccessResponse(new AiInsightVisibilityDto
+        {
+            AllowInvestorAiInsight = startup.AllowInvestorAiInsight
+        });
+    }
+
+    public async Task<ApiResponse<AiInsightVisibilityDto>> ToggleAiInsightVisibilityAsync(int userId, bool allowInvestorAiInsight)
+    {
+        var startup = await _context.Startups
+            .FirstOrDefaultAsync(s => s.UserID == userId);
+
+        if (startup == null)
+            return ApiResponse<AiInsightVisibilityDto>.ErrorResponse("STARTUP_PROFILE_NOT_FOUND",
+                "You haven't created a startup profile yet.");
+
+        startup.AllowInvestorAiInsight = allowInvestorAiInsight;
+        startup.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("TOGGLE_AI_INSIGHT_VISIBILITY", "Startup", startup.StartupID,
+            $"AllowInvestorAiInsight set to {allowInvestorAiInsight}");
+
+        return ApiResponse<AiInsightVisibilityDto>.SuccessResponse(new AiInsightVisibilityDto
+        {
+            AllowInvestorAiInsight = startup.AllowInvestorAiInsight
+        }, allowInvestorAiInsight
+            ? "Investors can now view AI insight details."
+            : "Investors can no longer view AI insight details.");
     }
 
     public async Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId)
@@ -724,6 +765,7 @@ public class StartupService : IStartupService
         var dto = MapToPublicDto(startup);
         dto.EnterpriseCode = enterpriseCode;
         dto.AiScore = aiScore;
+        dto.AllowInvestorAiInsight = startup.AllowInvestorAiInsight;
         return ApiResponse<StartupPublicDto>.SuccessResponse(dto);
     }
 
@@ -1016,6 +1058,7 @@ public class StartupService : IStartupService
             TeamSize = s.TeamSize,
             PitchDeckUrl = s.PitchDeckUrl,
             IsVisible = s.IsVisible,
+            AllowInvestorAiInsight = s.AllowInvestorAiInsight,
             LinkedInURL = s.LinkedInURL,
             FileCertificateBusiness = s.FileCertificateBusiness,
 

@@ -67,7 +67,8 @@ public class AiEvaluationController : ControllerBase
     public async Task<IActionResult> GetStatus(int runId)
     {
         var userId = GetCurrentUserId();
-        var result = await _service.GetEvaluationStatusAsync(runId, userId);
+        var userType = User.FindFirst("userType")?.Value ?? string.Empty;
+        var result = await _service.GetEvaluationStatusAsync(runId, userId, userType);
         return result.ToEnvelope();
     }
 
@@ -82,7 +83,8 @@ public class AiEvaluationController : ControllerBase
     public async Task<IActionResult> GetReport(int runId)
     {
         var userId = GetCurrentUserId();
-        var result = await _service.GetEvaluationReportAsync(runId, userId);
+        var userType = User.FindFirst("userType")?.Value ?? string.Empty;
+        var result = await _service.GetEvaluationReportAsync(runId, userId, userType);
         return result.ToEnvelope();
     }
 
@@ -99,7 +101,8 @@ public class AiEvaluationController : ControllerBase
     public async Task<IActionResult> GetSourceReport(int runId, string documentType)
     {
         var userId = GetCurrentUserId();
-        var result = await _service.GetSourceReportAsync(runId, documentType, userId);
+        var userType = User.FindFirst("userType")?.Value ?? string.Empty;
+        var result = await _service.GetSourceReportAsync(runId, documentType, userId, userType);
         return result.ToEnvelope();
     }
 
@@ -112,7 +115,8 @@ public class AiEvaluationController : ControllerBase
     public async Task<IActionResult> GetHistory(int startupId)
     {
         var userId = GetCurrentUserId();
-        var result = await _service.GetEvaluationHistoryAsync(startupId, userId);
+        var userType = User.FindFirst("userType")?.Value ?? string.Empty;
+        var result = await _service.GetEvaluationHistoryAsync(startupId, userId, userType);
         return result.ToEnvelope();
     }
 

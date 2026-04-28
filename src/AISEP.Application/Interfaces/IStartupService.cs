@@ -13,6 +13,8 @@ public interface IStartupService
     Task<ApiResponse<StartupMeDto>> UpdateStartupAsync(int userId, UpdateStartupRequest request);
     Task<ApiResponse<StartupMeDto>> SubmitForApprovalAsync(int userId);
     Task<ApiResponse<string>> ToggleVisibilityAsync(int userId, bool isVisible);
+    Task<ApiResponse<AiInsightVisibilityDto>> GetAiInsightVisibilityAsync(int userId);
+    Task<ApiResponse<AiInsightVisibilityDto>> ToggleAiInsightVisibilityAsync(int userId, bool allowInvestorAiInsight);
 
     // KYC
     Task<ApiResponse<StartupKYCStatusDto>> GetKYCStatusAsync(int userId);
