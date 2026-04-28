@@ -106,6 +106,18 @@ public class PythonEvaluationStatus
     [JsonPropertyName("overall_confidence")]
     public double? OverallConfidence { get; set; }
 
+    [JsonPropertyName("evaluation_mode")]
+    public string? EvaluationMode { get; set; }
+
+    [JsonPropertyName("has_pitch_deck_result")]
+    public bool HasPitchDeckResult { get; set; }
+
+    [JsonPropertyName("has_business_plan_result")]
+    public bool HasBusinessPlanResult { get; set; }
+
+    [JsonPropertyName("has_merged_result")]
+    public bool HasMergedResult { get; set; }
+
     [JsonPropertyName("documents")]
     public List<PythonEvaluationDocStatus>? Documents { get; set; }
 }
